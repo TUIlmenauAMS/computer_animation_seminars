@@ -1,7 +1,5 @@
-# CA_Tutorials
-Computer Animation Tutorials
+# Computer Animation Seminars
 
-Computer Animation course Chatbot:
-
-[https://chatgpt.com/g/g-Rf59Ngh6w-computer-animation-assistant](https://chatgpt.com/g/g-Rf59Ngh6w-computer-animation-assistant)
-
+- Seminar 01: Introduction<br>
+  <a href="https://colab.research.google.com/github/TUIlmenauAMS/multimedia_programming_seminars/blob/main/00_multimediaprogrammierung_intro.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="colab"></a>
+  <a href="https://nbviewer.org/github/TUIlmenauAMS/multimedia_programming_seminars/blob/main/00_multimediaprogrammierung_intro.ipynb" target="_blank"><img src="https://badgen.net/badge/View/in%20NBViewer/blue?icon=terminal" alt="nbviewer"></a>
