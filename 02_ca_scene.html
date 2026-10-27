@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo 1: First Three.js Scene — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 16px 0 14px;
+    flex-shrink: 0;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .header-logo img { width: 72px; border-radius: 8px; display: block; }
+  .header-info h1 { font-size: 18px; font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 2px; }
+  .header-info h2 { font-size: 12px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+  .header-meta { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 10px 24px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 5px; }
+
+  /* ── main layout ── */
+  main {
+    flex: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 20px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── demo title ── */
+  .demo-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.25;
+  }
+  .demo-title span {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 400;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .demo-desc {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 6px;
+    max-width: 700px;
+  }
+
+  /* ── error banner ── */
+  .error-banner {
+    display: none;
+    background: rgba(251,146,60,0.1);
+    border: 1px solid rgba(251,146,60,0.4);
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: var(--orange);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  /* ── two-column layout: canvas + panel ── */
+  .demo-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ── canvas wrapper ── */
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #07090d;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* stats overlay */
+  .stats {
+    position: absolute;
+    bottom: 10px;
+    left: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(216,220,230,0.6);
+    pointer-events: none;
+    line-height: 1.7;
+  }
+
+  /* ── controls panel ── */
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(37,43,56,0.7);
+    gap: 10px;
+  }
+  .control-row:last-child { border-bottom: none; }
+  .control-label {
+    font-size: 12px;
+    color: var(--text);
+    flex-shrink: 0;
+    min-width: 90px;
+  }
+  .control-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .value-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    min-width: 34px;
+    text-align: right;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { background: #74b3fb; }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+  }
+
+  input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+  input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: left 0.2s, background 0.2s;
+  }
+  input[type="checkbox"]:checked { background: rgba(79,156,249,0.25); }
+  input[type="checkbox"]:checked::after { left: 19px; background: var(--accent); }
+
+  .btn {
+    background: rgba(79,156,249,0.1);
+    border: 1px solid rgba(79,156,249,0.3);
+    border-radius: 6px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(79,156,249,0.2); border-color: rgba(79,156,249,0.5); }
+  .btn:active { background: rgba(79,156,249,0.3); }
+
+  /* divider label inside panel */
+  .panel-divider {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  /* ── annotations ── */
+  .annotation-box {
+    background: rgba(167,139,250,0.05);
+    border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .annotation-box strong { color: var(--accent2); font-weight: 500; }
+  .annotation-box code {
+    background: rgba(79,156,249,0.1);
+    color: #93c5fd;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .annotation-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* ── footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 14px 24px 18px;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  footer p + p { margin-top: 3px; font-size: 11px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 720px) {
+    .demo-layout { grid-template-columns: 1fr; }
+    .annotation-grid { grid-template-columns: 1fr; }
+    .header-inner, main, footer, .breadcrumb { padding-left: 16px; padding-right: 16px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 02: Three.js — Demo 1</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  <a href="02_computeranimation_threejs.html">Chapter 02: Three.js</a>
+  <span>›</span>
+  Demo 1: First Three.js Scene
+</nav>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div>
+    <div class="demo-title">
+      <span>02_ca_scene.html</span>
+      First Three.js Scene
+    </div>
+    <p class="demo-desc">
+      The simplest complete Three.js scene: a PBR-shaded cube, directional + ambient lighting, shadows, and
+      OrbitControls. Every line of the source is commented — read it alongside the running demo.
+    </p>
+  </div>
+
+  <!-- ── WebGL error banner ── -->
+  <div class="error-banner" id="errorBanner">
+    ⚠ WebGL 2 is not available in this browser or has been disabled. Try Chrome, Edge, Firefox, or Safari
+    with hardware acceleration enabled in settings.
+  </div>
+
+  <!-- ── canvas + controls ── -->
+  <div class="demo-layout">
+
+    <!-- Three.js canvas -->
+    <div class="canvas-wrap">
+      <canvas id="c" role="img" aria-label="Interactive Three.js scene: a rotating PBR cube on a shadow-receiving ground plane"></canvas>
+      <div class="stats" id="stats">FPS — · Calls — · Tris —</div>
+    </div>
+
+    <!-- Controls panel -->
+    <div class="demo-card">
+      <div class="panel-title">Scene Controls</div>
+
+      <div class="control-row">
+        <span class="control-label">Auto-rotate</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkAutoRotate" checked>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Rot. speed</span>
+        <div class="control-input">
+          <input type="range" id="sldSpeed" min="0" max="3" step="0.05" value="0.6">
+          <span class="value-badge" id="valSpeed">0.60</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Material color</span>
+        <div class="control-input">
+          <input type="color" id="pickColor" value="#4f9cf9">
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Roughness</span>
+        <div class="control-input">
+          <input type="range" id="sldRoughness" min="0" max="1" step="0.01" value="0.4">
+          <span class="value-badge" id="valRoughness">0.40</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Metalness</span>
+        <div class="control-input">
+          <input type="range" id="sldMetalness" min="0" max="1" step="0.01" value="0.1">
+          <span class="value-badge" id="valMetalness">0.10</span>
+        </div>
+      </div>
+
+      <div class="panel-divider">Lighting</div>
+
+      <div class="control-row">
+        <span class="control-label">Sun intensity</span>
+        <div class="control-input">
+          <input type="range" id="sldSun" min="0" max="3" step="0.05" value="1.2">
+          <span class="value-badge" id="valSun">1.20</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Ambient</span>
+        <div class="control-input">
+          <input type="range" id="sldAmbient" min="0" max="2" step="0.05" value="0.4">
+          <span class="value-badge" id="valAmbient">0.40</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Shadows</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkShadows" checked>
+        </div>
+      </div>
+
+      <div class="panel-divider">Display</div>
+
+      <div class="control-row">
+        <span class="control-label">Wireframe</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkWireframe">
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Grid</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkGrid" checked>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Axes helper</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkAxes">
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button class="btn" id="btnReset" style="width:100%">Reset Camera</button>
+      </div>
+    </div>
+
+  </div><!-- /.demo-layout -->
+
+  <!-- ── Concept annotations ── -->
+  <div class="annotation-grid">
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Mesh = Geometry + Material</strong><br>
+      A <code>Mesh</code> is not a self-contained object: it holds a reference to a
+      <code>BufferGeometry</code> (the shape, stored as typed arrays on the GPU) and a
+      <code>Material</code> (the shader + parameters). They are independent and reusable —
+      one geometry can be shared across 1,000 meshes with no extra GPU memory.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — Delta time</strong><br>
+      <code>cube.rotation.y += speed × delta</code> — multiplying by <code>delta</code>
+      (seconds since last frame) makes the rotation rate frame-rate-independent.
+      At 30 fps delta ≈ 0.033 s; at 120 fps delta ≈ 0.008 s. The cube completes the same
+      angle per second on every device. Never animate by a fixed amount per frame.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — devicePixelRatio</strong><br>
+      <code>renderer.setPixelRatio(window.devicePixelRatio)</code> scales the drawing buffer
+      by the screen's DPR (2 on Retina, 3 on some phones). Without it the GPU renders at
+      CSS pixel resolution and the browser stretches the image — it looks blurry on HiDPI
+      screens. For performance-critical scenes, cap at 2:
+      <code>Math.min(window.devicePixelRatio, 2)</code>.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Shadow map pipeline</strong><br>
+      Enabling shadows requires five steps: <code>renderer.shadowMap.enabled</code>,
+      choose <code>shadowMap.type</code>, set <code>light.castShadow</code>, set
+      <code>mesh.castShadow</code>, set <code>mesh.receiveShadow</code>. Each shadow-casting
+      light triggers an extra render pass of the entire scene from the light's viewpoint.
+      Limit shadow-casting lights to one or two for real-time performance.
+    </div>
+  </div>
+
+</main>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 02: Three.js &middot; Demo 1: First Three.js Scene<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Created by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     THREE.JS DEMO — 02_ca_scene.html
+     First Three.js Scene: rotating PBR cube, directional light, shadows,
+     OrbitControls, live stats, UI controls.
+
+     Reading guide:
+       Each numbered STEP comment marks a logical block of setup.
+       // THREE.JS CONCEPT: explains the API call and how it maps to raw WebGL.
+       // ANIMATION CONCEPT: explains the animation principle.
+       Read from top to bottom — each step builds on the previous one.
+══════════════════════════════════════════════════════════════════════════════ -->
+
+<!-- STEP 0: Import map — must come before any type="module" script.
+     An import map tells the browser how to resolve bare module specifiers
+     like 'three' to an actual CDN URL.
+     We pin to an exact version (0.165.0) — never use 'latest'.
+     'three/addons/' maps to the examples/jsm folder, where OrbitControls
+     and other extras live. -->
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+// ── ES module imports ──────────────────────────────────────────────────────
+// The import map above resolves these bare specifiers to their CDN URLs.
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── UI element references ──────────────────────────────────────────────────
+const canvas       = document.getElementById('c');
+const statsEl      = document.getElementById('stats');
+const errorBanner  = document.getElementById('errorBanner');
+
+const chkAutoRotate = document.getElementById('chkAutoRotate');
+const sldSpeed      = document.getElementById('sldSpeed');
+const valSpeed      = document.getElementById('valSpeed');
+const pickColor     = document.getElementById('pickColor');
+const sldRoughness  = document.getElementById('sldRoughness');
+const valRoughness  = document.getElementById('valRoughness');
+const sldMetalness  = document.getElementById('sldMetalness');
+const valMetalness  = document.getElementById('valMetalness');
+const sldSun        = document.getElementById('sldSun');
+const valSun        = document.getElementById('valSun');
+const sldAmbient    = document.getElementById('sldAmbient');
+const valAmbient    = document.getElementById('valAmbient');
+const chkShadows    = document.getElementById('chkShadows');
+const chkWireframe  = document.getElementById('chkWireframe');
+const chkGrid       = document.getElementById('chkGrid');
+const chkAxes       = document.getElementById('chkAxes');
+const btnReset      = document.getElementById('btnReset');
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 1: RENDERER
+// THREE.JS CONCEPT: WebGLRenderer creates a WebGL2 context on the given
+// canvas element. It is the bridge between the Three.js scene graph and
+// the raw WebGL API underneath. Every renderer.render() call translates
+// the scene description into actual WebGL draw calls.
+// ════════════════════════════════════════════════════════════════════════════
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,           // use our existing canvas instead of creating a new one
+  antialias: true,  // request 4x MSAA — smoother edges at moderate cost
+});
+
+// THREE.JS CONCEPT: setPixelRatio scales the drawing buffer by the screen's
+// DPR. Without this, the canvas looks blurry on Retina / HiDPI screens
+// because the browser stretches the low-res buffer to fill the physical pixels.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+// Set the initial size to match the canvas's CSS layout size.
+// We update this again in the resize handler.
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+// THREE.JS CONCEPT: enable the shadow map pass.
+// When this is true, Three.js renders one extra depth-only pass of the scene
+// from each shadow-casting light's point of view before the main render.
+renderer.shadowMap.enabled = true;
+
+// PCFSoftShadowMap uses Percentage Closer Filtering with a larger kernel —
+// soft, blurred shadow edges. The standard choice for quality.
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// Check that we actually got a WebGL 2 context. getContext('webgl2') can
+// return null on some devices or in private browsing mode.
+if (!renderer.getContext()) {
+  errorBanner.style.display = 'block';
+  throw new Error('WebGL 2 not available');
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 2: SCENE
+// THREE.JS CONCEPT: THREE.Scene is the root of the scene graph — a tree of
+// Object3D nodes. Every mesh, light, and helper you add to the scene becomes
+// a node in this tree. During renderer.render(scene, camera), Three.js
+// traverses the tree, computes world transforms, and issues draw calls.
+// ════════════════════════════════════════════════════════════════════════════
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0f14);  // match the page dark background
+
+// Optional: add linear fog so distant objects fade to the background color.
+// Fog(color, near, far) — objects at `near` distance are unaffected;
+// at `far` distance they are fully the fog color.
+scene.fog = new THREE.Fog(0x0d0f14, 15, 40);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 3: CAMERA
+// THREE.JS CONCEPT: PerspectiveCamera(fov, aspect, near, far) is the same
+// perspective projection as the mat4.perspective matrix from Chapter 01.
+// camera.position and camera.lookAt() produce the same view matrix as the
+// manual mat4.lookAt in Chapter 01's camera demo.
+// ════════════════════════════════════════════════════════════════════════════
+
+const camera = new THREE.PerspectiveCamera(
+  60,                                          // vertical field of view (degrees)
+  canvas.clientWidth / canvas.clientHeight,    // aspect ratio — updated on resize
+  0.1,                                         // near clip — keep as large as possible
+  100                                          // far clip — keep as small as possible
+                                               // (tighter range = better depth precision)
+);
+// Position the camera so the cube is visible from a good angle.
+camera.position.set(2.5, 2.0, 3.5);
+
+// Store the initial camera state so we can reset it.
+const CAM_RESET_POS = camera.position.clone();
+const CAM_RESET_TARGET = new THREE.Vector3(0, 0.5, 0);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 4: LIGHTING
+// THREE.JS CONCEPT: MeshStandardMaterial (PBR) needs lights to show any
+// shading. AmbientLight provides a uniform fill with no direction or shadows;
+// DirectionalLight casts parallel rays (like the sun) and supports shadows.
+// ════════════════════════════════════════════════════════════════════════════
+
+// AmbientLight: uniform fill from all directions — no shadows.
+// Use a low intensity so the dark faces of the cube are still dark,
+// not completely black.
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLight);
+
+// DirectionalLight: parallel rays from a direction, like the sun.
+// The light's position defines where the rays come FROM (direction = position - origin).
+const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.2);
+sunLight.position.set(4, 8, 4);
+
+// Enable shadow casting on this light.
+sunLight.castShadow = true;
+
+// Shadow map resolution — higher = sharper shadows, more GPU memory.
+sunLight.shadow.mapSize.width  = 2048;
+sunLight.shadow.mapSize.height = 2048;
+
+// The shadow camera is an orthographic camera that defines the frustum
+// the shadow map covers. Size it to enclose the visible scene.
+sunLight.shadow.camera.left   = -6;
+sunLight.shadow.camera.right  =  6;
+sunLight.shadow.camera.top    =  6;
+sunLight.shadow.camera.bottom = -6;
+sunLight.shadow.camera.near   = 1;
+sunLight.shadow.camera.far    = 25;
+
+// A small negative bias prevents shadow acne (self-shadowing noise).
+// Too negative causes peter panning (shadows float off surfaces).
+sunLight.shadow.bias = -0.001;
+
+scene.add(sunLight);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 5: GEOMETRY AND MATERIAL
+// THREE.JS CONCEPT: BufferGeometry stores vertex data as typed arrays —
+// position, normal, UV, index — the same typed arrays uploaded to VBOs and
+// EBOs in Chapter 01. BoxGeometry is a pre-built BufferGeometry.
+// ════════════════════════════════════════════════════════════════════════════
+
+// BoxGeometry(width, height, depth, widthSegs, heightSegs, depthSegs)
+// More segments = smoother wireframe, but more vertices to process.
+const cubeGeo = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2);
+
+// MeshStandardMaterial: PBR with metalness/roughness model.
+// This is the Three.js equivalent of the same model used in Unreal,
+// Unity, and Blender's Principled BSDF.
+const cubeMat = new THREE.MeshStandardMaterial({
+  color:     0x4f9cf9,   // base albedo color
+  roughness: 0.4,        // 0 = mirror, 1 = fully diffuse
+  metalness: 0.1,        // 0 = plastic/dielectric, 1 = metal
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 6: MESH
+// THREE.JS CONCEPT: Mesh = Geometry + Material. The Mesh is a node in the
+// scene graph — an Object3D with an extra geometry and material reference.
+// castShadow = true means this mesh is rendered into the shadow map pass.
+// ════════════════════════════════════════════════════════════════════════════
+
+const cube = new THREE.Mesh(cubeGeo, cubeMat);
+cube.position.set(0, 0.5, 0);   // lift so the bottom sits on the ground plane
+cube.castShadow    = true;       // this mesh casts a shadow onto the ground
+cube.receiveShadow = true;       // this mesh also receives shadows from itself
+scene.add(cube);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 7: GROUND PLANE
+// A PlaneGeometry lying flat in the XZ plane, receiving the cube's shadow.
+// receiveShadow = true means the shadow map is sampled during this mesh's
+// fragment shading to darken areas in shadow.
+// ════════════════════════════════════════════════════════════════════════════
+
+const groundGeo = new THREE.PlaneGeometry(20, 20);
+const groundMat = new THREE.MeshStandardMaterial({
+  color:     0x1a1e2a,
+  roughness: 0.9,
+  metalness: 0.0,
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+// PlaneGeometry lies in the XY plane by default — rotate it to lie flat.
+ground.rotation.x  = -Math.PI / 2;  // rotate 90° around X to face up
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid helper — drawn on top of the ground plane for spatial reference.
+const grid = new THREE.GridHelper(20, 20, 0x1e2535, 0x1e2535);
+grid.position.y = 0.001;   // tiny offset above ground to avoid z-fighting
+scene.add(grid);
+
+// Axes helper — shows the world X (red), Y (green), Z (blue) axes.
+const axes = new THREE.AxesHelper(2);
+axes.visible = false;       // hidden by default, toggled by checkbox
+scene.add(axes);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 8: ORBIT CONTROLS
+// THREE.JS CONCEPT: OrbitControls listens to pointer events on the canvas
+// and converts mouse drag into changes to spherical coordinates (azimuth,
+// elevation, radius) around a target point, then sets camera.position.
+// This is the same orbit math as Chapter 01's camera demo — OrbitControls
+// just wraps it in a reusable, production-ready class.
+// ════════════════════════════════════════════════════════════════════════════
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(CAM_RESET_TARGET);  // orbit around the center of the cube
+controls.enableDamping  = true;          // smooth inertia effect
+controls.dampingFactor  = 0.05;          // lower = more inertia
+controls.minDistance    = 1.0;           // prevent zooming inside the cube
+controls.maxDistance    = 30;
+controls.maxPolarAngle  = Math.PI / 2;   // prevent camera going below the ground
+controls.update();
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 9: RESIZE HANDLER
+// When the window resizes we must update both the renderer (drawing buffer)
+// and the camera (aspect ratio + projection matrix).
+// THREE.JS CONCEPT: camera.updateProjectionMatrix() recomputes the internal
+// 4×4 projection matrix from fov, aspect, near, far. Call it after any
+// change to those parameters.
+// ════════════════════════════════════════════════════════════════════════════
+
+function onResize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  renderer.setSize(w, h, false);          // resize the drawing buffer
+  camera.aspect = w / h;                  // update aspect ratio
+  camera.updateProjectionMatrix();        // recompute projection matrix
+}
+window.addEventListener('resize', onResize);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 10: ANIMATION LOOP
+// THREE.JS CONCEPT: renderer.setAnimationLoop registers a callback that runs
+// before every screen repaint, exactly like requestAnimationFrame. Passing
+// null cancels the loop.
+// THREE.Clock gives accurate delta time across frames — use getDelta() once
+// per frame. Never compute delta manually.
+// ════════════════════════════════════════════════════════════════════════════
+
+const clock  = new THREE.Clock();
+
+// FPS tracking variables
+let frameTimes = [];
+let lastFpsUpdate = 0;
+let displayFps = 0;
+
+renderer.setAnimationLoop((timestamp) => {
+
+  // Get time elapsed since last frame (seconds).
+  const delta = clock.getDelta();
+
+  // ── Update state ────────────────────────────────────────────────────
+  // ANIMATION CONCEPT: time-based rotation.
+  // speed * delta = radians per second × seconds per frame = radians this frame.
+  // This is frame-rate-independent: at 30fps delta≈0.033, at 120fps delta≈0.008,
+  // but speed * delta sums to the same angle per second on both.
+  if (chkAutoRotate.checked) {
+    const speed = parseFloat(sldSpeed.value);
+    cube.rotation.y += speed * delta;
+    cube.rotation.x += speed * 0.3 * delta;
+  }
+
+  // ── Controls ─────────────────────────────────────────────────────────
+  // controls.update() is required every frame when enableDamping is true.
+  // It applies the inertia decay to the camera position.
+  controls.update();
+
+  // ── Render ───────────────────────────────────────────────────────────
+  // renderer.render(scene, camera) traverses the scene graph, computes
+  // world transforms, and issues all WebGL draw calls for this frame.
+  renderer.render(scene, camera);
+
+  // ── Stats ────────────────────────────────────────────────────────────
+  // renderer.info is updated after each render() call.
+  // render.calls = number of draw calls (gl.drawArrays / gl.drawElements)
+  // render.triangles = total triangles rendered this frame
+  frameTimes.push(timestamp);
+  frameTimes = frameTimes.filter(t => timestamp - t < 1000);
+  if (timestamp - lastFpsUpdate > 200) {
+    displayFps = frameTimes.length;
+    lastFpsUpdate = timestamp;
+  }
+  statsEl.textContent =
+    `FPS ${displayFps.toString().padStart(3)} · ` +
+    `Calls ${renderer.info.render.calls} · ` +
+    `Tris ${renderer.info.render.triangles.toLocaleString()}`;
+
+  // Reset render info counters for the next frame.
+  renderer.info.reset();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 11: UI EVENT HANDLERS
+// Connect the HTML controls to the Three.js objects they control.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Rotation speed slider
+sldSpeed.addEventListener('input', () => {
+  valSpeed.textContent = parseFloat(sldSpeed.value).toFixed(2);
+});
+
+// Material color picker
+pickColor.addEventListener('input', () => {
+  cubeMat.color.set(pickColor.value);
+});
+
+// Roughness slider — controls microscopic surface texture (0 = mirror, 1 = diffuse)
+sldRoughness.addEventListener('input', () => {
+  cubeMat.roughness = parseFloat(sldRoughness.value);
+  valRoughness.textContent = cubeMat.roughness.toFixed(2);
+});
+
+// Metalness slider — 0 = plastic/dielectric, 1 = metal
+sldMetalness.addEventListener('input', () => {
+  cubeMat.metalness = parseFloat(sldMetalness.value);
+  valMetalness.textContent = cubeMat.metalness.toFixed(2);
+});
+
+// Sun intensity slider
+sldSun.addEventListener('input', () => {
+  sunLight.intensity = parseFloat(sldSun.value);
+  valSun.textContent = sunLight.intensity.toFixed(2);
+});
+
+// Ambient intensity slider
+sldAmbient.addEventListener('input', () => {
+  ambientLight.intensity = parseFloat(sldAmbient.value);
+  valAmbient.textContent = ambientLight.intensity.toFixed(2);
+});
+
+// Shadows toggle — enabling/disabling at runtime causes a renderer recompile.
+// In production you would not toggle this at runtime; here it is for education.
+chkShadows.addEventListener('change', () => {
+  renderer.shadowMap.enabled  = chkShadows.checked;
+  sunLight.castShadow         = chkShadows.checked;
+  // Force all materials to re-evaluate the shadow program:
+  scene.traverse(obj => { if (obj.isMesh) obj.material.needsUpdate = true; });
+});
+
+// Wireframe toggle — sets the wireframe flag on the cube material.
+chkWireframe.addEventListener('change', () => {
+  cubeMat.wireframe = chkWireframe.checked;
+});
+
+// Grid helper visibility
+chkGrid.addEventListener('change', () => {
+  grid.visible = chkGrid.checked;
+});
+
+// Axes helper visibility
+chkAxes.addEventListener('change', () => {
+  axes.visible = chkAxes.checked;
+});
+
+// Reset camera to initial position and target
+btnReset.addEventListener('click', () => {
+  camera.position.copy(CAM_RESET_POS);
+  controls.target.copy(CAM_RESET_TARGET);
+  controls.update();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// CLEANUP (for reference — not triggered in this single-page demo)
+// In applications that destroy and recreate scenes (SPA navigation, etc.)
+// call dispose() on every geometry, material, and texture to free GPU memory.
+// Failing to do so is the most common source of memory leaks in Three.js apps.
+//
+// function cleanup() {
+//   cubeGeo.dispose();
+//   cubeMat.dispose();
+//   groundGeo.dispose();
+//   groundMat.dispose();
+//   renderer.dispose();
+//   controls.dispose();
+// }
+// ════════════════════════════════════════════════════════════════════════════
+
+</script>
+</body>
+</html>

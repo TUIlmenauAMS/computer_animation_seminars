@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo 2: Scene Graph Explorer — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --sun:     #fbbf24;
+    --earth:   #34d399;
+    --moon:    #94a3b8;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header { border-bottom: 2px solid var(--border); padding: 16px 0 14px; flex-shrink: 0; }
+  .header-inner {
+    max-width: 1100px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .header-logo img { width: 72px; border-radius: 8px; display: block; }
+  .header-info h1 { font-size: 18px; font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 2px; }
+  .header-info h2 { font-size: 12px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+  .header-meta { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  .breadcrumb {
+    max-width: 1100px; margin: 0 auto; padding: 10px 24px 0;
+    font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0;
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 5px; }
+
+  main {
+    flex: 1; max-width: 1100px; margin: 0 auto; width: 100%;
+    padding: 20px 24px 48px; display: flex; flex-direction: column; gap: 20px;
+  }
+
+  .demo-title { font-size: 22px; font-weight: 500; color: #f0f2f7; line-height: 1.25; }
+  .demo-title span { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 400; display: block; margin-bottom: 4px; }
+  .demo-desc { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 700px; }
+
+  .error-banner {
+    display: none;
+    background: rgba(251,146,60,0.1); border: 1px solid rgba(251,146,60,0.4);
+    border-radius: 8px; padding: 16px 20px; color: var(--orange);
+    font-family: var(--mono); font-size: 13px;
+  }
+
+  /* ── layout ── */
+  .demo-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .canvas-wrap {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #04050a; border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+
+  .stats {
+    position: absolute; bottom: 10px; left: 12px;
+    font-family: var(--mono); font-size: 11px;
+    color: rgba(216,220,230,0.55); pointer-events: none; line-height: 1.7;
+  }
+
+  /* world position readout overlay */
+  .pos-overlay {
+    position: absolute; top: 10px; right: 12px;
+    font-family: var(--mono); font-size: 10.5px;
+    color: rgba(216,220,230,0.7); pointer-events: none;
+    line-height: 1.9; text-align: right;
+  }
+  .pos-sun   { color: var(--sun); }
+  .pos-earth { color: var(--earth); }
+  .pos-moon  { color: var(--moon); }
+
+  /* ── panel ── */
+  .demo-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 16px;
+    display: flex; flex-direction: column; gap: 0;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .panel-title {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+  }
+  .panel-divider {
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 10px 0 4px; border-top: 1px solid var(--border); margin-top: 4px;
+  }
+  .panel-body-label {
+    font-size: 11px; font-weight: 500; font-family: var(--mono);
+    padding: 8px 0 2px; margin-top: 6px;
+  }
+  .panel-body-label.sun   { color: var(--sun); }
+  .panel-body-label.earth { color: var(--earth); }
+  .panel-body-label.moon  { color: var(--moon); }
+
+  .control-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid rgba(37,43,56,0.7); gap: 8px;
+  }
+  .control-row:last-child { border-bottom: none; }
+  .control-label { font-size: 12px; color: var(--text); flex-shrink: 0; min-width: 80px; }
+  .control-input { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; }
+  .value-badge { font-family: var(--mono); font-size: 11px; color: var(--accent); min-width: 34px; text-align: right; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; background: var(--border);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px;
+    background: var(--accent); border-radius: 50%; cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px; height: 13px; background: var(--accent);
+    border-radius: 50%; border: none; cursor: pointer;
+  }
+
+  input[type="checkbox"] {
+    -webkit-appearance: none; appearance: none;
+    width: 34px; height: 18px; background: var(--border);
+    border-radius: 9px; cursor: pointer; position: relative;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  input[type="checkbox"]::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; background: var(--muted);
+    border-radius: 50%; transition: left 0.2s, background 0.2s;
+  }
+  input[type="checkbox"]:checked { background: rgba(79,156,249,0.25); }
+  input[type="checkbox"]:checked::after { left: 18px; background: var(--accent); }
+
+  .btn {
+    background: rgba(79,156,249,0.1); border: 1px solid rgba(79,156,249,0.3);
+    border-radius: 6px; color: var(--accent); font-family: var(--mono);
+    font-size: 11px; padding: 5px 12px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s; white-space: nowrap;
+  }
+  .btn:hover { background: rgba(79,156,249,0.2); border-color: rgba(79,156,249,0.5); }
+
+  /* ── scene graph diagram ── */
+  .graph-diagram {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+    font-family: var(--mono); font-size: 12px; line-height: 2;
+    color: var(--muted);
+  }
+  .graph-diagram .node { color: var(--text); }
+  .graph-diagram .node.sun   { color: var(--sun); }
+  .graph-diagram .node.earth { color: var(--earth); }
+  .graph-diagram .node.moon  { color: var(--moon); }
+  .graph-diagram .node.pivot { color: var(--accent2); font-size: 11px; }
+  .graph-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px; }
+
+  /* ── annotations ── */
+  .annotation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .annotation-box {
+    background: rgba(167,139,250,0.05); border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 8px; padding: 14px 18px;
+    font-size: 13px; color: var(--text); line-height: 1.65;
+  }
+  .annotation-box strong { color: var(--accent2); font-weight: 500; }
+  .annotation-box code {
+    background: rgba(79,156,249,0.1); color: #93c5fd;
+    font-family: var(--mono); font-size: 0.88em;
+    padding: 1px 5px; border-radius: 3px;
+  }
+
+  footer {
+    border-top: 2px solid var(--border); padding: 14px 24px 18px;
+    max-width: 1100px; margin: 0 auto; width: 100%;
+    text-align: center; font-size: 12px; color: var(--text); line-height: 1.7;
+  }
+  footer p + p { margin-top: 3px; font-size: 11px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 760px) {
+    .demo-layout { grid-template-columns: 1fr; }
+    .annotation-grid { grid-template-columns: 1fr; }
+    .header-inner, main, footer, .breadcrumb { padding-left: 16px; padding-right: 16px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 02: Three.js — Demo 2</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  <a href="02_computeranimation_threejs.html">Chapter 02: Three.js</a>
+  <span>›</span>
+  Demo 2: Scene Graph Explorer
+</nav>
+
+<main>
+
+  <div>
+    <div class="demo-title">
+      <span>02_ca_scenegraph.html</span>
+      Scene Graph Explorer
+    </div>
+    <p class="demo-desc">
+      A solar system built entirely from the Three.js scene graph: Sun → Earth pivot → Earth → Moon pivot → Moon.
+      Watch how rotating an invisible <em>pivot</em> Object3D drives a child mesh in a perfect orbit —
+      and how world position accumulates all parent transforms.
+    </p>
+  </div>
+
+  <div class="error-banner" id="errorBanner">
+    ⚠ WebGL 2 is not available in this browser. Try Chrome, Edge, Firefox or Safari with hardware acceleration enabled.
+  </div>
+
+  <div class="demo-layout">
+
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <canvas id="c" role="img" aria-label="Solar system scene graph: Sun, Earth orbiting the Sun, Moon orbiting the Earth"></canvas>
+      <div class="stats" id="stats">FPS — · Calls — · Tris —</div>
+      <div class="pos-overlay" id="posOverlay">
+        <span class="pos-sun">☀ Sun &nbsp;&nbsp;  x:0.00 y:0.00 z:0.00</span><br>
+        <span class="pos-earth">⊕ Earth x:0.00 y:0.00 z:0.00</span><br>
+        <span class="pos-moon">◯ Moon &nbsp;x:0.00 y:0.00 z:0.00</span>
+      </div>
+    </div>
+
+    <!-- Controls panel -->
+    <div class="demo-card">
+      <div class="panel-title">Scene Graph Controls</div>
+
+      <!-- Sun -->
+      <div class="panel-body-label sun">☀ Sun</div>
+      <div class="control-row">
+        <span class="control-label">Self-rotate</span>
+        <div class="control-input">
+          <input type="range" id="sldSunRot" min="0" max="2" step="0.02" value="0.2">
+          <span class="value-badge" id="valSunRot">0.20</span>
+        </div>
+      </div>
+
+      <!-- Earth -->
+      <div class="panel-body-label earth">⊕ Earth</div>
+      <div class="control-row">
+        <span class="control-label">Orbit speed</span>
+        <div class="control-input">
+          <input type="range" id="sldEarthOrbit" min="0" max="1.5" step="0.01" value="0.35">
+          <span class="value-badge" id="valEarthOrbit">0.35</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Self-rotate</span>
+        <div class="control-input">
+          <input type="range" id="sldEarthRot" min="0" max="4" step="0.05" value="1.0">
+          <span class="value-badge" id="valEarthRot">1.00</span>
+        </div>
+      </div>
+
+      <!-- Moon -->
+      <div class="panel-body-label moon">◯ Moon</div>
+      <div class="control-row">
+        <span class="control-label">Orbit speed</span>
+        <div class="control-input">
+          <input type="range" id="sldMoonOrbit" min="0" max="4" step="0.05" value="1.2">
+          <span class="value-badge" id="valMoonOrbit">1.20</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Self-rotate</span>
+        <div class="control-input">
+          <input type="range" id="sldMoonRot" min="0" max="4" step="0.05" value="1.2">
+          <span class="value-badge" id="valMoonRot">1.20</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Tidal lock</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkTidal">
+        </div>
+      </div>
+
+      <div class="panel-divider">Display</div>
+
+      <div class="control-row">
+        <span class="control-label">Axes helpers</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkAxes">
+        </div>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Orbit paths</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkOrbits" checked>
+        </div>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Pause</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkPause">
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button class="btn" id="btnReset" style="width:100%">Reset speeds</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene graph diagram -->
+  <div class="graph-diagram">
+    <div class="graph-title">Scene graph hierarchy</div>
+    <span class="node">THREE.Scene</span><br>
+    <span style="color:var(--border)">├─ </span><span class="node sun">sunMesh &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Mesh · position: origin)</span><br>
+    <span style="color:var(--border)">│ &nbsp;└─ </span><span class="node pivot">earthPivot &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Object3D · position: origin · rotation.y drives Earth orbit)</span><br>
+    <span style="color:var(--border)">│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ </span><span class="node earth">earthMesh &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Mesh · position.x = 5 → local offset from pivot)</span><br>
+    <span style="color:var(--border)">│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ </span><span class="node pivot">moonPivot &nbsp;&nbsp;&nbsp;&nbsp;(Object3D · position: origin in Earth's local space)</span><br>
+    <span style="color:var(--border)">│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ </span><span class="node moon">moonMesh &nbsp;&nbsp;&nbsp;&nbsp;(Mesh · position.x = 1.6 → local offset from moon pivot)</span><br>
+    <span style="color:var(--border)">├─ </span><span class="node">ambientLight</span><br>
+    <span style="color:var(--border)">├─ </span><span class="node">pointLight &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(at origin — the Sun is the light source)</span><br>
+    <span style="color:var(--border)">└─ </span><span class="node">orbitLines, helpers …</span>
+  </div>
+
+  <!-- Concept annotations -->
+  <div class="annotation-grid">
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — Pivot-based orbit</strong><br>
+      The Earth doesn't move in a circle by code — the <em>pivot</em>
+      (<code>Object3D</code> at the Sun's origin) rotates:
+      <code>earthPivot.rotation.y += orbitSpeed * delta</code>.
+      The Earth mesh is offset from the pivot by <code>position.x = 5</code>.
+      When the pivot rotates, the Earth sweeps a perfect circle — no trigonometry needed.
+      This is how every game engine drives orbital or wheel motion.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — World vs local position</strong><br>
+      The Moon's <code>position.x</code> is <code>1.6</code> — relative to its pivot,
+      which is relative to the Earth, which is relative to the Sun.
+      <code>moon.getWorldPosition(v)</code> computes the full accumulated transform:
+      world = Scene × earthPivot × earthMesh × moonPivot × moonMesh.
+      That's the number shown in the top-right readout.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — Tidal locking</strong><br>
+      Enable "Tidal lock": the Moon's self-rotation speed is locked to its orbital speed.
+      One face always points at the Earth — exactly as the real Moon behaves.
+      This demonstrates that tidal locking is simply <em>self-rotation = orbit speed</em>
+      in the parent's frame. Toggle it off to see the difference immediately.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Object3D hierarchy</strong><br>
+      <code>Object3D</code> is the base class for <em>everything</em> in Three.js:
+      Mesh, Light, Camera, Group. A pure <code>Object3D</code> (the pivot) has no
+      geometry or material — it's an invisible transform node. The same pattern is
+      used in Unity (empty GameObject), Unreal (SceneComponent), and Blender
+      (empty object parenting) to build any hierarchical articulated structure.
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 02: Three.js &middot; Demo 2: Scene Graph Explorer<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Created by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     THREE.JS DEMO — 02_ca_scenegraph.html
+     Scene Graph Explorer: solar system demonstrating parent-child transforms,
+     pivot-based orbit, world vs local position, tidal locking.
+
+     Reading guide:
+       STEP 0  — imports
+       STEP 1  — renderer, scene, camera, controls
+       STEP 2  — lighting (point light at origin = the Sun is the light source)
+       STEP 3  — solar system hierarchy (the core of this demo)
+       STEP 4  — orbit path rings (LineLoop geometry)
+       STEP 5  — axes helpers on each body
+       STEP 6  — UI wiring
+       STEP 7  — animation loop
+
+     Key concepts:
+       // ANIMATION CONCEPT: pivot-based orbit
+       // ANIMATION CONCEPT: tidal locking
+       // THREE.JS CONCEPT: Object3D hierarchy and world matrix
+       // THREE.JS CONCEPT: getWorldPosition
+══════════════════════════════════════════════════════════════════════════════ -->
+
+<script type="importmap">
+{
+  "imports": {
+    "three":         "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── UI refs ────────────────────────────────────────────────────────────────
+const canvas      = document.getElementById('c');
+const statsEl     = document.getElementById('stats');
+const posOverlay  = document.getElementById('posOverlay');
+const errorBanner = document.getElementById('errorBanner');
+
+const sldSunRot     = document.getElementById('sldSunRot');
+const valSunRot     = document.getElementById('valSunRot');
+const sldEarthOrbit = document.getElementById('sldEarthOrbit');
+const valEarthOrbit = document.getElementById('valEarthOrbit');
+const sldEarthRot   = document.getElementById('sldEarthRot');
+const valEarthRot   = document.getElementById('valEarthRot');
+const sldMoonOrbit  = document.getElementById('sldMoonOrbit');
+const valMoonOrbit  = document.getElementById('valMoonOrbit');
+const sldMoonRot    = document.getElementById('sldMoonRot');
+const valMoonRot    = document.getElementById('valMoonRot');
+const chkTidal      = document.getElementById('chkTidal');
+const chkAxes       = document.getElementById('chkAxes');
+const chkOrbits     = document.getElementById('chkOrbits');
+const chkPause      = document.getElementById('chkPause');
+const btnReset      = document.getElementById('btnReset');
+
+// Default speed values — used by the reset button
+const DEFAULTS = {
+  sunRot: 0.2, earthOrbit: 0.35, earthRot: 1.0, moonOrbit: 1.2, moonRot: 1.2
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 1: RENDERER, SCENE, CAMERA, CONTROLS
+// ════════════════════════════════════════════════════════════════════════════
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+// No shadows in this demo — the point light at the origin would require
+// 6 shadow map passes (one per cube face). We skip it for clarity.
+
+if (!renderer.getContext()) {
+  errorBanner.style.display = 'block';
+  throw new Error('WebGL 2 not available');
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04050a);   // very dark — space
+
+// Subtle star field: a large sphere of small points
+const starGeo = new THREE.BufferGeometry();
+const starCount = 2000;
+const starPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount * 3; i++) {
+  starPos[i] = (Math.random() - 0.5) * 200;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.08 }));
+scene.add(stars);
+
+const camera = new THREE.PerspectiveCamera(
+  55,
+  canvas.clientWidth / canvas.clientHeight,
+  0.1,
+  300
+);
+camera.position.set(0, 7, 16);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance   = 3;
+controls.maxDistance   = 60;
+controls.update();
+
+window.addEventListener('resize', () => {
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+  camera.aspect = canvas.clientWidth / canvas.clientHeight;
+  camera.updateProjectionMatrix();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 2: LIGHTING
+// The Sun is the only real light source in a solar system.
+// We use a PointLight at the origin (where the Sun mesh is) so that it
+// lights Earth and Moon from the correct direction as they orbit.
+// AmbientLight provides a very dim fill so the dark side is not pure black.
+// ════════════════════════════════════════════════════════════════════════════
+
+const ambientLight = new THREE.AmbientLight(0x111133, 1.5);
+scene.add(ambientLight);
+
+// PointLight at origin — radiates in all directions from a point.
+// This matches the Sun's physical position in the scene.
+const sunPointLight = new THREE.PointLight(0xfff5cc, 60, 40, 1.5);
+sunPointLight.position.set(0, 0, 0);
+scene.add(sunPointLight);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 3: SOLAR SYSTEM SCENE GRAPH HIERARCHY
+//
+// THREE.JS CONCEPT: Object3D hierarchy
+// Every Mesh, Group, and Object3D is a node in the scene graph tree.
+// A child's world transform = all parent world transforms × its local transform.
+//
+// ANIMATION CONCEPT: pivot-based orbit
+// Instead of computing circular motion with sin/cos ourselves, we use a
+// "pivot" — an invisible Object3D positioned at the center of the orbit.
+// We offset the child mesh from the pivot, then rotate the pivot.
+// When the pivot rotates, the child sweeps a perfect circle around it.
+// This is the standard technique in all game engines.
+//
+// Hierarchy we build:
+//   scene
+//   └─ sunMesh                  (Mesh at origin)
+//      └─ earthPivot            (Object3D at origin — rotation.y drives Earth orbit)
+//         └─ earthMesh          (Mesh offset x=5 from earthPivot)
+//            └─ moonPivot       (Object3D at Earth's local origin)
+//               └─ moonMesh     (Mesh offset x=1.6 from moonPivot)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Sun ───────────────────────────────────────────────────────────────────
+const sunGeo = new THREE.SphereGeometry(1.2, 32, 24);
+// MeshStandardMaterial with high emissive so the Sun glows regardless of light.
+// emissive is self-illumination — not affected by the scene's lights.
+const sunMat = new THREE.MeshStandardMaterial({
+  color:          0xfbbf24,
+  emissive:       0xf59e0b,
+  emissiveIntensity: 0.8,
+  roughness:      1.0,
+  metalness:      0.0,
+});
+const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+sunMesh.name = 'Sun';
+scene.add(sunMesh);
+
+// ── Earth pivot — attached to Sun (orbits Sun's center) ───────────────────
+// THREE.JS CONCEPT: Object3D with no geometry or material — a pure transform node.
+// Adding it to sunMesh means it lives in Sun's local coordinate space.
+// But since sunMesh is at the origin and has no position offset of its own,
+// the earthPivot effectively lives at the world origin too.
+// What matters is that when we rotate earthPivot.rotation.y, the Earth orbits.
+const earthPivot = new THREE.Object3D();
+earthPivot.name = 'earthPivot';
+sunMesh.add(earthPivot);   // earthPivot is a child of sunMesh
+
+// ── Earth ─────────────────────────────────────────────────────────────────
+const earthGeo = new THREE.SphereGeometry(0.55, 32, 24);
+const earthMat = new THREE.MeshStandardMaterial({
+  color:     0x34d399,
+  roughness: 0.8,
+  metalness: 0.0,
+});
+const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+earthMesh.name = 'Earth';
+// ANIMATION CONCEPT: offset from the pivot = orbital radius.
+// earthMesh.position.x = 5 means the Earth is 5 units to the right of earthPivot.
+// When earthPivot.rotation.y increases, this x offset sweeps a circle of radius 5.
+earthMesh.position.x = 5;
+earthPivot.add(earthMesh);  // Earth is a child of earthPivot
+
+// ── Moon pivot — attached to Earth (orbits Earth's center) ────────────────
+// ANIMATION CONCEPT: the moonPivot is a child of earthMesh.
+// Its local origin is therefore Earth's center.
+// Rotating moonPivot makes the Moon orbit the Earth,
+// and the whole Earth+Moon system orbits the Sun together.
+// This is the scene graph's parent-transform propagation in action.
+const moonPivot = new THREE.Object3D();
+moonPivot.name = 'moonPivot';
+earthMesh.add(moonPivot);   // moonPivot is a child of Earth
+
+// ── Moon ──────────────────────────────────────────────────────────────────
+const moonGeo = new THREE.SphereGeometry(0.2, 24, 18);
+const moonMat = new THREE.MeshStandardMaterial({
+  color:     0x94a3b8,
+  roughness: 0.95,
+  metalness: 0.0,
+});
+const moonMesh = new THREE.Mesh(moonGeo, moonMat);
+moonMesh.name = 'Moon';
+moonMesh.position.x = 1.6;   // orbital radius from moonPivot (Earth's center)
+moonPivot.add(moonMesh);     // Moon is a child of moonPivot
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 4: ORBIT PATH RINGS
+// Visual rings showing where each body orbits.
+// LineLoop draws a closed line through the given points — one circle per orbit.
+// These are in world space (children of scene), sized to match the orbital radii.
+// ════════════════════════════════════════════════════════════════════════════
+
+function makeOrbitRing(radius, color, segments = 128) {
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const θ = (i / segments) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(θ) * radius, 0, Math.sin(θ) * radius));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.25 });
+  return new THREE.LineLoop(geo, mat);
+}
+
+// Earth orbit: radius 5 around the Sun (world origin)
+const earthOrbitRing = makeOrbitRing(5, 0x34d399);
+scene.add(earthOrbitRing);
+
+// Moon orbit: radius 1.6 around the Earth.
+// THREE.JS CONCEPT: this ring is a child of earthMesh so it follows the Earth.
+// When Earth moves, the Moon orbit ring moves with it automatically.
+const moonOrbitRing = makeOrbitRing(1.6, 0x94a3b8, 64);
+earthMesh.add(moonOrbitRing);   // child of Earth — follows Earth's position
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 5: AXES HELPERS
+// AxesHelper draws the local X (red), Y (green), Z (blue) axes of any object.
+// Showing these on each body reveals the difference between local and world
+// coordinate systems as the scene graph transforms accumulate.
+// ════════════════════════════════════════════════════════════════════════════
+
+const sunAxes   = new THREE.AxesHelper(2.0);  // sized to be visible next to body
+const earthAxes = new THREE.AxesHelper(1.2);
+const moonAxes  = new THREE.AxesHelper(0.5);
+
+sunAxes.visible   = false;
+earthAxes.visible = false;
+moonAxes.visible  = false;
+
+sunMesh.add(sunAxes);    // axes follow the Sun's local transform
+earthMesh.add(earthAxes); // axes follow the Earth's local transform
+moonMesh.add(moonAxes);   // axes follow the Moon's local transform
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 6: UI EVENT HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+sldSunRot.addEventListener('input', () => {
+  valSunRot.textContent = parseFloat(sldSunRot.value).toFixed(2);
+});
+sldEarthOrbit.addEventListener('input', () => {
+  valEarthOrbit.textContent = parseFloat(sldEarthOrbit.value).toFixed(2);
+});
+sldEarthRot.addEventListener('input', () => {
+  valEarthRot.textContent = parseFloat(sldEarthRot.value).toFixed(2);
+});
+sldMoonOrbit.addEventListener('input', () => {
+  valMoonOrbit.textContent = parseFloat(sldMoonOrbit.value).toFixed(2);
+});
+sldMoonRot.addEventListener('input', () => {
+  valMoonRot.textContent = parseFloat(sldMoonRot.value).toFixed(2);
+  // If tidal lock is on, keep orbit in sync
+  if (chkTidal.checked) {
+    sldMoonOrbit.value = sldMoonRot.value;
+    valMoonOrbit.textContent = valMoonRot.textContent;
+  }
+});
+
+// Tidal lock: sync moon self-rotation = moon orbit speed
+chkTidal.addEventListener('change', () => {
+  if (chkTidal.checked) {
+    sldMoonOrbit.value = sldMoonRot.value;
+    valMoonOrbit.textContent = valMoonRot.textContent;
+  }
+});
+
+chkAxes.addEventListener('change', () => {
+  sunAxes.visible   = chkAxes.checked;
+  earthAxes.visible = chkAxes.checked;
+  moonAxes.visible  = chkAxes.checked;
+});
+
+chkOrbits.addEventListener('change', () => {
+  earthOrbitRing.visible = chkOrbits.checked;
+  moonOrbitRing.visible  = chkOrbits.checked;
+});
+
+btnReset.addEventListener('click', () => {
+  sldSunRot.value     = DEFAULTS.sunRot;     valSunRot.textContent     = DEFAULTS.sunRot.toFixed(2);
+  sldEarthOrbit.value = DEFAULTS.earthOrbit; valEarthOrbit.textContent = DEFAULTS.earthOrbit.toFixed(2);
+  sldEarthRot.value   = DEFAULTS.earthRot;   valEarthRot.textContent   = DEFAULTS.earthRot.toFixed(2);
+  sldMoonOrbit.value  = DEFAULTS.moonOrbit;  valMoonOrbit.textContent  = DEFAULTS.moonOrbit.toFixed(2);
+  sldMoonRot.value    = DEFAULTS.moonRot;    valMoonRot.textContent    = DEFAULTS.moonRot.toFixed(2);
+  chkTidal.checked    = false;
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 7: ANIMATION LOOP
+// THREE.JS CONCEPT: all transforms are updated by mutating .rotation / .position
+// on Object3D nodes. Three.js recomputes the world matrices of the entire
+// scene graph during renderer.render() — we never call updateMatrixWorld() manually.
+// ════════════════════════════════════════════════════════════════════════════
+
+const clock = new THREE.Clock();
+// Reusable Vector3 for getWorldPosition — avoid allocating per frame.
+const _worldPos = new THREE.Vector3();
+
+// FPS tracking
+let frameTimes = [];
+let lastFpsUpdate = 0;
+let displayFps = 0;
+
+renderer.setAnimationLoop((timestamp) => {
+  const delta = clock.getDelta();
+
+  if (!chkPause.checked) {
+
+    // ── Sun self-rotation ────────────────────────────────────────────────
+    // The Sun rotates on its Y axis in its own local space.
+    sunMesh.rotation.y += parseFloat(sldSunRot.value) * delta;
+
+    // ── Earth orbit ──────────────────────────────────────────────────────
+    // ANIMATION CONCEPT: rotating the pivot (not the mesh) drives the orbit.
+    // earthPivot is at the Sun's center. Incrementing rotation.y makes
+    // everything attached to it (earthMesh and its children) sweep a circle.
+    earthPivot.rotation.y += parseFloat(sldEarthOrbit.value) * delta;
+
+    // ── Earth self-rotation ──────────────────────────────────────────────
+    // Earth rotates on its own Y axis independently of its orbital pivot.
+    // This is local rotation — it does NOT affect the Earth's world position.
+    earthMesh.rotation.y += parseFloat(sldEarthRot.value) * delta;
+
+    // ── Moon orbit ───────────────────────────────────────────────────────
+    // moonPivot is a child of earthMesh, so its local origin is Earth's center.
+    // Rotating it makes the Moon orbit the Earth.
+    // Meanwhile the Earth is orbiting the Sun — the Moon inherits that motion.
+    let moonOrbitSpeed = parseFloat(sldMoonOrbit.value);
+
+    // ANIMATION CONCEPT: tidal locking.
+    // Tidal locking = the Moon's self-rotation speed equals its orbital speed.
+    // This keeps the same face always pointing toward the parent body.
+    // In our scene graph: if moonMesh.rotation.y grows at the same rate as
+    // moonPivot.rotation.y, the Moon's local Y rotation cancels the pivot's Y
+    // rotation — the same face always points "inward" toward earthMesh.
+    if (chkTidal.checked) {
+      moonOrbitSpeed = parseFloat(sldMoonRot.value);
+      sldMoonOrbit.value = sldMoonRot.value;
+      valMoonOrbit.textContent = parseFloat(sldMoonRot.value).toFixed(2);
+    }
+
+    moonPivot.rotation.y += moonOrbitSpeed * delta;
+    moonMesh.rotation.y  += parseFloat(sldMoonRot.value) * delta;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+
+  // ── World position readout ───────────────────────────────────────────────
+  // THREE.JS CONCEPT: getWorldPosition(target) computes the accumulated world
+  // transform for a node by multiplying all parent matrices down the tree.
+  // This is how you find out where an object actually is in world space —
+  // its local position alone is meaningless without knowing its parent chain.
+  sunMesh.getWorldPosition(_worldPos);
+  const sp = _worldPos;
+  earthMesh.getWorldPosition(_worldPos);
+  const ep = _worldPos.clone();
+  moonMesh.getWorldPosition(_worldPos);
+  const mp = _worldPos.clone();
+
+  posOverlay.innerHTML =
+    `<span class="pos-sun">☀ Sun &nbsp;&nbsp; ${fmt(sp)}</span><br>` +
+    `<span class="pos-earth">⊕ Earth ${fmt(ep)}</span><br>` +
+    `<span class="pos-moon">◯ Moon &nbsp;${fmt(mp)}</span>`;
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+  frameTimes.push(timestamp);
+  frameTimes = frameTimes.filter(t => timestamp - t < 1000);
+  if (timestamp - lastFpsUpdate > 200) {
+    displayFps = frameTimes.length;
+    lastFpsUpdate = timestamp;
+  }
+  statsEl.textContent =
+    `FPS ${displayFps.toString().padStart(3)} · ` +
+    `Calls ${renderer.info.render.calls} · ` +
+    `Tris ${renderer.info.render.triangles.toLocaleString()}`;
+  renderer.info.reset();
+});
+
+// Format a Vector3 as a compact string for the overlay
+function fmt(v) {
+  return `x:${v.x.toFixed(2).padStart(6)} y:${v.y.toFixed(2).padStart(5)} z:${v.z.toFixed(2).padStart(6)}`;
+}
+
+// ── Cleanup (for reference) ────────────────────────────────────────────────
+// function cleanup() {
+//   [sunGeo, earthGeo, moonGeo, starGeo].forEach(g => g.dispose());
+//   [sunMat, earthMat, moonMat].forEach(m => m.dispose());
+//   renderer.dispose(); controls.dispose();
+// }
+
+</script>
+</body>
+</html>
