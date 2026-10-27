@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Computeranimation &ndash; Keyframes &amp; Interpolation Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:    #1a73e8;
+      --danger:    #e53935;
+      --border:    #e0e0e0;
+      --canvas-bg: #1e1e2e;
+      --surface:   #f8f9fa;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #212121;
+      background: #fff;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+    }
+
+    /* Header */
+    .nb-header { display: flex; align-items: center; gap: 24px; border-bottom: 2px solid var(--border); padding: 16px 0; margin-bottom: 32px; }
+    .nb-header img { width: 120px; border-radius: 12px; flex-shrink: 0; }
+    .nb-header h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .nb-header h2 { font-size: 1.1rem; font-weight: 400; margin-bottom: 8px; color: #444; }
+    .nb-header p  { font-size: 0.92rem; margin-bottom: 2px; }
+    .nb-header a  { color: var(--accent); text-decoration: none; }
+    .nb-header a:hover { text-decoration: underline; }
+
+    /* Pills */
+    .pills { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      display: inline-block;
+      padding: 6px 14px;
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.92rem;
+      color: var(--accent);
+      transition: background 0.15s, color 0.15s;
+    }
+    .pill:hover { background: var(--accent); color: #fff; }
+
+    /* Sections */
+    h2.section { font-size: 1.3rem; margin: 40px 0 12px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+    p  { margin-bottom: 12px; }
+
+    /* Demo card */
+    .demo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin: 24px 0;
+    }
+    .demo-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* Controls */
+    .control-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .control-row label { min-width: 140px; font-weight: 500; font-size: 0.95rem; }
+    .control-row input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+    .control-row select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95rem; background: #fff; }
+    .value-badge { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.92rem; color: #555; }
+
+    .btn-row { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+    .btn { padding: 10px 28px; border: none; border-radius: 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Canvas */
+    canvas.gl-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border-radius: 8px;
+      background: var(--canvas-bg);
+      margin-top: 20px;
+      touch-action: none;
+    }
+    .canvas-wrap { margin-bottom: 16px; }
+
+    .stats {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.82rem;
+      color: #555;
+      margin-top: 10px;
+      min-height: 1.4em;
+    }
+    .info-box {
+      border-left: 5px solid var(--accent);
+      background: rgba(26,115,232,0.07);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+    .error-banner {
+      background: #fdecea;
+      border-left: 5px solid var(--danger);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin: 20px 0;
+      color: #7f1d1d;
+    }
+    code { background: #f1f3f4; border-radius: 4px; padding: 1px 6px; font-size: 0.9em; font-family: "SFMono-Regular", Consolas, monospace; }
+
+    /* Footer */
+    .nb-footer {
+      text-align: center;
+      padding: 18px 0 8px;
+      margin-top: 48px;
+      border-top: 2px solid var(--border);
+      font-size: 0.92rem;
+      color: #444;
+      line-height: 1.7;
+    }
+    .nb-footer a { color: var(--accent); text-decoration: none; }
+    .nb-footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .nb-header { flex-direction: column; align-items: flex-start; }
+      .demo-card { padding: 20px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HEADER
+  ════════════════════════════════════════════════════════════ -->
+  <header class="nb-header">
+    <img
+      src="https://raw.githubusercontent.com/TUIlmenauAMS/multimedia_programming_seminars/main/ams_group_tui.png"
+      alt="AMS Group – TU Ilmenau"
+    />
+    <div>
+      <h1>Computeranimation</h1>
+      <h2>Chapter 01: Animation Fundamentals &mdash; Demo: Keyframes &amp; Interpolation</h2>
+      <p><strong>Institut für Medientechnik &ndash; Technische Universität Ilmenau</strong><br>
+        <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme" target="_blank">
+          Institut für Medientechnik &ndash; AMS Group
+        </a>
+      </p>
+      <p>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller<br>
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank">LinkedIn</a>
+      </p>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 1 — CONCEPT
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">1. Keyframes &amp; Interpolation</h2>
+
+  <p>
+    In traditional animation, a senior animator draws the <strong>key poses</strong> of a character — the frames that matter most — and an assistant fills in all the frames between them. Computer animation works the same way: the animator specifies values at key moments in time, and the software computes every value in between. Those specified values are called <strong>keyframes</strong>.
+  </p>
+  <p>
+    The simplest way to fill in the gaps is <strong>linear interpolation</strong>: given the value at keyframe&nbsp;<em>i</em> and the value at keyframe&nbsp;<em>i+1</em>, assume a constant rate of change and move smoothly from one to the other. This is mathematically clean, but it produces motion that often looks mechanical — we will address that in Demo 2.
+  </p>
+  <p>
+    The <strong>step</strong> interpolation mode holds the keyframe value constant until the next keyframe is reached, with no transition at all. It looks jarring for continuous motion, but it is the right choice for discrete properties like sprite frames or state machines.
+  </p>
+
+  <div class="info-box">
+    <strong>Core idea:</strong> A keyframe stores the value of a property at a specific point in time.
+    The animator sets the keyframes; the computer fills in the frames between them &mdash; this is called
+    <em>inbetweening</em> or <em>interpolation</em>. Linear interpolation is the simplest: it assumes
+    constant velocity between keyframes.
+  </div>
+
+  <hr />
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 2 — INTERACTIVE DEMO
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">2. Interactive Demo</h2>
+
+  <p>A sphere travels through five keyframe positions, changing color as it moves. Use the controls below to switch interpolation modes, scrub to any moment in time, and adjust playback speed.</p>
+
+  <!-- Error banner — shown by JS if WebGL 2 is unavailable -->
+  <div id="errorBanner" class="error-banner" style="display:none;"></div>
+
+  <div class="demo-card">
+    <h3>Keyframe Animation</h3>
+
+    <div class="canvas-wrap">
+      <canvas id="glcanvas" class="gl-canvas"
+        role="img"
+        aria-label="A colored sphere moving between five keyframe positions.">
+      </canvas>
+    </div>
+
+    <div class="control-row">
+      <label for="interpMode">Interpolation</label>
+      <select id="interpMode">
+        <option value="linear" selected>linear</option>
+        <option value="step">step</option>
+      </select>
+    </div>
+
+    <div class="control-row">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="0.25" max="3" step="0.05" value="1.0" />
+      <span class="value-badge" id="speedVal">1.00×</span>
+    </div>
+
+    <div class="control-row">
+      <label for="scrubber">Scrubber</label>
+      <input type="range" id="scrubber" min="0" max="1" step="0.001" value="0" />
+      <span class="value-badge" id="scrubberVal">0.000</span>
+    </div>
+
+    <div class="control-row">
+      <label for="loop">Loop</label>
+      <input type="checkbox" id="loop" checked style="width:18px;height:18px;accent-color:var(--accent);" />
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="playBtn">Pause</button>
+    </div>
+
+    <div class="stats" id="stats" aria-live="off"></div>
+  </div>
+
+  <hr />
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 3 — HOW IT WORKS
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">3. How It Works</h2>
+
+  <p>
+    The script is divided into nine numbered steps. <strong>Steps 1–5</strong> are standard WebGL setup: context, shaders, helpers, compile/link, and geometry buffers. The animation concepts live in <strong>Steps 6–8</strong>.
+  </p>
+  <p>
+    <strong>Step 6</strong> defines the keyframe track — a plain JavaScript array of objects, each holding a <code>time</code>, a <code>position</code>, and a <code>color</code>. This is the data structure that drives everything. <strong>Step 7</strong> wires the UI controls to the playback state. <strong>Step 8</strong> is the render loop: it accumulates time, looks up the two surrounding keyframes, computes the local&nbsp;<em>t</em>&nbsp;value, and interpolates both position and color before sending them to the GPU as uniforms.
+  </p>
+  <p>
+    The small discs on the ground are the five keyframe positions, drawn with <code>gl.POINTS</code>. They never move — they are the raw data. The sphere moves between them.
+  </p>
+
+  <div class="info-box">
+    <strong>Note on color interpolation:</strong> This demo interpolates color in <strong>RGB space</strong>
+    using the same linear lerp as position. RGB lerp is not perceptually uniform &mdash; the perceived
+    brightness can dip in the middle of a blend. Professional tools such as Blender and After Effects
+    offer interpolation in <strong>HSL</strong> or <strong>Oklab</strong> (a perceptually uniform color
+    space) to produce more natural-looking color transitions. RGB is used here for simplicity and to
+    keep the focus on the keyframe concept.
+  </div>
+
+  <div class="pills">
+    <a class="pill" href="https://en.wikipedia.org/wiki/Key_frame" target="_blank">Keyframe &ndash; Wikipedia &#8599;</a>
+    <a class="pill" href="https://developer.mozilla.org/en-US/docs/Web/CSS/interpolate" target="_blank">Interpolation &ndash; MDN &#8599;</a>
+    <a class="pill" href="https://en.wikipedia.org/wiki/12_basic_principles_of_animation" target="_blank">Disney&rsquo;s 12 Principles &#8599;</a>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FOOTER
+  ════════════════════════════════════════════════════════════ -->
+  <footer class="nb-footer">
+    <p><strong>Computeranimation</strong> &middot; Chapter 01: Animation Fundamentals &middot; Demo: Keyframes &amp; Interpolation<br>
+      Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+    <p>Demo created by <strong>Renato Fera P.</strong> &middot;
+      <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank">LinkedIn</a>
+    </p>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCRIPT
+  ════════════════════════════════════════════════════════════ -->
+  <script type="module">
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * Computeranimation — Chapter 01 · Demo 1: Keyframes & Interpolation
+ *
+ * Animation concepts:
+ *   - Keyframe track (time + value pairs)
+ *   - Linear interpolation (lerp) between keyframes
+ *   - Step interpolation (hold until next keyframe)
+ *   - Normalized local time t ∈ [0,1] within a segment
+ *   - Scrubbing: animation as a pure function of time
+ *
+ * Steps in this file:
+ *   0) Collect DOM references
+ *   1) Get the WebGL 2 context (with error banner)
+ *   2) Shader sources (GLSL ES 3.00)
+ *   3) Standard WebGL helpers
+ *   4) Compile + link, cache uniform/attribute locations
+ *   5) Build geometry: UV sphere, ground plane, marker points
+ *   6) Keyframe track definition and interpolation logic
+ *   7) Wire UI events to playback state
+ *   8) Render + animation update function
+ *   9) Start the loop
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+// ══════════════════════════════════════════════════════════════
+// STEP 0 — Collect DOM references once
+// ══════════════════════════════════════════════════════════════
+// Querying the DOM is cheap but doing it every frame is noise.
+// Collect everything into one object and keep it.
+const ui = {
+  canvas:      document.getElementById('glcanvas'),
+  errorBanner: document.getElementById('errorBanner'),
+  interpMode:  document.getElementById('interpMode'),
+  speed:       document.getElementById('speed'),
+  speedVal:    document.getElementById('speedVal'),
+  scrubber:    document.getElementById('scrubber'),
+  scrubberVal: document.getElementById('scrubberVal'),
+  loop:        document.getElementById('loop'),
+  playBtn:     document.getElementById('playBtn'),
+  stats:       document.getElementById('stats'),
+};
+
+/** Show a friendly in-page error so the student never faces a silent black canvas. */
+function showError(msg) {
+  ui.errorBanner.textContent = msg;
+  ui.errorBanner.style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 1 — Get the WebGL 2 context
+// ══════════════════════════════════════════════════════════════
+const gl = ui.canvas.getContext('webgl2');
+if (!gl) {
+  showError(
+    'WebGL 2 is not available in this browser or on this device. ' +
+    'Make sure hardware acceleration is enabled in your browser settings.'
+  );
+  throw new Error('WebGL 2 not available');
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 2 — Shader sources (GLSL ES 3.00)
+// ══════════════════════════════════════════════════════════════
+// IMPORTANT: "#version 300 es" must be the very first characters of the
+// string — no leading newline, no space. That is why the template literal
+// starts immediately after the opening backtick.
+
+// ── Sphere / ground vertex shader ───────────────────────────
+// Applies the MVP transform and passes the world-space normal
+// to the fragment shader for Lambert lighting.
+const sphereVertSrc = `#version 300 es
+in vec3 a_position;   // vertex position in model space
+in vec3 a_normal;     // vertex normal in model space
+
+uniform mat4 u_model;      // model → world
+uniform mat4 u_view;       // world → camera
+uniform mat4 u_projection; // camera → clip
+uniform mat3 u_normalMat;  // inverse-transpose of model, for normals
+
+out vec3 v_worldNormal;   // normal in world space (for lighting)
+out vec3 v_worldPos;      // position in world space (for lighting)
+
+void main() {
+  vec4 worldPos = u_model * vec4(a_position, 1.0);
+  v_worldPos    = worldPos.xyz;
+  v_worldNormal = normalize(u_normalMat * a_normal);
+  gl_Position   = u_projection * u_view * worldPos;
+}`;
+
+// ── Sphere / ground fragment shader ─────────────────────────
+// Lambert diffuse + a small ambient term. The sphere color is
+// passed as a uniform that changes each frame.
+const sphereFragSrc = `#version 300 es
+precision highp float;
+
+in vec3 v_worldNormal;
+in vec3 v_worldPos;
+
+uniform vec3 u_color;       // current interpolated color of the sphere
+uniform vec3 u_lightDir;    // direction TOWARD the light, world space
+uniform bool u_isGround;    // true → use a fixed grey color
+
+out vec4 outColor;
+
+void main() {
+  // Lambert diffuse: brightness = how directly the surface faces the light.
+  float diff   = max(dot(normalize(v_worldNormal), normalize(u_lightDir)), 0.0);
+  float ambient = 0.18;
+  float light   = ambient + (1.0 - ambient) * diff;
+
+  // The ground uses a fixed grey; the sphere uses the animated color.
+  vec3 baseColor = u_isGround ? vec3(0.45) : u_color;
+  outColor = vec4(baseColor * light, 1.0);
+}`;
+
+// ── Marker point vertex shader ───────────────────────────────
+// Renders the five keyframe positions as large points on the ground.
+const markerVertSrc = `#version 300 es
+in vec3 a_position;
+
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+void main() {
+  // Fixed point size for the keyframe markers.
+  gl_PointSize = 10.0;
+  gl_Position  = u_projection * u_view * vec4(a_position, 1.0);
+}`;
+
+// ── Marker point fragment shader ────────────────────────────
+const markerFragSrc = `#version 300 es
+precision highp float;
+
+uniform vec3 u_markerColor;
+
+out vec4 outColor;
+
+void main() {
+  // Discard pixels outside a circle so we get round points, not squares.
+  vec2 pc = gl_PointCoord - vec2(0.5);
+  if (dot(pc, pc) > 0.25) discard;
+  outColor = vec4(u_markerColor, 1.0);
+}`;
+
+// ══════════════════════════════════════════════════════════════
+// STEP 3 — Standard WebGL helpers
+// Standard WebGL helper — see the Multimediaprogrammierung WebGL
+// chapter for a full walkthrough.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Compile a single GLSL shader and return it, or throw on error.
+ * @param {WebGL2RenderingContext} gl
+ * @param {number} type gl.VERTEX_SHADER | gl.FRAGMENT_SHADER
+ * @param {string} source GLSL source (must start with #version 300 es)
+ * @returns {WebGLShader}
+ */
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(`Shader compile error:\n${log}`);
+  }
+  return shader;
+}
+
+/**
+ * Link a vertex shader and a fragment shader into a program.
+ * @param {WebGL2RenderingContext} gl
+ * @param {string} vertSrc
+ * @param {string} fragSrc
+ * @returns {WebGLProgram}
+ */
+function createProgram(gl, vertSrc, fragSrc) {
+  const vs   = createShader(gl, gl.VERTEX_SHADER,   vertSrc);
+  const fs   = createShader(gl, gl.FRAGMENT_SHADER, fragSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(prog);
+    gl.deleteProgram(prog);
+    throw new Error(`Program link error:\n${log}`);
+  }
+  return prog;
+}
+
+/**
+ * Resize the WebGL drawing buffer to match the canvas's CSS size,
+ * accounting for the device pixel ratio.
+ * @param {HTMLCanvasElement} canvas
+ * @returns {boolean} true if a resize occurred
+ */
+function resizeCanvasToDisplaySize(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w   = Math.round(canvas.clientWidth  * dpr);
+  const h   = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    return true;
+  }
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 3b — mat4 helpers (column-major Float32Array)
+// Standard WebGL helper — see the Multimediaprogrammierung WebGL
+// chapter for a full walkthrough.
+// ══════════════════════════════════════════════════════════════
+// All 3D transforms are 4×4 matrices stored in COLUMN-MAJOR order
+// (same as GLSL). These match the helpers from the WebGL chapter.
+const mat4 = {
+  identity:    () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  translation: (x, y, z) => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]),
+  rotationY:   (a) => {
+    const c = Math.cos(a), s = Math.sin(a);
+    return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);
+  },
+  scaling:     (x, y, z) => new Float32Array([x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]),
+  perspective: (fovY, aspect, near, far) => {
+    const f  = 1 / Math.tan(fovY / 2);
+    const nf = 1 / (near - far);
+    return new Float32Array([
+      f/aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far+near)*nf, -1,
+      0, 0, 2*far*near*nf, 0,
+    ]);
+  },
+  multiply: (a, b) => {
+    const out = new Float32Array(16);
+    for (let c = 0; c < 4; c++) {
+      for (let r = 0; r < 4; r++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k*4+r] * b[c*4+k];
+        out[c*4+r] = s;
+      }
+    }
+    return out;
+  },
+  /** Construct a view matrix from eye position, target point, and up vector. */
+  lookAt: (eye, target, up) => {
+    // ANIMATION CONCEPT: lookAt constructs the view matrix from camera
+    // position and target. The three axes of the camera's local frame
+    // are computed from cross products.
+    const normalize = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+    const cross = (a, b) => [
+      a[1]*b[2] - a[2]*b[1],
+      a[2]*b[0] - a[0]*b[2],
+      a[0]*b[1] - a[1]*b[0],
+    ];
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const z = normalize([eye[0]-target[0], eye[1]-target[1], eye[2]-target[2]]);
+    const x = normalize(cross(up, z));
+    const y = cross(z, x);
+    return new Float32Array([
+       x[0],  y[0],  z[0], 0,
+       x[1],  y[1],  z[1], 0,
+       x[2],  y[2],  z[2], 0,
+      -dot(x,eye), -dot(y,eye), -dot(z,eye), 1,
+    ]);
+  },
+};
+
+/**
+ * Compute the normal matrix (inverse-transpose of the upper-left 3×3
+ * of a model matrix). Needed for correct normal transformation.
+ * @param {Float32Array} m column-major 4×4 model matrix
+ * @returns {Float32Array} 9 floats, column-major 3×3
+ */
+function normalMatrix(m) {
+  // Extract the 3×3, compute its determinant, invert and transpose.
+  const [a,b,c, d,e,f, g,h,i] = [m[0],m[1],m[2], m[4],m[5],m[6], m[8],m[9],m[10]];
+  const det = a*(e*i-f*h) - b*(d*i-f*g) + c*(d*h-e*g);
+  const inv = 1 / det;
+  // Adjugate (transpose of cofactor matrix), then divide by det.
+  return new Float32Array([
+    (e*i-f*h)*inv, -(b*i-c*h)*inv,  (b*f-c*e)*inv,
+    -(d*i-f*g)*inv, (a*i-c*g)*inv, -(a*f-c*d)*inv,
+     (d*h-e*g)*inv,-(a*h-b*g)*inv,  (a*e-b*d)*inv,
+  ]);
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 4 — Compile + link, cache attribute / uniform locations
+// ══════════════════════════════════════════════════════════════
+// Compile once at startup. Cache all locations — looking them up
+// per frame is wasteful and flagged as an error in WebGL profilers.
+
+// Program for the sphere and the ground plane.
+let sphereProg, markerProg;
+try {
+  sphereProg = createProgram(gl, sphereVertSrc,  sphereFragSrc);
+  markerProg = createProgram(gl, markerVertSrc, markerFragSrc);
+} catch (err) {
+  showError(err.message);
+  throw err;
+}
+
+// Sphere program locations
+const sp = {
+  aPosition:   gl.getAttribLocation(sphereProg,  'a_position'),
+  aNormal:     gl.getAttribLocation(sphereProg,  'a_normal'),
+  uModel:      gl.getUniformLocation(sphereProg, 'u_model'),
+  uView:       gl.getUniformLocation(sphereProg, 'u_view'),
+  uProjection: gl.getUniformLocation(sphereProg, 'u_projection'),
+  uNormalMat:  gl.getUniformLocation(sphereProg, 'u_normalMat'),
+  uColor:      gl.getUniformLocation(sphereProg, 'u_color'),
+  uLightDir:   gl.getUniformLocation(sphereProg, 'u_lightDir'),
+  uIsGround:   gl.getUniformLocation(sphereProg, 'u_isGround'),
+};
+
+// Marker program locations
+const mp = {
+  aPosition:     gl.getAttribLocation(markerProg,  'a_position'),
+  uView:         gl.getUniformLocation(markerProg, 'u_view'),
+  uProjection:   gl.getUniformLocation(markerProg, 'u_projection'),
+  uMarkerColor:  gl.getUniformLocation(markerProg, 'u_markerColor'),
+};
+
+// ══════════════════════════════════════════════════════════════
+// STEP 5 — Build geometry buffers and VAOs
+// ══════════════════════════════════════════════════════════════
+
+// ── UV Sphere ────────────────────────────────────────────────
+// A UV sphere is generated by sweeping a circle (latitude) around
+// the Y axis (longitude). Each vertex stores a position and a smooth
+// (interpolated) normal pointing outward from the centre.
+
+/** Generate a UV sphere.
+ * @param {number} latBands  horizontal rings (default 16)
+ * @param {number} lonBands  vertical slices (default 24)
+ * @returns {{ positions: Float32Array, normals: Float32Array, indices: Uint16Array }}
+ */
+function buildSphere(latBands = 16, lonBands = 24) {
+  const positions = [];
+  const normals   = [];
+  const indices   = [];
+
+  for (let lat = 0; lat <= latBands; lat++) {
+    const theta    = (lat / latBands) * Math.PI;   // 0 … π
+    const sinTheta = Math.sin(theta);
+    const cosTheta = Math.cos(theta);
+
+    for (let lon = 0; lon <= lonBands; lon++) {
+      const phi    = (lon / lonBands) * 2 * Math.PI; // 0 … 2π
+      const sinPhi = Math.sin(phi);
+      const cosPhi = Math.cos(phi);
+
+      // Normal equals the unit position vector for a unit sphere.
+      const nx = cosPhi * sinTheta;
+      const ny = cosTheta;
+      const nz = sinPhi * sinTheta;
+
+      normals.push(nx, ny, nz);
+      positions.push(nx, ny, nz); // radius = 1; scale via model matrix
+    }
+  }
+
+  // Build the index buffer — two triangles per quad.
+  for (let lat = 0; lat < latBands; lat++) {
+    for (let lon = 0; lon < lonBands; lon++) {
+      const a = lat * (lonBands + 1) + lon;
+      const b = a + lonBands + 1;
+      indices.push(a, b, a+1,  b, b+1, a+1);
+    }
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    normals:   new Float32Array(normals),
+    indices:   new Uint16Array(indices),
+  };
+}
+
+/**
+ * Upload an attribute buffer and record the pointer in the current VAO.
+ * @param {Float32Array} data
+ * @param {number} attribLoc
+ * @param {number} components  floats per vertex
+ * @returns {WebGLBuffer}
+ */
+function makeAttribBuffer(data, attribLoc, components) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(attribLoc);
+  gl.vertexAttribPointer(attribLoc, components, gl.FLOAT, false, 0, 0);
+  return buf;
+}
+
+const sphere = buildSphere(16, 24);
+const sphereIndexCount = sphere.indices.length;
+
+const sphereVAO = gl.createVertexArray();
+gl.bindVertexArray(sphereVAO);
+makeAttribBuffer(sphere.positions, sp.aPosition, 3);
+makeAttribBuffer(sphere.normals,   sp.aNormal,   3);
+const sphereIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
+gl.bindVertexArray(null);
+
+// ── Ground Plane ─────────────────────────────────────────────
+// A flat quad at y = 0. All normals point straight up (+Y).
+const GROUND_HALF = 5.0;  // half-extent of the ground plane
+const groundPositions = new Float32Array([
+  -GROUND_HALF, 0, -GROUND_HALF,
+   GROUND_HALF, 0, -GROUND_HALF,
+   GROUND_HALF, 0,  GROUND_HALF,
+  -GROUND_HALF, 0,  GROUND_HALF,
+]);
+const groundNormals = new Float32Array([
+  0,1,0,  0,1,0,  0,1,0,  0,1,0,
+]);
+const groundIndices = new Uint16Array([0,1,2, 0,2,3]);
+
+const groundVAO = gl.createVertexArray();
+gl.bindVertexArray(groundVAO);
+makeAttribBuffer(groundPositions, sp.aPosition, 3);
+makeAttribBuffer(groundNormals,   sp.aNormal,   3);
+const groundIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, groundIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, groundIndices, gl.STATIC_DRAW);
+gl.bindVertexArray(null);
+
+// ── Keyframe Markers ─────────────────────────────────────────
+// Five points on the ground plane, one per keyframe. They are drawn
+// with gl.POINTS so each one renders as a disc (the fragment shader
+// discards pixels outside the inscribed circle). They stay fixed and
+// show the student where in space the keyframe data lives.
+const MARKER_Y = 0.02; // slightly above the ground to avoid z-fighting
+
+const markerVAO = gl.createVertexArray();
+gl.bindVertexArray(markerVAO);
+// Positions are filled once the keyframes are defined (Step 6).
+const markerPosBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, markerPosBuf);
+gl.enableVertexAttribArray(mp.aPosition);
+gl.vertexAttribPointer(mp.aPosition, 3, gl.FLOAT, false, 0, 0);
+gl.bindVertexArray(null);
+
+// ══════════════════════════════════════════════════════════════
+// STEP 6 — Animation state and keyframe track
+// ══════════════════════════════════════════════════════════════
+
+// ANIMATION CONCEPT: Keyframe track
+// A keyframe track is an ordered array of (time, value) pairs. For
+// this demo each keyframe stores a 3D position and an RGB color —
+// two properties that are animated together using the same t.
+// The track below defines the sphere's journey over 4 seconds.
+
+/** @typedef {{ time: number, position: number[], color: number[] }} Keyframe */
+
+/** @type {Keyframe[]} */
+const KEYFRAMES = [
+  { time: 0.0, position: [-3.0, 0.5,  0.0], color: [0.9, 0.3, 0.2] }, // red
+  { time: 1.0, position: [-1.0, 1.5,  1.0], color: [0.9, 0.7, 0.1] }, // orange
+  { time: 2.0, position: [ 0.0, 0.5,  0.0], color: [0.2, 0.8, 0.4] }, // green
+  { time: 3.0, position: [ 1.0, 2.0, -1.0], color: [0.2, 0.5, 0.9] }, // blue
+  { time: 4.0, position: [ 3.0, 0.5,  0.0], color: [0.7, 0.2, 0.9] }, // purple
+];
+
+const TOTAL_DURATION = KEYFRAMES[KEYFRAMES.length - 1].time; // 4.0 s
+
+// Upload marker positions to the GPU now that the keyframes are defined.
+{
+  const pts = new Float32Array(KEYFRAMES.length * 3);
+  KEYFRAMES.forEach((kf, i) => {
+    pts[i*3]   = kf.position[0];
+    pts[i*3+1] = MARKER_Y;
+    pts[i*3+2] = kf.position[2];
+  });
+  gl.bindBuffer(gl.ARRAY_BUFFER, markerPosBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, pts, gl.STATIC_DRAW);
+}
+
+// ── Playback state ───────────────────────────────────────────
+let playTime   = 0.0;    // current position in the animation (seconds)
+let paused     = false;  // is the animation paused?
+let lastStamp  = null;   // rAF timestamp of the previous frame
+
+// ── Linear interpolation helpers ────────────────────────────
+
+/**
+ * Lerp a scalar: linear interpolation between a and b.
+ * @param {number} a
+ * @param {number} b
+ * @param {number} t  normalized local time, 0 at a, 1 at b
+ * @returns {number}
+ */
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+/**
+ * Lerp a vec3 (array of 3 numbers) component-wise.
+ * @param {number[]} a
+ * @param {number[]} b
+ * @param {number} t
+ * @returns {number[]}
+ */
+function lerpVec3(a, b, t) {
+  return [lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
+}
+
+/**
+ * Sample the keyframe track at time `time` using the chosen mode.
+ *
+ * ANIMATION CONCEPT: Evaluating a keyframe track
+ *   1. Find the segment: walk the track to find the two keyframes
+ *      that bracket the current time (kf[i].time ≤ time < kf[i+1].time).
+ *   2. Compute the local (normalized) time within that segment:
+ *        t = (time − kf[i].time) / (kf[i+1].time − kf[i].time)
+ *      t = 0 means we are exactly at keyframe i.
+ *      t = 1 means we are exactly at keyframe i+1.
+ *      t = 0.5 means we are halfway between them.
+ *   3. Interpolate: position = lerp(pos_i, pos_{i+1}, t)
+ *                   color    = lerp(col_i, col_{i+1}, t)
+ *
+ * @param {number} time   current play time in seconds
+ * @param {'linear'|'step'} mode
+ * @returns {{ position: number[], color: number[], segA: number, segB: number }}
+ */
+function sampleTrack(time, mode) {
+  // Clamp to the valid range of the track.
+  const t0 = Math.max(0, Math.min(time, TOTAL_DURATION));
+
+  // Find the active segment index.
+  let i = 0;
+  while (i < KEYFRAMES.length - 2 && KEYFRAMES[i+1].time <= t0) i++;
+
+  const kfA = KEYFRAMES[i];
+  const kfB = KEYFRAMES[i + 1];
+
+  // Compute the normalized local time within this segment.
+  const segDuration = kfB.time - kfA.time;
+  const localT      = (t0 - kfA.time) / segDuration;  // ∈ [0, 1]
+
+  if (mode === 'step') {
+    // Step: hold the value of the STARTING keyframe; jump at the boundary.
+    return { position: kfA.position, color: kfA.color, segA: i, segB: i+1 };
+  }
+
+  // Linear: interpolate both position and color with the same t.
+  return {
+    position: lerpVec3(kfA.position, kfB.position, localT),
+    color:    lerpVec3(kfA.color,    kfB.color,    localT),
+    segA:     i,
+    segB:     i + 1,
+  };
+}
+
+// ── Camera (fixed for this demo) ─────────────────────────────
+const CAM_EYE    = [0, 3, 8];
+const CAM_TARGET = [0, 0.5, 0];
+const CAM_UP     = [0, 1, 0];
+
+// ── Scene constants ──────────────────────────────────────────
+const LIGHT_DIR    = [0.6, 1.0, 0.5];   // direction TOWARD the light
+const SPHERE_SCALE = 0.45;               // sphere radius in world units
+
+const FOV_Y  = 45 * Math.PI / 180;
+const Z_NEAR = 0.1;
+const Z_FAR  = 60.0;
+
+// ══════════════════════════════════════════════════════════════
+// STEP 7 — Wire UI events to playback state
+// ══════════════════════════════════════════════════════════════
+
+// Speed slider — display the formatted value next to it.
+ui.speed.addEventListener('input', () => {
+  ui.speedVal.textContent = `${parseFloat(ui.speed.value).toFixed(2)}×`;
+});
+
+// Scrubber — dragging pauses playback and jumps to the chosen time.
+// This teaches students that an animation is just a function of time:
+// time can be driven by anything, not only a clock.
+ui.scrubber.addEventListener('input', () => {
+  paused   = true;
+  playTime = parseFloat(ui.scrubber.value) * TOTAL_DURATION;
+  ui.playBtn.textContent = 'Play';
+  ui.scrubberVal.textContent = parseFloat(ui.scrubber.value).toFixed(3);
+  // Request one extra frame so the canvas updates while scrubbing.
+  requestAnimationFrame(frame);
+});
+
+// Play / Pause toggle button.
+ui.playBtn.addEventListener('click', () => {
+  paused = !paused;
+  ui.playBtn.textContent = paused ? 'Play' : 'Pause';
+  if (!paused) {
+    // Reset the timestamp so accumulated time doesn't jump.
+    lastStamp = null;
+    requestAnimationFrame(frame);
+  }
+});
+
+// Interpolation mode — no extra state needed; sampleTrack reads it directly.
+ui.interpMode.addEventListener('change', () => {
+  // Trigger a redraw when paused so the change is visible immediately.
+  if (paused) requestAnimationFrame(frame);
+});
+
+// ══════════════════════════════════════════════════════════════
+// STEP 8 — Render + animation update function
+// ══════════════════════════════════════════════════════════════
+
+// FPS smoothing over ~30 frames.
+let fpsSamples = [];
+
+/**
+ * Draw one frame and advance the animation clock.
+ * @param {DOMHighResTimeStamp} timestamp  provided by requestAnimationFrame
+ */
+function frame(timestamp) {
+  // ── 8a. Advance the animation clock ─────────────────────────
+  // ANIMATION CONCEPT: Performance-independent animation
+  //   Use elapsed wall-clock time (dt) to advance playTime, not frame
+  //   counts. This ensures the animation runs at the same speed
+  //   regardless of display refresh rate (60 Hz vs 120 Hz, etc.).
+  if (!paused) {
+    if (lastStamp !== null) {
+      const dt = (timestamp - lastStamp) / 1000;  // milliseconds → seconds
+      playTime += dt * parseFloat(ui.speed.value);
+
+      if (playTime >= TOTAL_DURATION) {
+        if (ui.loop.checked) {
+          playTime %= TOTAL_DURATION;  // wrap around
+        } else {
+          playTime = TOTAL_DURATION;
+          paused   = true;
+          ui.playBtn.textContent = 'Play';
+        }
+      }
+    }
+    lastStamp = timestamp;
+  }
+
+  // ── 8b. Sample the keyframe track ───────────────────────────
+  const mode   = ui.interpMode.value;
+  const sample = sampleTrack(playTime, mode);
+
+  // ── 8c. Sync the scrubber to the animation clock (when playing) ─
+  if (!paused) {
+    const norm = playTime / TOTAL_DURATION;
+    ui.scrubber.value    = norm;
+    ui.scrubberVal.textContent = norm.toFixed(3);
+  }
+
+  // ── 8d. Resize the drawing buffer if the CSS size changed ────
+  resizeCanvasToDisplaySize(ui.canvas);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+  // ── 8e. Global GL state ──────────────────────────────────────
+  gl.clearColor(0.12, 0.12, 0.18, 1.0);  // matches --canvas-bg
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+
+  // ── 8f. Compute matrices ─────────────────────────────────────
+  const aspect     = gl.drawingBufferWidth / gl.drawingBufferHeight;
+  const projection = mat4.perspective(FOV_Y, aspect, Z_NEAR, Z_FAR);
+  const view       = mat4.lookAt(CAM_EYE, CAM_TARGET, CAM_UP);
+
+  // Sphere model matrix: translate to the interpolated position, scale to radius.
+  const [sx, sy, sz] = sample.position;
+  const sphereModel  = mat4.multiply(
+    mat4.translation(sx, sy, sz),
+    mat4.scaling(SPHERE_SCALE, SPHERE_SCALE, SPHERE_SCALE)
+  );
+
+  // ── 8g. Draw the ground plane ────────────────────────────────
+  gl.useProgram(sphereProg);
+  gl.uniformMatrix4fv(sp.uView,       false, view);
+  gl.uniformMatrix4fv(sp.uProjection, false, projection);
+  gl.uniform3fv(sp.uLightDir, new Float32Array(LIGHT_DIR));
+  gl.uniform1i(sp.uIsGround, 1);         // flag the ground shader path
+  gl.uniform3fv(sp.uColor, new Float32Array([0.45, 0.45, 0.45])); // unused in ground path
+
+  const groundModel = mat4.identity();
+  gl.uniformMatrix4fv(sp.uModel,     false, groundModel);
+  gl.uniformMatrix3fv(sp.uNormalMat, false, normalMatrix(groundModel));
+
+  gl.bindVertexArray(groundVAO);
+  gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+  // ── 8h. Draw the sphere ──────────────────────────────────────
+  gl.uniform1i(sp.uIsGround, 0);  // switch to sphere color path
+  gl.uniform3fv(sp.uColor, new Float32Array(sample.color));
+  gl.uniformMatrix4fv(sp.uModel,     false, sphereModel);
+  gl.uniformMatrix3fv(sp.uNormalMat, false, normalMatrix(sphereModel));
+
+  gl.bindVertexArray(sphereVAO);
+  gl.drawElements(gl.TRIANGLES, sphereIndexCount, gl.UNSIGNED_SHORT, 0);
+
+  // ── 8i. Draw the keyframe markers ────────────────────────────
+  // The markers are rendered with the marker program (separate shader).
+  // Each marker's color shows which keyframe it represents.
+  gl.useProgram(markerProg);
+  gl.uniformMatrix4fv(mp.uView,       false, view);
+  gl.uniformMatrix4fv(mp.uProjection, false, projection);
+
+  gl.bindVertexArray(markerVAO);
+  KEYFRAMES.forEach((kf, idx) => {
+    gl.uniform3fv(mp.uMarkerColor, new Float32Array(kf.color));
+    gl.drawArrays(gl.POINTS, idx, 1);
+  });
+
+  // ── 8j. Update the stats read-out ───────────────────────────
+  // Track FPS with a rolling average so the display is stable.
+  fpsSamples.push(timestamp);
+  fpsSamples = fpsSamples.filter(t => timestamp - t < 1000);
+  const fps  = fpsSamples.length;
+
+  const { segA, segB } = sample;
+  ui.stats.textContent =
+    `t = ${playTime.toFixed(2)} s / ${TOTAL_DURATION.toFixed(2)} s  ·  ` +
+    `segment: ${segA+1}→${segB+1}  ·  mode: ${mode}  ·  FPS: ${fps}`;
+
+  // Schedule the next frame (only while playing).
+  if (!paused) requestAnimationFrame(frame);
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 9 — Start the loop
+// ══════════════════════════════════════════════════════════════
+
+// Handle window resize: redraw once when the canvas CSS size changes.
+new ResizeObserver(() => requestAnimationFrame(frame)).observe(ui.canvas);
+
+// Draw the first frame to populate the canvas before the user interacts.
+requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Computeranimation &ndash; Easing &amp; Animation Curves Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:    #1a73e8;
+      --danger:    #e53935;
+      --border:    #e0e0e0;
+      --canvas-bg: #1e1e2e;
+      --surface:   #f8f9fa;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #212121;
+      background: #fff;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+    }
+
+    .nb-header { display: flex; align-items: center; gap: 24px; border-bottom: 2px solid var(--border); padding: 16px 0; margin-bottom: 32px; }
+    .nb-header img { width: 120px; border-radius: 12px; flex-shrink: 0; }
+    .nb-header h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .nb-header h2 { font-size: 1.1rem; font-weight: 400; margin-bottom: 8px; color: #444; }
+    .nb-header p  { font-size: 0.92rem; margin-bottom: 2px; }
+    .nb-header a  { color: var(--accent); text-decoration: none; }
+    .nb-header a:hover { text-decoration: underline; }
+
+    .pills { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      display: inline-block;
+      padding: 6px 14px;
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.92rem;
+      color: var(--accent);
+      transition: background 0.15s, color 0.15s;
+    }
+    .pill:hover { background: var(--accent); color: #fff; }
+
+    h2.section { font-size: 1.3rem; margin: 40px 0 12px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+    p  { margin-bottom: 12px; }
+
+    .demo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin: 24px 0;
+    }
+    .demo-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .control-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .control-row label { min-width: 140px; font-weight: 500; font-size: 0.95rem; }
+    .control-row input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+    .control-row select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95rem; background: #fff; }
+    .value-badge { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.92rem; color: #555; }
+
+    .btn-row { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+    .btn { padding: 10px 28px; border: none; border-radius: 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    canvas.gl-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border-radius: 8px;
+      background: var(--canvas-bg);
+      margin-top: 20px;
+      touch-action: none;
+    }
+    .canvas-wrap { margin-bottom: 16px; }
+
+    /* 2D curve canvas below the WebGL canvas */
+    canvas.curve-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 2 / 1;
+      border-radius: 8px;
+      background: #fafafa;
+      border: 1px solid var(--border);
+      margin-top: 12px;
+      cursor: default;
+    }
+    canvas.curve-canvas.draggable { cursor: crosshair; }
+
+    .stats {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.82rem;
+      color: #555;
+      margin-top: 10px;
+      min-height: 1.4em;
+    }
+    .info-box {
+      border-left: 5px solid var(--accent);
+      background: rgba(26,115,232,0.07);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+    .error-banner {
+      background: #fdecea;
+      border-left: 5px solid var(--danger);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin: 20px 0;
+      color: #7f1d1d;
+    }
+    code { background: #f1f3f4; border-radius: 4px; padding: 1px 6px; font-size: 0.9em; font-family: "SFMono-Regular", Consolas, monospace; }
+
+    /* Bezier-only controls — shown/hidden by JS */
+    .bezier-only { display: none; }
+
+    .nb-footer {
+      text-align: center;
+      padding: 18px 0 8px;
+      margin-top: 48px;
+      border-top: 2px solid var(--border);
+      font-size: 0.92rem;
+      color: #444;
+      line-height: 1.7;
+    }
+    .nb-footer a { color: var(--accent); text-decoration: none; }
+    .nb-footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .nb-header { flex-direction: column; align-items: flex-start; }
+      .demo-card { padding: 20px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HEADER
+  ════════════════════════════════════════════════════════════ -->
+  <header class="nb-header">
+    <img
+      src="https://raw.githubusercontent.com/TUIlmenauAMS/multimedia_programming_seminars/main/ams_group_tui.png"
+      alt="AMS Group – TU Ilmenau"
+    />
+    <div>
+      <h1>Computeranimation</h1>
+      <h2>Chapter 01: Animation Fundamentals &mdash; Demo: Easing &amp; Animation Curves</h2>
+      <p><strong>Institut für Medientechnik &ndash; Technische Universität Ilmenau</strong><br>
+        <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme" target="_blank">
+          Institut für Medientechnik &ndash; AMS Group
+        </a>
+      </p>
+      <p>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller<br>
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank">LinkedIn</a>
+      </p>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 1 — CONCEPT
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">1. Easing &amp; Animation Curves</h2>
+
+  <p>
+    Demo 1 showed how keyframes store values at discrete times and how linear interpolation fills the gaps. But linear interpolation produces motion at constant speed — and in the real world, almost nothing moves at constant speed. Objects accelerate as they start and decelerate as they stop. This quality is what makes motion feel <em>alive</em>.
+  </p>
+  <p>
+    An <strong>easing function</strong> is a mapping from a linear progress value <em>t&nbsp;&isin;&nbsp;[0,&nbsp;1]</em> to a non-linear output <em>e&nbsp;&isin;&nbsp;[0,&nbsp;1]</em>. Instead of moving at a fixed rate, the animated value follows the shape of that curve. The same principle drives CSS transitions, game-engine tweens, and professional animation software.
+  </p>
+  <p>
+    The most expressive easing functions are <strong>cubic Bézier curves</strong>, defined by two control points P1 and P2. The CSS <code>transition-timing-function</code> property and After Effects graph editor both use exactly this model. The live curve plot below shows the easing curve in real time — watch the moving dot to see exactly where on the curve the animation currently is.
+  </p>
+
+  <div class="info-box">
+    <strong>Core idea:</strong> Easing is the difference between motion that <em>looks right</em> and motion that looks mechanical. An easing function remaps the linear progress <code>t &isin; [0,1]</code> to a non-linear output <code>e &isin; [0,1]</code>. The same easing function is used in CSS transitions, game engines, and professional animation software.
+  </div>
+
+  <hr />
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 2 — INTERACTIVE DEMO
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">2. Interactive Demo</h2>
+
+  <p>A sphere moves back and forth between two fixed points. The easing function controls the timing of that motion. The curve plot below the canvas shows the shape of the easing function and a moving dot at the current position on the curve.</p>
+
+  <div id="errorBanner" class="error-banner" style="display:none;"></div>
+
+  <div class="demo-card">
+    <h3>Easing &amp; Animation Curves</h3>
+
+    <!-- WebGL canvas -->
+    <div class="canvas-wrap">
+      <canvas id="glcanvas" class="gl-canvas"
+        role="img"
+        aria-label="A sphere moving between two points with the selected easing function applied.">
+      </canvas>
+    </div>
+
+    <!-- 2D curve plot canvas -->
+    <canvas id="curveCanvas" class="curve-canvas"
+      aria-label="Live plot of the easing curve with a moving dot showing current position.">
+    </canvas>
+
+    <!-- Easing function selector -->
+    <div class="control-row" style="margin-top: 18px;">
+      <label for="easingFn">Easing function</label>
+      <select id="easingFn">
+        <optgroup label="Linear">
+          <option value="linear" selected>linear</option>
+        </optgroup>
+        <optgroup label="Quadratic">
+          <option value="easeInQuad">easeInQuad</option>
+          <option value="easeOutQuad">easeOutQuad</option>
+          <option value="easeInOutQuad">easeInOutQuad</option>
+        </optgroup>
+        <optgroup label="Cubic">
+          <option value="easeInCubic">easeInCubic</option>
+          <option value="easeOutCubic">easeOutCubic</option>
+          <option value="easeInOutCubic">easeInOutCubic</option>
+        </optgroup>
+        <optgroup label="Cubic Bézier">
+          <option value="cubicBezier">cubicBezier (custom)</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <!-- Bezier preset — shown only when cubicBezier is selected -->
+    <div class="control-row bezier-only" id="rowBezierPreset">
+      <label for="bezierPreset">Preset</label>
+      <select id="bezierPreset">
+        <option value="ease">ease (CSS default)</option>
+        <option value="ease-in">ease-in</option>
+        <option value="ease-out">ease-out</option>
+        <option value="ease-in-out">ease-in-out</option>
+        <option value="custom">custom</option>
+      </select>
+    </div>
+
+    <!-- x1/y1/x2/y2 sliders — shown only when cubicBezier + custom -->
+    <div class="control-row bezier-only" id="rowX1">
+      <label for="bzX1">P1 x</label>
+      <input type="range" id="bzX1" min="0" max="1" step="0.01" value="0.25" />
+      <span class="value-badge" id="bzX1Val">0.25</span>
+    </div>
+    <div class="control-row bezier-only" id="rowY1">
+      <label for="bzY1">P1 y</label>
+      <input type="range" id="bzY1" min="0" max="1" step="0.01" value="0.10" />
+      <span class="value-badge" id="bzY1Val">0.10</span>
+    </div>
+    <div class="control-row bezier-only" id="rowX2">
+      <label for="bzX2">P2 x</label>
+      <input type="range" id="bzX2" min="0" max="1" step="0.01" value="0.25" />
+      <span class="value-badge" id="bzX2Val">0.25</span>
+    </div>
+    <div class="control-row bezier-only" id="rowY2">
+      <label for="bzY2">P2 y</label>
+      <input type="range" id="bzY2" min="0" max="1" step="0.01" value="1.00" />
+      <span class="value-badge" id="bzY2Val">1.00</span>
+    </div>
+
+    <!-- Speed slider -->
+    <div class="control-row">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="0.25" max="2" step="0.05" value="1.0" />
+      <span class="value-badge" id="speedVal">1.00×</span>
+    </div>
+
+    <!-- Play/Pause button -->
+    <div class="btn-row">
+      <button class="btn btn-primary" id="playBtn">Pause</button>
+    </div>
+
+    <div class="stats" id="stats" aria-live="off"></div>
+  </div>
+
+  <hr />
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 3 — HOW IT WORKS
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">3. How It Works</h2>
+
+  <p>
+    The WebGL scene (<strong>Steps 1–5</strong>) is the same sphere and ground plane from Demo 1 — the shaders, geometry builders, and mat4 helpers are carried over unchanged. The new material is in <strong>Steps 6–8</strong>.
+  </p>
+  <p>
+    <strong>Step 6</strong> defines the easing functions as pure JavaScript functions <code>f(t) → e</code> where both input and output live in <code>[0, 1]</code>. The cubic Bézier is implemented as a factory: given the two control points, it returns a closure that uses Newton's method to invert the Bézier x-component and then evaluates the y-component. <strong>Step 7</strong> wires all the controls, including the pointer-drag logic on the 2D canvas for moving P1 and P2. <strong>Step 8</strong> is the render loop: it drives a ping-pong timer, applies the current easing function, and redraws both the WebGL canvas and the curve plot every frame.
+  </p>
+  <p>
+    The curve plot is drawn with the <strong>Canvas 2D API</strong> (not WebGL). Each frame it samples the active easing function at 200 equally-spaced points and draws a polyline. The moving dot is plotted at the current <em>t</em> value. In cubic Bézier mode the two control-point handles are drawn as draggable circles.
+  </p>
+
+  <div class="info-box">
+    <strong>Connection to other tools:</strong> After Effects uses the same cubic Bézier model in its graph editor. The CSS function <code>cubic-bezier(x1, y1, x2, y2)</code> takes exactly these four parameters. GSAP's named eases (e.g. <code>power2.inOut</code>) compile to the same math. The <a href="https://cubic-bezier.com" target="_blank">cubic-bezier.com</a> tool is the interactive reference used by web developers worldwide.
+  </div>
+
+  <div class="pills">
+    <a class="pill" href="https://developer.mozilla.org/en-US/docs/Web/CSS/easing-function" target="_blank">CSS easing functions &ndash; MDN &#8599;</a>
+    <a class="pill" href="https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timing-function" target="_blank">cubic-bezier &ndash; MDN &#8599;</a>
+    <a class="pill" href="https://cubic-bezier.com" target="_blank">cubic-bezier.com &#8599;</a>
+    <a class="pill" href="http://robertpenner.com/easing/" target="_blank">Robert Penner&rsquo;s easing equations &#8599;</a>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FOOTER
+  ════════════════════════════════════════════════════════════ -->
+  <footer class="nb-footer">
+    <p><strong>Computeranimation</strong> &middot; Chapter 01: Animation Fundamentals &middot; Demo: Easing &amp; Animation Curves<br>
+      Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+    <p>Demo created by <strong>Renato Fera P.</strong> &middot;
+      <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank">LinkedIn</a>
+    </p>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCRIPT
+  ════════════════════════════════════════════════════════════ -->
+  <script type="module">
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * Computeranimation — Chapter 01 · Demo 2: Easing & Animation Curves
+ *
+ * Animation concepts:
+ *   - Easing functions: remapping linear t ∈ [0,1] to a non-linear e
+ *   - Ease-in / ease-out / ease-in-out families (quadratic, cubic)
+ *   - Cubic Bézier timing curves: factory, Newton's method solver
+ *   - Live curve plot: visualizing the easing function in real time
+ *   - Ping-pong animation: time that bounces between 0 and 1
+ *
+ * Steps in this file:
+ *   0) Collect DOM references
+ *   1) Get the WebGL 2 context (with error banner)
+ *   2) Shader sources (GLSL ES 3.00) — same as Demo 1
+ *   3) Standard WebGL helpers (createShader, createProgram, resize)
+ *   3b) mat4 helpers (same as Demo 1)
+ *   4) Compile + link, cache uniform/attribute locations
+ *   5) Build geometry: UV sphere and ground plane (same as Demo 1)
+ *   6) Easing functions and animation state
+ *   7) Wire UI events; pointer-drag on the 2D curve canvas
+ *   8) Render + animation update (WebGL + curve plot every frame)
+ *   9) Start the loop
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+// ══════════════════════════════════════════════════════════════
+// STEP 0 — Collect DOM references once
+// ══════════════════════════════════════════════════════════════
+const ui = {
+  canvas:         document.getElementById('glcanvas'),
+  curveCanvas:    document.getElementById('curveCanvas'),
+  errorBanner:    document.getElementById('errorBanner'),
+  easingFn:       document.getElementById('easingFn'),
+  bezierPreset:   document.getElementById('bezierPreset'),
+  rowBezierPreset:document.getElementById('rowBezierPreset'),
+  bzX1:           document.getElementById('bzX1'),
+  bzY1:           document.getElementById('bzY1'),
+  bzX2:           document.getElementById('bzX2'),
+  bzY2:           document.getElementById('bzY2'),
+  bzX1Val:        document.getElementById('bzX1Val'),
+  bzY1Val:        document.getElementById('bzY1Val'),
+  bzX2Val:        document.getElementById('bzX2Val'),
+  bzY2Val:        document.getElementById('bzY2Val'),
+  rowX1:          document.getElementById('rowX1'),
+  rowY1:          document.getElementById('rowY1'),
+  rowX2:          document.getElementById('rowX2'),
+  rowY2:          document.getElementById('rowY2'),
+  speed:          document.getElementById('speed'),
+  speedVal:       document.getElementById('speedVal'),
+  playBtn:        document.getElementById('playBtn'),
+  stats:          document.getElementById('stats'),
+};
+
+function showError(msg) {
+  ui.errorBanner.textContent = msg;
+  ui.errorBanner.style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 1 — Get the WebGL 2 context
+// ══════════════════════════════════════════════════════════════
+const gl = ui.canvas.getContext('webgl2');
+if (!gl) {
+  showError(
+    'WebGL 2 is not available in this browser or on this device. ' +
+    'Make sure hardware acceleration is enabled in your browser settings.'
+  );
+  throw new Error('WebGL 2 not available');
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 2 — Shader sources (GLSL ES 3.00)
+// Same shaders as Demo 1 — reused without modification.
+// The animation concept being taught here is the easing function,
+// not the rendering. The shaders are standard WebGL boilerplate.
+// ══════════════════════════════════════════════════════════════
+
+// ── Vertex shader: MVP transform + world-space normal ────────
+const sphereVertSrc = `#version 300 es
+in vec3 a_position;
+in vec3 a_normal;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+uniform mat3 u_normalMat;
+
+out vec3 v_worldNormal;
+out vec3 v_worldPos;
+
+void main() {
+  vec4 worldPos = u_model * vec4(a_position, 1.0);
+  v_worldPos    = worldPos.xyz;
+  v_worldNormal = normalize(u_normalMat * a_normal);
+  gl_Position   = u_projection * u_view * worldPos;
+}`;
+
+// ── Fragment shader: Lambert diffuse + ambient ───────────────
+const sphereFragSrc = `#version 300 es
+precision highp float;
+
+in vec3 v_worldNormal;
+in vec3 v_worldPos;
+
+uniform vec3 u_color;
+uniform vec3 u_lightDir;
+uniform bool u_isGround;
+
+out vec4 outColor;
+
+void main() {
+  float diff    = max(dot(normalize(v_worldNormal), normalize(u_lightDir)), 0.0);
+  float ambient = 0.18;
+  float light   = ambient + (1.0 - ambient) * diff;
+  vec3 baseColor = u_isGround ? vec3(0.45) : u_color;
+  outColor = vec4(baseColor * light, 1.0);
+}`;
+
+// ══════════════════════════════════════════════════════════════
+// STEP 3 — Standard WebGL helpers
+// Standard WebGL helper — see the Multimediaprogrammierung WebGL
+// chapter for a full walkthrough.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @param {number} type
+ * @param {string} source
+ * @returns {WebGLShader}
+ */
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(`Shader compile error:\n${log}`);
+  }
+  return shader;
+}
+
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @param {string} vertSrc
+ * @param {string} fragSrc
+ * @returns {WebGLProgram}
+ */
+function createProgram(gl, vertSrc, fragSrc) {
+  const vs   = createShader(gl, gl.VERTEX_SHADER,   vertSrc);
+  const fs   = createShader(gl, gl.FRAGMENT_SHADER, fragSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(prog);
+    gl.deleteProgram(prog);
+    throw new Error(`Program link error:\n${log}`);
+  }
+  return prog;
+}
+
+/**
+ * @param {HTMLCanvasElement} canvas
+ * @returns {boolean}
+ */
+function resizeCanvasToDisplaySize(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w   = Math.round(canvas.clientWidth  * dpr);
+  const h   = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    return true;
+  }
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 3b — mat4 helpers (column-major Float32Array)
+// Standard WebGL helper — see the Multimediaprogrammierung WebGL
+// chapter for a full walkthrough.
+// ══════════════════════════════════════════════════════════════
+const mat4 = {
+  identity:    () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  translation: (x, y, z) => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]),
+  scaling:     (x, y, z) => new Float32Array([x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]),
+  perspective: (fovY, aspect, near, far) => {
+    const f  = 1 / Math.tan(fovY / 2);
+    const nf = 1 / (near - far);
+    return new Float32Array([
+      f/aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far+near)*nf, -1,
+      0, 0, 2*far*near*nf, 0,
+    ]);
+  },
+  multiply: (a, b) => {
+    const out = new Float32Array(16);
+    for (let c = 0; c < 4; c++) {
+      for (let r = 0; r < 4; r++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k*4+r] * b[c*4+k];
+        out[c*4+r] = s;
+      }
+    }
+    return out;
+  },
+  lookAt: (eye, target, up) => {
+    // ANIMATION CONCEPT: lookAt constructs the view matrix from camera
+    // position and target. The three axes of the camera's local frame
+    // are computed from cross products.
+    const normalize = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+    const cross = (a, b) => [
+      a[1]*b[2] - a[2]*b[1],
+      a[2]*b[0] - a[0]*b[2],
+      a[0]*b[1] - a[1]*b[0],
+    ];
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const z = normalize([eye[0]-target[0], eye[1]-target[1], eye[2]-target[2]]);
+    const x = normalize(cross(up, z));
+    const y = cross(z, x);
+    return new Float32Array([
+       x[0],  y[0],  z[0], 0,
+       x[1],  y[1],  z[1], 0,
+       x[2],  y[2],  z[2], 0,
+      -dot(x,eye), -dot(y,eye), -dot(z,eye), 1,
+    ]);
+  },
+};
+
+/**
+ * Compute the normal matrix (inverse-transpose of the upper-left 3×3).
+ * @param {Float32Array} m column-major 4×4
+ * @returns {Float32Array} 9 floats, column-major 3×3
+ */
+function normalMatrix(m) {
+  const [a,b,c, d,e,f, g,h,i] = [m[0],m[1],m[2], m[4],m[5],m[6], m[8],m[9],m[10]];
+  const det = a*(e*i-f*h) - b*(d*i-f*g) + c*(d*h-e*g);
+  const inv = 1 / det;
+  return new Float32Array([
+     (e*i-f*h)*inv, -(b*i-c*h)*inv,  (b*f-c*e)*inv,
+    -(d*i-f*g)*inv,  (a*i-c*g)*inv, -(a*f-c*d)*inv,
+     (d*h-e*g)*inv, -(a*h-b*g)*inv,  (a*e-b*d)*inv,
+  ]);
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 4 — Compile + link, cache attribute / uniform locations
+// ══════════════════════════════════════════════════════════════
+let sphereProg;
+try {
+  sphereProg = createProgram(gl, sphereVertSrc, sphereFragSrc);
+} catch (err) {
+  showError(err.message);
+  throw err;
+}
+
+const sp = {
+  aPosition:   gl.getAttribLocation(sphereProg,  'a_position'),
+  aNormal:     gl.getAttribLocation(sphereProg,  'a_normal'),
+  uModel:      gl.getUniformLocation(sphereProg, 'u_model'),
+  uView:       gl.getUniformLocation(sphereProg, 'u_view'),
+  uProjection: gl.getUniformLocation(sphereProg, 'u_projection'),
+  uNormalMat:  gl.getUniformLocation(sphereProg, 'u_normalMat'),
+  uColor:      gl.getUniformLocation(sphereProg, 'u_color'),
+  uLightDir:   gl.getUniformLocation(sphereProg, 'u_lightDir'),
+  uIsGround:   gl.getUniformLocation(sphereProg, 'u_isGround'),
+};
+
+// ══════════════════════════════════════════════════════════════
+// STEP 5 — Build geometry buffers and VAOs
+// Same geometry builders as Demo 1 — marked as reused.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Generate a UV sphere.
+ * Standard geometry helper — see the Multimediaprogrammierung WebGL demos.
+ * @param {number} latBands
+ * @param {number} lonBands
+ * @returns {{ positions: Float32Array, normals: Float32Array, indices: Uint16Array }}
+ */
+function buildSphere(latBands = 16, lonBands = 24) {
+  const positions = [];
+  const normals   = [];
+  const indices   = [];
+  for (let lat = 0; lat <= latBands; lat++) {
+    const theta    = (lat / latBands) * Math.PI;
+    const sinTheta = Math.sin(theta);
+    const cosTheta = Math.cos(theta);
+    for (let lon = 0; lon <= lonBands; lon++) {
+      const phi    = (lon / lonBands) * 2 * Math.PI;
+      const nx = Math.cos(phi) * sinTheta;
+      const ny = cosTheta;
+      const nz = Math.sin(phi) * sinTheta;
+      normals.push(nx, ny, nz);
+      positions.push(nx, ny, nz);
+    }
+  }
+  for (let lat = 0; lat < latBands; lat++) {
+    for (let lon = 0; lon < lonBands; lon++) {
+      const a = lat * (lonBands + 1) + lon;
+      const b = a + lonBands + 1;
+      indices.push(a, b, a+1,  b, b+1, a+1);
+    }
+  }
+  return {
+    positions: new Float32Array(positions),
+    normals:   new Float32Array(normals),
+    indices:   new Uint16Array(indices),
+  };
+}
+
+/**
+ * Upload an attribute buffer and record the pointer in the current VAO.
+ * @param {Float32Array} data
+ * @param {number} attribLoc
+ * @param {number} components
+ * @returns {WebGLBuffer}
+ */
+function makeAttribBuffer(data, attribLoc, components) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(attribLoc);
+  gl.vertexAttribPointer(attribLoc, components, gl.FLOAT, false, 0, 0);
+  return buf;
+}
+
+// Build and upload sphere geometry.
+const sphere = buildSphere(16, 24);
+const sphereIndexCount = sphere.indices.length;
+
+const sphereVAO = gl.createVertexArray();
+gl.bindVertexArray(sphereVAO);
+makeAttribBuffer(sphere.positions, sp.aPosition, 3);
+makeAttribBuffer(sphere.normals,   sp.aNormal,   3);
+const sphereIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
+gl.bindVertexArray(null);
+
+// Build and upload ground plane geometry.
+const GROUND_HALF = 5.0;
+const groundPositions = new Float32Array([
+  -GROUND_HALF, 0, -GROUND_HALF,
+   GROUND_HALF, 0, -GROUND_HALF,
+   GROUND_HALF, 0,  GROUND_HALF,
+  -GROUND_HALF, 0,  GROUND_HALF,
+]);
+const groundNormals = new Float32Array([0,1,0, 0,1,0, 0,1,0, 0,1,0]);
+const groundIndices = new Uint16Array([0,1,2, 0,2,3]);
+
+const groundVAO = gl.createVertexArray();
+gl.bindVertexArray(groundVAO);
+makeAttribBuffer(groundPositions, sp.aPosition, 3);
+makeAttribBuffer(groundNormals,   sp.aNormal,   3);
+const groundIBO = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, groundIBO);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, groundIndices, gl.STATIC_DRAW);
+gl.bindVertexArray(null);
+
+// ══════════════════════════════════════════════════════════════
+// STEP 6 — Easing functions and animation state
+// ══════════════════════════════════════════════════════════════
+
+// ── Linear ──────────────────────────────────────────────────
+// The baseline: output equals input. Constant velocity.
+
+// ── Quadratic ───────────────────────────────────────────────
+// Polynomial easing based on t². Ease-in accelerates from rest;
+// ease-out decelerates to rest; ease-in-out does both.
+
+// ── Cubic ───────────────────────────────────────────────────
+// Same pattern but with t³, giving stronger acceleration/deceleration.
+
+// ── Cubic Bézier ────────────────────────────────────────────
+// ANIMATION CONCEPT: CSS transition-timing-function and After Effects
+// use cubic Bézier curves defined by two control points P1=(x1,y1)
+// and P2=(x2,y2), with P0=(0,0) and P3=(1,1) fixed.
+// The x axis is the input time (linear t); the y axis is the eased output.
+//
+// The Bézier curve is parametric in a hidden variable τ ∈ [0,1]:
+//   B_x(τ) = 3(1-τ)²τ·x1 + 3(1-τ)τ²·x2 + τ³
+//   B_y(τ) = 3(1-τ)²τ·y1 + 3(1-τ)τ²·y2 + τ³
+//
+// To evaluate the easing function at a given linear t:
+//   1. Solve B_x(τ) = t for τ using Newton's method (4 iterations).
+//   2. Return B_y(τ) as the eased output.
+
+/**
+ * Evaluate the x component of the cubic Bézier at parameter tau.
+ * @param {number} tau  hidden Bézier parameter ∈ [0,1]
+ * @param {number} x1
+ * @param {number} x2
+ * @returns {number}
+ */
+function bezierX(tau, x1, x2) {
+  const mt = 1 - tau;
+  return 3 * mt * mt * tau * x1 + 3 * mt * tau * tau * x2 + tau * tau * tau;
+}
+
+/**
+ * Evaluate the y component of the cubic Bézier at parameter tau.
+ * @param {number} tau
+ * @param {number} y1
+ * @param {number} y2
+ * @returns {number}
+ */
+function bezierY(tau, y1, y2) {
+  const mt = 1 - tau;
+  return 3 * mt * mt * tau * y1 + 3 * mt * tau * tau * y2 + tau * tau * tau;
+}
+
+/**
+ * Derivative of B_x with respect to tau (for Newton's method).
+ * @param {number} tau
+ * @param {number} x1
+ * @param {number} x2
+ * @returns {number}
+ */
+function bezierXDerivative(tau, x1, x2) {
+  const mt = 1 - tau;
+  return 3 * mt * mt * x1 + 6 * mt * tau * (x2 - x1) + 3 * tau * tau * (1 - x2);
+}
+
+/**
+ * Factory: create a cubic Bézier easing function from two control points.
+ * Returns a function f(t) → e that maps linear t ∈ [0,1] to eased e ∈ [0,1].
+ *
+ * ANIMATION CONCEPT: We want to evaluate e = B_y(τ) where τ satisfies
+ * B_x(τ) = t. Because the Bézier is parametric (τ is not the same as t),
+ * we cannot solve analytically — we use Newton's method instead.
+ *
+ * Newton's method: start with a guess τ₀, then iterate:
+ *   τ_{n+1} = τ_n - (B_x(τ_n) - t) / B_x'(τ_n)
+ * 4 iterations is enough for sub-pixel precision at any screen size.
+ *
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} x2
+ * @param {number} y2
+ * @returns {function(number): number}
+ */
+function makeCubicBezier(x1, y1, x2, y2) {
+  return function cubicBezierEase(t) {
+    // Clamp input to [0, 1].
+    const tc = Math.max(0, Math.min(1, t));
+    if (tc === 0) return 0;
+    if (tc === 1) return 1;
+
+    // Initial guess: τ ≈ t (good for near-linear curves).
+    let tau = tc;
+
+    // Newton's method: 4 iterations, converges rapidly.
+    for (let i = 0; i < 4; i++) {
+      const x    = bezierX(tau, x1, x2) - tc;
+      const dxdt = bezierXDerivative(tau, x1, x2);
+      // Guard against near-zero derivative (flat region of curve).
+      if (Math.abs(dxdt) < 1e-9) break;
+      tau -= x / dxdt;
+      tau = Math.max(0, Math.min(1, tau));
+    }
+
+    return bezierY(tau, y1, y2);
+  };
+}
+
+/**
+ * A lookup table mapping easing function names to their implementations.
+ * Each entry is a function f(t) → e, with t and e both in [0, 1].
+ * The cubicBezier entry is rebuilt whenever the control points change.
+ *
+ * ANIMATION CONCEPT: Wrapping every easing function in the same interface
+ * means the rest of the code never needs to know which function is active —
+ * it just calls `state.easeFn(t)`. This is the strategy pattern in practice.
+ */
+const EASING_FNS = {
+  // ── Linear ──────────────────────────────────────────────────
+  linear:          t => t,
+
+  // ── Quadratic ───────────────────────────────────────────────
+  easeInQuad:      t => t * t,
+  easeOutQuad:     t => t * (2 - t),
+  easeInOutQuad:   t => t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t,
+
+  // ── Cubic ───────────────────────────────────────────────────
+  easeInCubic:     t => t * t * t,
+  easeOutCubic:    t => { const u = t - 1; return u * u * u + 1; },
+  easeInOutCubic:  t => t < 0.5 ? 4*t*t*t : (t-1)*(2*t-2)*(2*t-2)+1,
+
+  // cubicBezier is generated from current control points (see buildBezierFn).
+  cubicBezier:     makeCubicBezier(0.25, 0.10, 0.25, 1.0),
+};
+
+/**
+ * Preset cubic Bézier control points, matching CSS named easing functions.
+ * @type {Record<string, [number, number, number, number]>}
+ */
+const BEZIER_PRESETS = {
+  'ease':        [0.25, 0.10, 0.25, 1.00],
+  'ease-in':     [0.42, 0.00, 1.00, 1.00],
+  'ease-out':    [0.00, 0.00, 0.58, 1.00],
+  'ease-in-out': [0.42, 0.00, 0.58, 1.00],
+};
+
+// ── Animation state ──────────────────────────────────────────
+
+// ANIMATION CONCEPT: Ping-pong animation
+// Instead of looping from 0→1→0→1…, a ping-pong drive runs 0→1 then
+// reverses to 1→0, producing smooth back-and-forth motion without a
+// discontinuous jump at the wrap point. The raw time t is mapped to
+// a segment-local value via Math.abs(2*frac - 1) reflected around 0.5.
+// The easing function is then applied to that reflected t.
+
+// Total period of one full ping-pong cycle (go + come back), in seconds.
+const DEFAULT_PERIOD = 2.0;
+
+// Sphere path endpoints. The sphere moves along a straight line (no keyframes).
+const FROM_POS = [-3.0, 0.5, 0.0];
+const TO_POS   = [ 3.0, 0.5, 0.0];
+
+// Sphere color — fixed for this demo so the focus stays on timing.
+const SPHERE_COLOR = [0.3, 0.6, 1.0];
+const SPHERE_SCALE = 0.45;
+
+const CAM_EYE    = [0, 3, 8];
+const CAM_TARGET = [0, 0.5, 0];
+const CAM_UP     = [0, 1, 0];
+const LIGHT_DIR  = [0.6, 1.0, 0.5];
+const FOV_Y      = 45 * Math.PI / 180;
+const Z_NEAR     = 0.1;
+const Z_FAR      = 60.0;
+
+// Running wall-clock time (seconds). This drives the ping-pong.
+let elapsed    = 0.0;
+let paused     = false;
+let lastStamp  = null;
+
+// The currently active easing function (one of EASING_FNS values).
+// Updated whenever the UI selector or Bézier parameters change.
+let activeFn = EASING_FNS.linear;
+let activeFnName = 'linear';
+
+// Current raw t ∈ [0,1] and eased e ∈ [0,1] (written every frame for stats).
+let currentT = 0;
+let currentE = 0;
+
+// ── Cubic Bézier control point state ────────────────────────
+// These are updated when the user drags handles on the curve canvas
+// or moves the sliders. They are mirrored back to the slider values.
+let bzState = { x1: 0.25, y1: 0.10, x2: 0.25, y2: 1.00 };
+
+/**
+ * Rebuild EASING_FNS.cubicBezier from the current bzState.
+ * Called whenever bzState changes.
+ */
+function buildBezierFn() {
+  const { x1, y1, x2, y2 } = bzState;
+  EASING_FNS.cubicBezier = makeCubicBezier(x1, y1, x2, y2);
+  if (activeFnName === 'cubicBezier') activeFn = EASING_FNS.cubicBezier;
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 7 — Wire UI events and 2D canvas pointer drag
+// ══════════════════════════════════════════════════════════════
+
+// ── Easing function selector ─────────────────────────────────
+// When changed: update activeFn, show/hide Bézier controls.
+ui.easingFn.addEventListener('change', () => {
+  activeFnName = ui.easingFn.value;
+  activeFn     = EASING_FNS[activeFnName];
+  updateBezierVisibility();
+  if (paused) requestAnimationFrame(frame);
+});
+
+// ── Bézier preset selector ───────────────────────────────────
+ui.bezierPreset.addEventListener('change', () => {
+  const preset = ui.bezierPreset.value;
+  if (preset !== 'custom') {
+    const [x1, y1, x2, y2] = BEZIER_PRESETS[preset];
+    bzState = { x1, y1, x2, y2 };
+    syncSlidersFromBzState();
+    buildBezierFn();
+  }
+  updateBezierVisibility();
+  if (paused) requestAnimationFrame(frame);
+});
+
+// ── Bézier sliders ───────────────────────────────────────────
+// Each slider updates bzState and rebuilds the function.
+function makeBzSliderHandler(coord, sliderEl, badgeEl) {
+  sliderEl.addEventListener('input', () => {
+    bzState[coord] = parseFloat(sliderEl.value);
+    badgeEl.textContent = bzState[coord].toFixed(2);
+    // Switch preset to "custom" when the user manually moves a slider.
+    ui.bezierPreset.value = 'custom';
+    buildBezierFn();
+    if (paused) requestAnimationFrame(frame);
+  });
+}
+makeBzSliderHandler('x1', ui.bzX1, ui.bzX1Val);
+makeBzSliderHandler('y1', ui.bzY1, ui.bzY1Val);
+makeBzSliderHandler('x2', ui.bzX2, ui.bzX2Val);
+makeBzSliderHandler('y2', ui.bzY2, ui.bzY2Val);
+
+// ── Speed slider ─────────────────────────────────────────────
+ui.speed.addEventListener('input', () => {
+  ui.speedVal.textContent = `${parseFloat(ui.speed.value).toFixed(2)}×`;
+});
+
+// ── Play / Pause button ──────────────────────────────────────
+ui.playBtn.addEventListener('click', () => {
+  paused = !paused;
+  ui.playBtn.textContent = paused ? 'Play' : 'Pause';
+  if (!paused) {
+    lastStamp = null;
+    requestAnimationFrame(frame);
+  }
+});
+
+// ── Show/hide Bézier controls ────────────────────────────────
+/**
+ * Show or hide the Bézier preset row and slider rows based on the
+ * current easingFn selection and preset value.
+ */
+function updateBezierVisibility() {
+  const isBezier = activeFnName === 'cubicBezier';
+  const isCustom = ui.bezierPreset.value === 'custom';
+
+  ui.rowBezierPreset.style.display = isBezier ? 'flex' : 'none';
+  for (const id of ['rowX1','rowY1','rowX2','rowY2']) {
+    document.getElementById(id).style.display = (isBezier && isCustom) ? 'flex' : 'none';
+  }
+  // Show draggable cursor on curve canvas when in Bézier mode.
+  ui.curveCanvas.classList.toggle('draggable', isBezier);
+}
+
+/**
+ * Push current bzState values back into the slider elements and badges.
+ */
+function syncSlidersFromBzState() {
+  ui.bzX1.value = bzState.x1; ui.bzX1Val.textContent = bzState.x1.toFixed(2);
+  ui.bzY1.value = bzState.y1; ui.bzY1Val.textContent = bzState.y1.toFixed(2);
+  ui.bzX2.value = bzState.x2; ui.bzX2Val.textContent = bzState.x2.toFixed(2);
+  ui.bzY2.value = bzState.y2; ui.bzY2Val.textContent = bzState.y2.toFixed(2);
+}
+
+// ── 2D curve canvas — pointer drag for P1 and P2 ─────────────
+// ANIMATION CONCEPT: making the curve interactive lets students feel
+// directly how moving a control point changes the shape of the timing
+// and the resulting motion — without needing to read any numbers.
+
+const curve2d = ui.curveCanvas.getContext('2d');
+
+// Handle radius for the draggable dots (in plot coordinates 0–1).
+const HANDLE_RADIUS_PLOT = 0.045;
+
+// Which handle is being dragged ('p1', 'p2', or null).
+let draggingHandle = null;
+
+/**
+ * Convert a pointer event position on the curve canvas to plot
+ * coordinates (both axes 0–1, origin at bottom-left).
+ * @param {PointerEvent} e
+ * @returns {{ px: number, py: number }}
+ */
+function pointerToPlot(e) {
+  const rect = ui.curveCanvas.getBoundingClientRect();
+  const pad  = getCurvePadding();
+  const innerW = rect.width  - pad.left - pad.right;
+  const innerH = rect.height - pad.top  - pad.bottom;
+  const px = (e.clientX - rect.left  - pad.left)  / innerW;
+  const py = 1 - (e.clientY - rect.top - pad.top) / innerH;
+  return { px, py };
+}
+
+/**
+ * Check if a plot-space point hits a control handle.
+ * @param {number} px  pointer x in plot coords
+ * @param {number} py  pointer y in plot coords
+ * @param {number} hx  handle x in plot coords
+ * @param {number} hy  handle y in plot coords
+ * @returns {boolean}
+ */
+function hitsHandle(px, py, hx, hy) {
+  const dx = px - hx;
+  const dy = py - hy;
+  return Math.sqrt(dx*dx + dy*dy) < HANDLE_RADIUS_PLOT;
+}
+
+ui.curveCanvas.addEventListener('pointerdown', e => {
+  if (activeFnName !== 'cubicBezier') return;
+  const { px, py } = pointerToPlot(e);
+  if (hitsHandle(px, py, bzState.x1, bzState.y1)) {
+    draggingHandle = 'p1';
+    ui.curveCanvas.setPointerCapture(e.pointerId);
+  } else if (hitsHandle(px, py, bzState.x2, bzState.y2)) {
+    draggingHandle = 'p2';
+    ui.curveCanvas.setPointerCapture(e.pointerId);
+  }
+});
+
+ui.curveCanvas.addEventListener('pointermove', e => {
+  if (!draggingHandle) return;
+  const { px, py } = pointerToPlot(e);
+  // Clamp to [0,1] for both x and y.
+  const cx = Math.max(0, Math.min(1, px));
+  const cy = Math.max(0, Math.min(1, py));
+  if (draggingHandle === 'p1') {
+    bzState.x1 = cx; bzState.y1 = cy;
+  } else {
+    bzState.x2 = cx; bzState.y2 = cy;
+  }
+  // Switch preset to "custom" and rebuild the function.
+  ui.bezierPreset.value = 'custom';
+  updateBezierVisibility();
+  syncSlidersFromBzState();
+  buildBezierFn();
+  if (paused) requestAnimationFrame(frame);
+});
+
+ui.curveCanvas.addEventListener('pointerup', () => {
+  draggingHandle = null;
+});
+
+// ══════════════════════════════════════════════════════════════
+// STEP 8 — Render + animation update
+// ══════════════════════════════════════════════════════════════
+
+// FPS smoothing.
+let fpsSamples = [];
+
+/**
+ * Return the padding (in CSS pixels) used for the curve plot inner area.
+ * These must match the values used in drawCurve().
+ * @returns {{ top: number, right: number, bottom: number, left: number }}
+ */
+function getCurvePadding() {
+  return { top: 18, right: 18, bottom: 32, left: 40 };
+}
+
+/**
+ * Draw the 2D easing curve plot on ui.curveCanvas.
+ * Called every frame (from the main rAF loop).
+ * @param {number} rawT  current linear t ∈ [0,1] (position on the x axis)
+ * @param {number} easedE  current eased e ∈ [0,1] (position on the y axis)
+ */
+function drawCurve(rawT, easedE) {
+  // Size the 2D canvas to its CSS display size.
+  const dpr = window.devicePixelRatio || 1;
+  const cw  = Math.round(ui.curveCanvas.clientWidth  * dpr);
+  const ch  = Math.round(ui.curveCanvas.clientHeight * dpr);
+  if (ui.curveCanvas.width !== cw || ui.curveCanvas.height !== ch) {
+    ui.curveCanvas.width  = cw;
+    ui.curveCanvas.height = ch;
+  }
+
+  // All measurements in physical pixels.
+  const pad = {
+    top:    18 * dpr,
+    right:  18 * dpr,
+    bottom: 32 * dpr,
+    left:   40 * dpr,
+  };
+  const W = cw - pad.left - pad.right;  // inner plot width
+  const H = ch - pad.top  - pad.bottom; // inner plot height
+
+  // Helper: convert plot coords (0–1) to canvas pixels.
+  const toX = v => pad.left + v * W;
+  const toY = v => pad.top  + (1 - v) * H;
+
+  curve2d.clearRect(0, 0, cw, ch);
+
+  // ── Grid ─────────────────────────────────────────────────
+  curve2d.strokeStyle = '#dde';
+  curve2d.lineWidth   = 1 * dpr;
+  for (let i = 0; i <= 4; i++) {
+    const v = i / 4;
+    // Horizontal grid line.
+    curve2d.beginPath();
+    curve2d.moveTo(toX(0), toY(v));
+    curve2d.lineTo(toX(1), toY(v));
+    curve2d.stroke();
+    // Vertical grid line.
+    curve2d.beginPath();
+    curve2d.moveTo(toX(v), toY(0));
+    curve2d.lineTo(toX(v), toY(1));
+    curve2d.stroke();
+  }
+
+  // ── Diagonal reference (linear) ──────────────────────────
+  // A faint diagonal shows what a perfectly linear easing would look like.
+  curve2d.strokeStyle = '#ccc';
+  curve2d.lineWidth   = 1 * dpr;
+  curve2d.setLineDash([4 * dpr, 4 * dpr]);
+  curve2d.beginPath();
+  curve2d.moveTo(toX(0), toY(0));
+  curve2d.lineTo(toX(1), toY(1));
+  curve2d.stroke();
+  curve2d.setLineDash([]);
+
+  // ── Axis labels ──────────────────────────────────────────
+  curve2d.fillStyle  = '#888';
+  curve2d.font       = `${10 * dpr}px -apple-system, sans-serif`;
+  curve2d.textAlign  = 'center';
+  curve2d.fillText('0', toX(0), toY(0) + 18 * dpr);
+  curve2d.fillText('1', toX(1), toY(0) + 18 * dpr);
+  curve2d.textAlign = 'right';
+  curve2d.fillText('0', toX(0) - 6 * dpr, toY(0) + 4 * dpr);
+  curve2d.fillText('1', toX(0) - 6 * dpr, toY(1) + 4 * dpr);
+  curve2d.textAlign  = 'center';
+  curve2d.fillText('t (input)', toX(0.5), ch - 4 * dpr);
+  // y-axis label — rotated text.
+  curve2d.save();
+  curve2d.translate(10 * dpr, toY(0.5));
+  curve2d.rotate(-Math.PI / 2);
+  curve2d.fillText('e (output)', 0, 0);
+  curve2d.restore();
+
+  // ── Easing curve ─────────────────────────────────────────
+  // Sample the active easing function at 200 points and draw a polyline.
+  // This is the main visual: the shape of the curve IS the easing function.
+  const SAMPLES = 200;
+  curve2d.strokeStyle = '#1a73e8';
+  curve2d.lineWidth   = 2 * dpr;
+  curve2d.beginPath();
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+    const e = activeFn(t);
+    if (i === 0) {
+      curve2d.moveTo(toX(t), toY(e));
+    } else {
+      curve2d.lineTo(toX(t), toY(e));
+    }
+  }
+  curve2d.stroke();
+
+  // ── Cubic Bézier control handles (only in cubicBezier mode) ─
+  if (activeFnName === 'cubicBezier') {
+    const { x1, y1, x2, y2 } = bzState;
+
+    // Draw lines from anchors (0,0) and (1,1) to control points P1 and P2.
+    curve2d.strokeStyle = '#aaa';
+    curve2d.lineWidth   = 1 * dpr;
+    curve2d.setLineDash([3 * dpr, 3 * dpr]);
+
+    curve2d.beginPath();
+    curve2d.moveTo(toX(0), toY(0));
+    curve2d.lineTo(toX(x1), toY(y1));
+    curve2d.stroke();
+
+    curve2d.beginPath();
+    curve2d.moveTo(toX(1), toY(1));
+    curve2d.lineTo(toX(x2), toY(y2));
+    curve2d.stroke();
+
+    curve2d.setLineDash([]);
+
+    // Draw the control point dots (draggable).
+    const HANDLE_R = 6 * dpr;
+    for (const [hx, hy, label] of [[x1, y1, 'P1'], [x2, y2, 'P2']]) {
+      curve2d.beginPath();
+      curve2d.arc(toX(hx), toY(hy), HANDLE_R, 0, Math.PI * 2);
+      curve2d.fillStyle   = '#fff';
+      curve2d.strokeStyle = '#1a73e8';
+      curve2d.lineWidth   = 2 * dpr;
+      curve2d.fill();
+      curve2d.stroke();
+
+      // Label next to the handle.
+      curve2d.fillStyle  = '#1a73e8';
+      curve2d.font       = `bold ${10 * dpr}px -apple-system, sans-serif`;
+      curve2d.textAlign  = 'left';
+      curve2d.fillText(label, toX(hx) + 8 * dpr, toY(hy) + 4 * dpr);
+    }
+  }
+
+  // ── Moving dot on the curve ───────────────────────────────
+  // This is the most important element in the plot: it shows exactly
+  // where on the curve the animation currently is. Its x position is
+  // the linear t; its y position is the eased e.
+  curve2d.beginPath();
+  curve2d.arc(toX(rawT), toY(easedE), 5 * dpr, 0, Math.PI * 2);
+  curve2d.fillStyle = '#e53935';
+  curve2d.fill();
+  curve2d.strokeStyle = '#fff';
+  curve2d.lineWidth   = 1.5 * dpr;
+  curve2d.stroke();
+}
+
+/**
+ * Compute the position of the sphere for a given eased value e ∈ [0,1].
+ * The sphere moves along the straight line from FROM_POS to TO_POS.
+ *
+ * ANIMATION CONCEPT: The eased value replaces the linear t in the lerp.
+ * Changing the easing function changes *when* the sphere reaches each
+ * position, not *where* it goes — the endpoints are fixed.
+ *
+ * @param {number} e  eased progress ∈ [0,1]
+ * @returns {[number, number, number]}
+ */
+function spherePosition(e) {
+  return [
+    FROM_POS[0] + (TO_POS[0] - FROM_POS[0]) * e,
+    FROM_POS[1] + (TO_POS[1] - FROM_POS[1]) * e,
+    FROM_POS[2] + (TO_POS[2] - FROM_POS[2]) * e,
+  ];
+}
+
+/**
+ * Draw one frame: advance the ping-pong clock, apply easing,
+ * render the WebGL scene, and redraw the curve plot.
+ * @param {DOMHighResTimeStamp} timestamp
+ */
+function frame(timestamp) {
+  // ── 8a. Advance the animation clock ─────────────────────────
+  // ANIMATION CONCEPT: Performance-independent animation.
+  // We accumulate wall-clock time in seconds and use it to drive
+  // both the ping-pong and the easing function. The speed slider
+  // scales the rate of advance.
+  if (!paused) {
+    if (lastStamp !== null) {
+      const dt = (timestamp - lastStamp) / 1000;
+      elapsed += dt * parseFloat(ui.speed.value);
+    }
+    lastStamp = timestamp;
+  }
+
+  // ── 8b. Ping-pong t ──────────────────────────────────────────
+  // ANIMATION CONCEPT: Ping-pong remaps unbounded elapsed time into
+  // a value that bounces between 0 and 1:
+  //   phase ∈ [0, 2): one full period (0→1 then back 1→0)
+  //   t = phase < 1 → phase (going forward)
+  //       phase ≥ 1 → 2 - phase (going backward)
+  // This avoids any discontinuous jump at the wrap point.
+  const period = DEFAULT_PERIOD / Math.max(0.01, parseFloat(ui.speed.value));
+  const phase  = (elapsed % (2 * DEFAULT_PERIOD)) / DEFAULT_PERIOD;
+  // The speed is already baked into elapsed, so use DEFAULT_PERIOD here
+  // to keep the period independent of the speed slider's display value.
+  const rawPhase = (elapsed % (2 * DEFAULT_PERIOD)) / DEFAULT_PERIOD;
+  currentT = rawPhase < 1 ? rawPhase : 2 - rawPhase;
+
+  // ── 8c. Apply the easing function ───────────────────────────
+  currentE = activeFn(currentT);
+
+  // ── 8d. Resize and clear ─────────────────────────────────────
+  resizeCanvasToDisplaySize(ui.canvas);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.clearColor(0.12, 0.12, 0.18, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+
+  // ── 8e. Compute camera matrices ──────────────────────────────
+  const aspect     = gl.drawingBufferWidth / gl.drawingBufferHeight;
+  const projection = mat4.perspective(FOV_Y, aspect, Z_NEAR, Z_FAR);
+  const view       = mat4.lookAt(CAM_EYE, CAM_TARGET, CAM_UP);
+
+  // ── 8f. Draw the ground plane ────────────────────────────────
+  gl.useProgram(sphereProg);
+  gl.uniformMatrix4fv(sp.uView,       false, view);
+  gl.uniformMatrix4fv(sp.uProjection, false, projection);
+  gl.uniform3fv(sp.uLightDir, new Float32Array(LIGHT_DIR));
+  gl.uniform1i(sp.uIsGround, 1);
+  gl.uniform3fv(sp.uColor, new Float32Array([0.45, 0.45, 0.45]));
+
+  const groundModel = mat4.identity();
+  gl.uniformMatrix4fv(sp.uModel,     false, groundModel);
+  gl.uniformMatrix3fv(sp.uNormalMat, false, normalMatrix(groundModel));
+  gl.bindVertexArray(groundVAO);
+  gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+  // ── 8g. Draw the sphere ──────────────────────────────────────
+  // The sphere's position is determined by the EASED value, not the
+  // linear t. This is where the easing function has its effect.
+  const [sx, sy, sz] = spherePosition(currentE);
+  const sphereModel  = mat4.multiply(
+    mat4.translation(sx, sy, sz),
+    mat4.scaling(SPHERE_SCALE, SPHERE_SCALE, SPHERE_SCALE)
+  );
+
+  gl.uniform1i(sp.uIsGround, 0);
+  gl.uniform3fv(sp.uColor, new Float32Array(SPHERE_COLOR));
+  gl.uniformMatrix4fv(sp.uModel,     false, sphereModel);
+  gl.uniformMatrix3fv(sp.uNormalMat, false, normalMatrix(sphereModel));
+  gl.bindVertexArray(sphereVAO);
+  gl.drawElements(gl.TRIANGLES, sphereIndexCount, gl.UNSIGNED_SHORT, 0);
+
+  // ── 8h. Draw the curve plot (Canvas 2D) ──────────────────────
+  drawCurve(currentT, currentE);
+
+  // ── 8i. Stats ────────────────────────────────────────────────
+  fpsSamples.push(timestamp);
+  fpsSamples = fpsSamples.filter(ts => timestamp - ts < 1000);
+  const fps  = fpsSamples.length;
+
+  ui.stats.textContent =
+    `t = ${currentT.toFixed(2)}  ·  eased = ${currentE.toFixed(2)}  ·  ` +
+    `fn: ${activeFnName}  ·  FPS: ${fps}`;
+
+  if (!paused) requestAnimationFrame(frame);
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 9 — Start the loop
+// ══════════════════════════════════════════════════════════════
+
+// Handle resize: redraw once when the canvas CSS size changes.
+new ResizeObserver(() => requestAnimationFrame(frame)).observe(ui.canvas);
+
+// Draw the first frame before any user interaction.
+requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

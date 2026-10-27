@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Computeranimation &ndash; Camera Animation Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:    #1a73e8;
+      --danger:    #e53935;
+      --border:    #e0e0e0;
+      --canvas-bg: #1e1e2e;
+      --surface:   #f8f9fa;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #212121;
+      background: #fff;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+    }
+
+    /* Header */
+    .nb-header { display: flex; align-items: center; gap: 24px; border-bottom: 2px solid var(--border); padding: 16px 0; margin-bottom: 32px; }
+    .nb-header img { width: 120px; border-radius: 12px; flex-shrink: 0; }
+    .nb-header h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .nb-header h2 { font-size: 1.1rem; font-weight: 400; margin-bottom: 8px; color: #444; }
+    .nb-header p  { font-size: 0.92rem; margin-bottom: 2px; }
+    .nb-header a  { color: var(--accent); text-decoration: none; }
+    .nb-header a:hover { text-decoration: underline; }
+
+    /* Pills */
+    .pills { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      display: inline-block;
+      padding: 6px 14px;
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.92rem;
+      color: var(--accent);
+      transition: background 0.15s, color 0.15s;
+    }
+    .pill:hover { background: var(--accent); color: #fff; }
+
+    /* Sections */
+    h2.section { font-size: 1.3rem; margin: 40px 0 12px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+    p  { margin-bottom: 12px; }
+
+    /* Demo card */
+    .demo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin: 24px 0;
+    }
+    .demo-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* Controls */
+    .control-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .control-row label { min-width: 140px; font-weight: 500; font-size: 0.95rem; }
+    .control-row input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+    .control-row select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95rem; background: #fff; }
+    .control-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+    .value-badge { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.92rem; color: #555; }
+
+    .btn-row { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+    .btn { padding: 10px 28px; border: none; border-radius: 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #e8eaed; color: #212121; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Blend progress badge */
+    .blend-badge {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88rem;
+      background: #e8eaed;
+      border-radius: 12px;
+      padding: 4px 12px;
+      color: #444;
+    }
+
+    /* Canvas */
+    canvas.gl-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      border-radius: 8px;
+      background: var(--canvas-bg);
+      margin-top: 20px;
+      touch-action: none;
+    }
+    .canvas-wrap { margin-bottom: 16px; }
+
+    .stats {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.82rem;
+      color: #555;
+      margin-top: 10px;
+      min-height: 1.4em;
+    }
+    .info-box {
+      border-left: 5px solid var(--accent);
+      background: rgba(26,115,232,0.07);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+    .error-banner {
+      background: #fdecea;
+      border-left: 5px solid var(--danger);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin: 20px 0;
+      color: #7f1d1d;
+    }
+    code { background: #f1f3f4; border-radius: 4px; padding: 1px 6px; font-size: 0.9em; font-family: "SFMono-Regular", Consolas, monospace; }
+
+    /* Mode-specific control sections */
+    .mode-controls { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 16px; }
+    .mode-controls[hidden] { display: none; }
+
+    /* Footer */
+    .nb-footer {
+      text-align: center;
+      padding: 18px 0 8px;
+      margin-top: 48px;
+      border-top: 2px solid var(--border);
+      font-size: 0.92rem;
+      color: #444;
+      line-height: 1.7;
+    }
+    .nb-footer a { color: var(--accent); text-decoration: none; }
+    .nb-footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .nb-header { flex-direction: column; align-items: flex-start; }
+      .demo-card { padding: 20px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HEADER
+  ════════════════════════════════════════════════════════════ -->
+  <header class="nb-header">
+    <img
+      src="https://raw.githubusercontent.com/TUIlmenauAMS/multimedia_programming_seminars/main/ams_group_tui.png"
+      alt="AMS Group – TU Ilmenau"
+    />
+    <div>
+      <h1>Computeranimation</h1>
+      <h2>Chapter 01: Animation Fundamentals &mdash; Demo: Camera Animation</h2>
+      <p><strong>Institut für Medientechnik &ndash; Technische Universität Ilmenau</strong><br>
+        <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme" target="_blank">
+          Institut für Medientechnik &ndash; AMS Group
+        </a>
+      </p>
+      <p>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller<br>
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank">LinkedIn</a>
+      </p>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 1 — CONCEPT
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">1. Camera Animation</h2>
+
+  <p>
+    In computer animation, the camera is not a special object — it is just another object in the scene with a position and orientation that can be keyframed, interpolated, and eased. The only thing that makes it the camera is that its transform is used to build the <strong>view matrix</strong> passed to the GPU.
+  </p>
+  <p>
+    The <code>lookAt</code> function constructs this view matrix from three values: the <strong>eye</strong> position (where the camera is), the <strong>target</strong> point (what it is looking at), and an <strong>up</strong> vector (which way is up in the camera's frame). Animating <em>eye</em> and <em>target</em> over time is all that is needed to produce a camera move.
+  </p>
+  <p>
+    This demo shows three common camera animation patterns: <strong>orbit</strong> (circular arc around a fixed point, defined by spherical coordinates), <strong>dolly</strong> (linear path between two positions, with easing from Demo 2), and <strong>look-at lerp</strong> (interpolating between two fully defined cameras to produce a blend or a cut).
+  </p>
+
+  <div class="info-box">
+    <strong>Core idea:</strong> In computer animation, the camera is not special &mdash; it is just another
+    object with a position and orientation that can be keyframed and interpolated. The <code>lookAt</code>
+    view matrix takes an eye position, a target point, and an up vector and constructs the transformation
+    that maps world space to camera space. Animating these three values over time is all that is needed
+    to produce a camera move.
+  </div>
+
+  <hr />
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 2 — INTERACTIVE DEMO
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">2. Interactive Demo</h2>
+
+  <p>A small stage with a cube and a sphere. Change the camera mode and use the controls to explore orbit, dolly, and look-at interpolation.</p>
+
+  <!-- Error banner — shown by JS if WebGL 2 is unavailable -->
+  <div id="errorBanner" class="error-banner" style="display:none;"></div>
+
+  <div class="demo-card">
+    <h3>Camera Animation</h3>
+
+    <div class="canvas-wrap">
+      <canvas id="glcanvas" class="gl-canvas"
+        role="img"
+        aria-label="A 3D scene with a cube and sphere, viewed through an animated camera.">
+      </canvas>
+    </div>
+
+    <!-- Controls shared by all modes -->
+    <div class="control-row">
+      <label for="cameraMode">Camera mode</label>
+      <select id="cameraMode">
+        <option value="orbit" selected>orbit</option>
+        <option value="dolly">dolly</option>
+        <option value="lookAtLerp">lookAtLerp</option>
+      </select>
+    </div>
+
+    <div class="control-row">
+      <label for="fovAnim">Animate FOV</label>
+      <input type="checkbox" id="fovAnim" />
+    </div>
+
+    <div class="control-row">
+      <label for="fov">FOV</label>
+      <input type="range" id="fov" min="20" max="90" step="1" value="45" />
+      <span class="value-badge" id="fovVal">45°</span>
+    </div>
+
+    <!-- ── ORBIT controls ──────────────────────────────── -->
+    <div class="mode-controls" id="orbitControls">
+      <div class="control-row">
+        <label for="azimuth">Azimuth</label>
+        <input type="range" id="azimuth" min="0" max="360" step="0.5" value="45" />
+        <span class="value-badge" id="azimuthVal">45°</span>
+      </div>
+      <div class="control-row">
+        <label for="elevation">Elevation</label>
+        <input type="range" id="elevation" min="5" max="80" step="1" value="25" />
+        <span class="value-badge" id="elevationVal">25°</span>
+      </div>
+      <div class="control-row">
+        <label for="radius">Radius</label>
+        <input type="range" id="radius" min="2" max="10" step="0.1" value="6" />
+        <span class="value-badge" id="radiusVal">6.0</span>
+      </div>
+      <div class="control-row">
+        <label for="autoRotate">Auto-rotate</label>
+        <input type="checkbox" id="autoRotate" checked />
+      </div>
+      <div class="control-row">
+        <label for="rotSpeed">Rotation speed</label>
+        <input type="range" id="rotSpeed" min="0.1" max="2" step="0.05" value="0.5" />
+        <span class="value-badge" id="rotSpeedVal">0.50</span>
+      </div>
+    </div>
+
+    <!-- ── DOLLY controls ──────────────────────────────── -->
+    <div class="mode-controls" id="dollyControls" hidden>
+      <div class="control-row">
+        <label for="scrubber">Scrubber</label>
+        <input type="range" id="scrubber" min="0" max="1" step="0.001" value="0" />
+        <span class="value-badge" id="scrubberVal">0.000</span>
+      </div>
+      <div class="control-row">
+        <label for="dollyCurve">Easing</label>
+        <select id="dollyCurve">
+          <option value="linear">linear</option>
+          <option value="easeInOut" selected>easeInOut</option>
+          <option value="easeOutCubic">easeOutCubic</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="dollyPlayBtn">Play</button>
+      </div>
+    </div>
+
+    <!-- ── LOOKATLERP controls ─────────────────────────── -->
+    <div class="mode-controls" id="lookAtLerpControls" hidden>
+      <p style="font-size:0.9rem;color:#555;margin-bottom:12px;">
+        Camera A: wide establishing shot &nbsp;|&nbsp; Camera B: close-up on the sphere
+      </p>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="cutBtn">Cut (instant)</button>
+        <button class="btn btn-primary"  id="blendBtn">Blend</button>
+        <span class="blend-badge" id="blendProgress">t = 0.00</span>
+      </div>
+    </div>
+
+    <div class="stats" id="stats" aria-live="off"></div>
+  </div>
+
+  <hr />
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 3 — HOW IT WORKS
+  ════════════════════════════════════════════════════════════ -->
+  <h2 class="section">3. How It Works</h2>
+
+  <p>
+    The script follows the same nine-step structure as Demos 1 and 2. <strong>Steps 1–5</strong> are WebGL setup and geometry. The camera animation concepts are in <strong>Steps 6–8</strong>.
+  </p>
+  <p>
+    <strong>Step 6</strong> defines the three camera modes as pure data: spherical-coordinate parameters for orbit, two endpoint vectors for dolly, and two camera definitions (eye + target) for look-at lerp. <strong>Step 7</strong> wires the UI. <strong>Step 8</strong> computes the current <code>eye</code> and <code>target</code> each frame for the active mode, then calls <code>mat4.lookAt</code> exactly once to produce the view matrix.
+  </p>
+  <p>
+    All three modes converge on the same two values — <code>eye</code> and <code>target</code> — and use the same <code>mat4.lookAt</code> call. This is the key insight: <strong>any camera move is just a path through (eye, target) space</strong>.
+  </p>
+
+  <div class="info-box">
+    <strong>Connections to professional tools:</strong> Blender and Maya expose exactly these same
+    parameters on their camera objects. The orbit control is the same math used in Three.js
+    <code>OrbitControls</code>. The cubic Bézier easing from Demo 2 can be dropped into the dolly
+    mode with zero changes &mdash; easing is just a function <code>f(t) → t'</code> applied before
+    the lerp. After Effects uses the same <code>lookAt</code>-equivalent when you parent a camera
+    to a null object and animate the null.
+  </div>
+
+  <div class="pills">
+    <a class="pill" href="https://learnopengl.com/Getting-started/Camera" target="_blank">mat4.lookAt explained &ndash; learnopengl.com &#8599;</a>
+    <a class="pill" href="https://docs.blender.org/manual/en/latest/render/cameras/index.html" target="_blank">Camera &ndash; Blender manual &#8599;</a>
+    <a class="pill" href="https://github.com/mrdoob/three.js/blob/dev/examples/jsm/controls/OrbitControls.js" target="_blank">Three.js OrbitControls source &#8599;</a>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FOOTER
+  ════════════════════════════════════════════════════════════ -->
+  <footer class="nb-footer">
+    <p><strong>Computeranimation</strong> &middot; Chapter 01: Animation Fundamentals &middot; Demo: Camera Animation<br>
+      Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+    <p>Demo created by <strong>Renato Fera P.</strong> &middot;
+      <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank">LinkedIn</a>
+    </p>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SCRIPT
+  ════════════════════════════════════════════════════════════ -->
+  <script type="module">
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * Computeranimation — Chapter 01 · Demo 3: Camera Animation
+ *
+ * Animation concepts:
+ *   - The view matrix as an animation target (lookAt)
+ *   - Orbit: spherical coordinates → eye position (azimuth, elevation, radius)
+ *   - Dolly: lerp along a straight camera path, with easing from Demo 2
+ *   - Look-at lerp: interpolating eye + target between two cameras (blend vs. cut)
+ *   - FOV animation: animating the projection matrix (dolly-zoom effect)
+ *
+ * Steps in this file:
+ *   0) Collect DOM references
+ *   1) Get WebGL 2 context
+ *   2) GLSL ES 3.00 shader sources
+ *   3) Standard WebGL helpers
+ *   4) Compile + link programs, cache uniform/attribute locations
+ *   5) Build geometry (cube, sphere, ground plane) + VAOs
+ *   6) Camera state and animation data
+ *   7) Wire UI events to state
+ *   8) Render + animation update function
+ *   9) Start the loop
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+// ══════════════════════════════════════════════════════════════
+// STEP 0 — Collect DOM references once
+// ══════════════════════════════════════════════════════════════
+
+const ui = {
+  canvas:           document.getElementById('glcanvas'),
+  errorBanner:      document.getElementById('errorBanner'),
+  stats:            document.getElementById('stats'),
+
+  // shared
+  cameraMode:       document.getElementById('cameraMode'),
+  fovAnim:          document.getElementById('fovAnim'),
+  fov:              document.getElementById('fov'),
+  fovVal:           document.getElementById('fovVal'),
+
+  // orbit
+  orbitControls:    document.getElementById('orbitControls'),
+  azimuth:          document.getElementById('azimuth'),
+  azimuthVal:       document.getElementById('azimuthVal'),
+  elevation:        document.getElementById('elevation'),
+  elevationVal:     document.getElementById('elevationVal'),
+  radius:           document.getElementById('radius'),
+  radiusVal:        document.getElementById('radiusVal'),
+  autoRotate:       document.getElementById('autoRotate'),
+  rotSpeed:         document.getElementById('rotSpeed'),
+  rotSpeedVal:      document.getElementById('rotSpeedVal'),
+
+  // dolly
+  dollyControls:    document.getElementById('dollyControls'),
+  scrubber:         document.getElementById('scrubber'),
+  scrubberVal:      document.getElementById('scrubberVal'),
+  dollyCurve:       document.getElementById('dollyCurve'),
+  dollyPlayBtn:     document.getElementById('dollyPlayBtn'),
+
+  // lookAtLerp
+  lookAtLerpControls: document.getElementById('lookAtLerpControls'),
+  cutBtn:           document.getElementById('cutBtn'),
+  blendBtn:         document.getElementById('blendBtn'),
+  blendProgress:    document.getElementById('blendProgress'),
+};
+
+// ══════════════════════════════════════════════════════════════
+// STEP 1 — Get the WebGL 2 context (with friendly error banner)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Shows an error message inside the error banner div and hides the canvas.
+ * @param {string} msg - Human-readable error description.
+ */
+function showError(msg) {
+  ui.errorBanner.textContent = msg;
+  ui.errorBanner.style.display = 'block';
+  ui.canvas.style.display = 'none';
+}
+
+const gl = ui.canvas.getContext('webgl2');
+if (!gl) {
+  showError('WebGL 2 is not available in this browser. Try a recent version of Chrome, Edge, or Firefox.');
+  throw new Error('WebGL 2 unavailable');
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 2 — Shader sources (GLSL ES 3.00)
+// ══════════════════════════════════════════════════════════════
+
+// ----- Scene shader (cube + sphere + ground) -----------------
+// Vertex shader: transforms each vertex by the MVP matrix and
+// computes the world-space normal for lighting in the fragment shader.
+const SCENE_VERT = `#version 300 es
+precision highp float;
+
+in vec3 a_position;
+in vec3 a_normal;
+in vec3 a_color;     // per-vertex color (used by cube face colors and ground)
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_proj;
+uniform mat3 u_normalMatrix; // transpose(inverse(model)) — keeps normals correct after scaling
+
+out vec3 v_worldNormal;
+out vec3 v_color;
+
+void main() {
+  vec4 worldPos = u_model * vec4(a_position, 1.0);
+  gl_Position   = u_proj * u_view * worldPos;
+
+  // Transform the normal to world space so lighting is computed there.
+  v_worldNormal = normalize(u_normalMatrix * a_normal);
+  v_color       = a_color;
+}
+`;
+
+// Fragment shader: simple Lambert (diffuse) lighting with a fixed directional light.
+// This is the same model used in the Multimediaprogrammierung WebGL chapter.
+const SCENE_FRAG = `#version 300 es
+precision highp float;
+
+in vec3 v_worldNormal;
+in vec3 v_color;
+
+uniform vec3  u_lightDir;   // world-space direction TO the light (normalised)
+uniform float u_ambient;    // minimum brightness even in shadow
+
+out vec4 outColor;
+
+void main() {
+  // Lambert diffuse: intensity = max(0, dot(normal, lightDir))
+  float diff    = max(0.0, dot(normalize(v_worldNormal), normalize(u_lightDir)));
+  float light   = u_ambient + (1.0 - u_ambient) * diff;
+  outColor = vec4(v_color * light, 1.0);
+}
+`;
+
+// ══════════════════════════════════════════════════════════════
+// STEP 3 — Standard WebGL helpers
+// Standard WebGL helper — see the Multimediaprogrammierung WebGL chapter for a full walkthrough.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Compiles a GLSL shader and returns it.
+ * @param {WebGL2RenderingContext} gl
+ * @param {number} type - gl.VERTEX_SHADER or gl.FRAGMENT_SHADER
+ * @param {string} source - GLSL source string
+ * @returns {WebGLShader}
+ */
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(`Shader compile error:\n${log}`);
+  }
+  return shader;
+}
+
+/**
+ * Links a WebGL program from a vertex and fragment shader.
+ * @param {WebGL2RenderingContext} gl
+ * @param {string} vertSrc
+ * @param {string} fragSrc
+ * @returns {WebGLProgram}
+ */
+function createProgram(gl, vertSrc, fragSrc) {
+  const vs   = createShader(gl, gl.VERTEX_SHADER,   vertSrc);
+  const fs   = createShader(gl, gl.FRAGMENT_SHADER, fragSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(prog);
+    gl.deleteProgram(prog);
+    throw new Error(`Program link error:\n${log}`);
+  }
+  return prog;
+}
+
+/**
+ * Resizes the canvas backing store to match its CSS display size × devicePixelRatio.
+ * @param {HTMLCanvasElement} canvas
+ * @returns {boolean} true if the size changed.
+ */
+function resizeCanvasToDisplaySize(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w   = Math.round(canvas.clientWidth  * dpr);
+  const h   = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width  = w;
+    canvas.height = h;
+    return true;
+  }
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 4 — Compile + link, cache attribute/uniform locations
+// ══════════════════════════════════════════════════════════════
+
+let sceneProg;
+let sceneLoc;
+
+try {
+  sceneProg = createProgram(gl, SCENE_VERT, SCENE_FRAG);
+} catch (e) {
+  showError(`Shader error: ${e.message}`);
+  throw e;
+}
+
+// Cache all locations at init — never call getUniformLocation / getAttribLocation per frame.
+sceneLoc = {
+  // attributes
+  a_position:    gl.getAttribLocation(sceneProg,  'a_position'),
+  a_normal:      gl.getAttribLocation(sceneProg,  'a_normal'),
+  a_color:       gl.getAttribLocation(sceneProg,  'a_color'),
+  // uniforms
+  u_model:       gl.getUniformLocation(sceneProg, 'u_model'),
+  u_view:        gl.getUniformLocation(sceneProg, 'u_view'),
+  u_proj:        gl.getUniformLocation(sceneProg, 'u_proj'),
+  u_normalMatrix:gl.getUniformLocation(sceneProg, 'u_normalMatrix'),
+  u_lightDir:    gl.getUniformLocation(sceneProg, 'u_lightDir'),
+  u_ambient:     gl.getUniformLocation(sceneProg, 'u_ambient'),
+};
+
+// ══════════════════════════════════════════════════════════════
+// STEP 5 — Build geometry buffers and VAOs
+// Standard geometry helpers — see the Multimediaprogrammierung WebGL demos for a full walkthrough.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Uploads vertex data (interleaved position/normal/color, float32) to a VAO.
+ * Layout: [x,y,z, nx,ny,nz, r,g,b] = 9 floats per vertex.
+ * @param {Float32Array} verts - Interleaved vertex data.
+ * @param {Uint16Array|null} indices - Optional index buffer.
+ * @returns {{ vao: WebGLVertexArrayObject, count: number, indexed: boolean }}
+ */
+function buildVAO(verts, indices = null) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+  const STRIDE = 9 * 4; // 9 floats × 4 bytes
+
+  // position: location 0, 3 floats, offset 0
+  gl.enableVertexAttribArray(sceneLoc.a_position);
+  gl.vertexAttribPointer(sceneLoc.a_position, 3, gl.FLOAT, false, STRIDE, 0);
+
+  // normal: location 1, 3 floats, offset 12
+  gl.enableVertexAttribArray(sceneLoc.a_normal);
+  gl.vertexAttribPointer(sceneLoc.a_normal,   3, gl.FLOAT, false, STRIDE, 12);
+
+  // color: location 2, 3 floats, offset 24
+  gl.enableVertexAttribArray(sceneLoc.a_color);
+  gl.vertexAttribPointer(sceneLoc.a_color,    3, gl.FLOAT, false, STRIDE, 24);
+
+  let count;
+  let indexed = false;
+
+  if (indices) {
+    const ebo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    count   = indices.length;
+    indexed = true;
+  } else {
+    count = verts.length / 9; // 9 floats per vertex
+  }
+
+  gl.bindVertexArray(null);
+  return { vao, count, indexed };
+}
+
+// ── Cube geometry ──────────────────────────────────────────────
+// Flat-shaded: each face has a constant normal and a distinct color.
+// We duplicate the 4 vertices per face so each vertex has the face normal baked in.
+// Standard geometry helper — see the Multimediaprogrammierung WebGL demos for a full walkthrough.
+
+/** Appends [x,y,z, nx,ny,nz, r,g,b] for a quad (two triangles) into `arr`. */
+function pushFace(arr, corners, nx, ny, nz, r, g, b) {
+  // corners: four [x,y,z] for the quad, wound counter-clockwise from front
+  // Triangle 1: 0,1,2
+  for (const i of [0,1,2]) arr.push(...corners[i], nx, ny, nz, r, g, b);
+  // Triangle 2: 0,2,3
+  for (const i of [0,2,3]) arr.push(...corners[i], nx, ny, nz, r, g, b);
+}
+
+function buildCube() {
+  const v = [];
+  const s = 0.5; // half-size
+
+  // Face colors: warm, distinct palette for immediate visual interest.
+  //              [r, g, b] in 0..1
+  const FACES = [
+    // +X right  (red-orange)
+    { n:[1,0,0], c:[0.92,0.35,0.25],
+      corners:[[s,-s,-s],[s,-s,s],[s,s,s],[s,s,-s]] },
+    // -X left   (teal)
+    { n:[-1,0,0], c:[0.25,0.72,0.70],
+      corners:[[-s,-s,s],[-s,-s,-s],[-s,s,-s],[-s,s,s]] },
+    // +Y top    (yellow)
+    { n:[0,1,0], c:[0.95,0.82,0.20],
+      corners:[[-s,s,-s],[s,s,-s],[s,s,s],[-s,s,s]] },
+    // -Y bottom (dark grey — rarely seen)
+    { n:[0,-1,0], c:[0.35,0.35,0.35],
+      corners:[[-s,-s,s],[s,-s,s],[s,-s,-s],[-s,-s,-s]] },
+    // +Z front  (blue)
+    { n:[0,0,1], c:[0.30,0.55,0.95],
+      corners:[[-s,-s,s],[s,-s,s],[s,s,s],[-s,s,s]] },
+    // -Z back   (purple)
+    { n:[0,0,-1], c:[0.70,0.35,0.90],
+      corners:[[s,-s,-s],[-s,-s,-s],[-s,s,-s],[s,s,-s]] },
+  ];
+
+  for (const f of FACES) pushFace(v, f.corners, ...f.n, ...f.c);
+
+  return buildVAO(new Float32Array(v));
+}
+
+// ── Sphere geometry ────────────────────────────────────────────
+// UV sphere with smooth normals (normals equal the normalised position on a unit sphere).
+// Standard geometry helper — see the Multimediaprogrammierung WebGL demos for a full walkthrough.
+
+function buildSphere(stacks = 24, slices = 32) {
+  const verts   = [];
+  const indices = [];
+
+  for (let i = 0; i <= stacks; i++) {
+    const phi  = (Math.PI * i) / stacks;          // 0 … π
+    const sinP = Math.sin(phi);
+    const cosP = Math.cos(phi);
+
+    for (let j = 0; j <= slices; j++) {
+      const theta = (2 * Math.PI * j) / slices;   // 0 … 2π
+      const nx    = Math.sin(theta) * sinP;
+      const ny    = cosP;
+      const nz    = Math.cos(theta) * sinP;
+
+      // On a unit sphere the normal equals the position.
+      // Push position, normal, color (single accent blue for the sphere).
+      verts.push(nx, ny, nz,   nx, ny, nz,   0.35, 0.65, 1.0);
+    }
+  }
+
+  for (let i = 0; i < stacks; i++) {
+    for (let j = 0; j < slices; j++) {
+      const a = i * (slices + 1) + j;
+      const b = a + slices + 1;
+      indices.push(a, b, a+1,  b, b+1, a+1);
+    }
+  }
+
+  return buildVAO(new Float32Array(verts), new Uint16Array(indices));
+}
+
+// ── Ground plane geometry ──────────────────────────────────────
+// A single large quad, flat-shaded grey, lying in the XZ plane at y = 0.
+// Standard geometry helper — see the Multimediaprogrammierung WebGL demos for a full walkthrough.
+
+function buildGround(size = 8.0) {
+  const s = size / 2;
+  const v = [];
+  // Two triangles; normal points up (+Y); mid-grey color.
+  pushFace(v,
+    [[-s,0,-s],[s,0,-s],[s,0,s],[-s,0,s]],
+    0, 1, 0,
+    0.60, 0.60, 0.60
+  );
+  return buildVAO(new Float32Array(v));
+}
+
+// Build all geometry objects once.
+const cubeGeo   = buildCube();
+const sphereGeo = buildSphere();
+const groundGeo = buildGround();
+
+// ══════════════════════════════════════════════════════════════
+// STEP 6 — Camera state and animation data
+// ══════════════════════════════════════════════════════════════
+
+// ── Constants ─────────────────────────────────────────────────
+const DEG  = Math.PI / 180;      // degrees → radians multiplier
+const UP   = [0, 1, 0];          // world up vector (constant for all modes)
+
+// Fixed directional light — world space direction TO the light.
+const LIGHT_DIR = [0.6, 1.0, 0.8];
+
+// Scene object transforms (fixed — only the camera moves).
+const CUBE_POS   = [-1.5, 0.5, 0.0];
+const SPHERE_POS = [ 1.5, 0.5, 0.0];
+
+// ANIMATION CONCEPT: shared camera target for orbit and dolly modes.
+// Both modes keep the camera pointed at this fixed world point.
+// Only lookAtLerp animates the target itself.
+const FIXED_TARGET = [0.0, 0.5, 0.0];
+
+// ── Orbit state ───────────────────────────────────────────────
+const orbit = {
+  azimuthDeg:   45,     // current azimuth in degrees (driven by auto-rotate or slider)
+  elevationDeg: 25,     // vertical angle above the XZ plane, degrees
+  radius:       6.0,    // distance from target to eye
+  autoRotate:   true,
+  rotSpeedDeg:  0.5,    // degrees per second when auto-rotating
+};
+
+// ── Dolly state ───────────────────────────────────────────────
+const dolly = {
+  // ANIMATION CONCEPT: two keyframe positions define the dolly path.
+  // The camera starts far away and moves in close, always looking at FIXED_TARGET.
+  eyeStart: [0.0, 2.0, 8.0],    // far, wide shot
+  eyeEnd:   [0.0, 1.0, 2.0],    // close, low shot
+
+  t:        0.0,    // raw scrubber value 0..1 (set by slider or play)
+  playing:  false,
+  speed:    0.18,   // units of t per second when playing
+  curve:    'easeInOut',
+};
+
+// ── Look-at lerp state ────────────────────────────────────────
+// ANIMATION CONCEPT: interpolating both eye and target produces a camera move;
+// interpolating neither is a cut; interpolating only t between 0 and 1 is a blend.
+const lerp2 = {
+  // Camera A — wide establishing shot
+  camA: { eye: [-4.0, 2.0, 4.0], target: [0.0, 0.5, 0.0] },
+  // Camera B — close-up on the sphere
+  camB: { eye: [ 0.5, 1.0, 2.0], target: [1.5, 0.5, 0.0] },
+
+  t:        0.0,   // 0 = camera A, 1 = camera B
+  blending: false, // true while the smooth blend animation is running
+  blendDur: 1.5,   // seconds for a full A→B or B→A blend
+  blendDir: 1,     // +1 = towards B, -1 = towards A
+};
+
+// ── Shared animated FOV state ─────────────────────────────────
+const fovState = {
+  animating: false,
+  baseDeg:   45,          // used when not animating
+  currentDeg: 45,
+  periodSec: 6.0,         // sine oscillation period
+  minDeg:    30,
+  maxDeg:    70,
+};
+
+// ── Active mode ───────────────────────────────────────────────
+let cameraMode = 'orbit'; // 'orbit' | 'dolly' | 'lookAtLerp'
+
+// ── Frame tracking (for FPS display) ─────────────────────────
+let lastFrameTime = 0;
+let fps           = 0;
+let fpsSmooth     = 60;
+
+// ══════════════════════════════════════════════════════════════
+// STEP 6b — mat4 helpers (column-major Float32Array; no gl-matrix)
+// ══════════════════════════════════════════════════════════════
+
+// ANIMATION CONCEPT: All 3D transforms are 4×4 matrices in column-major order.
+// These are the same helpers as in the WebGL chapter — included here for self-containment.
+const mat4 = {
+  identity:    () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  translation: (x,y,z) => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]),
+  scaling:     (x,y,z) => new Float32Array([x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]),
+
+  perspective: (fovY, aspect, near, far) => {
+    const f  = 1 / Math.tan(fovY / 2);
+    const nf = 1 / (near - far);
+    return new Float32Array([
+      f/aspect, 0, 0,  0,
+      0,        f, 0,  0,
+      0,        0, (far+near)*nf, -1,
+      0,        0, 2*far*near*nf, 0,
+    ]);
+  },
+
+  multiply: (a, b) => {
+    const out = new Float32Array(16);
+    for (let c = 0; c < 4; c++)
+      for (let r = 0; r < 4; r++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k*4+r] * b[c*4+k];
+        out[c*4+r] = s;
+      }
+    return out;
+  },
+
+  /**
+   * Constructs the view matrix from camera position and target.
+   * ANIMATION CONCEPT: lookAt constructs the view matrix from camera position and target.
+   * The three axes of the camera's local frame are computed from cross products:
+   *   z-axis = normalize(eye - target)    (points away from what we look at)
+   *   x-axis = normalize(cross(up, z))    (points to camera's right)
+   *   y-axis = cross(z, x)                (camera's up, orthogonal to x and z)
+   * The final matrix rotates world coordinates into camera space and translates
+   * them so the eye is at the origin.
+   * @param {number[]} eye    - Camera position [x,y,z]
+   * @param {number[]} target - Look-at point [x,y,z]
+   * @param {number[]} up     - World up vector [x,y,z]
+   * @returns {Float32Array} Column-major 4×4 view matrix.
+   */
+  lookAt: (eye, target, up) => {
+    const normalize = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+    const cross     = (a, b) => [
+      a[1]*b[2] - a[2]*b[1],
+      a[2]*b[0] - a[0]*b[2],
+      a[0]*b[1] - a[1]*b[0],
+    ];
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+
+    const z = normalize([eye[0]-target[0], eye[1]-target[1], eye[2]-target[2]]);
+    const x = normalize(cross(up, z));
+    const y = cross(z, x);
+
+    return new Float32Array([
+       x[0],  y[0],  z[0], 0,
+       x[1],  y[1],  z[1], 0,
+       x[2],  y[2],  z[2], 0,
+      -dot(x, eye), -dot(y, eye), -dot(z, eye), 1,
+    ]);
+  },
+
+  /**
+   * Computes the normal matrix: the upper-left 3×3 of transpose(inverse(model)).
+   * This is needed to correctly transform normals when the model matrix includes
+   * non-uniform scaling.  For uniform scaling or pure rotation it equals the model's 3×3.
+   * @param {Float32Array} m - Column-major 4×4 model matrix.
+   * @returns {Float32Array} Column-major 3×3 normal matrix.
+   */
+  normalMatrix3: (m) => {
+    // Extract 3×3 from the 4×4, then invert and transpose.
+    const a00=m[0],a01=m[1],a02=m[2];
+    const a10=m[4],a11=m[5],a12=m[6];
+    const a20=m[8],a21=m[9],a22=m[10];
+    const det = a00*(a11*a22-a12*a21) - a01*(a10*a22-a12*a20) + a02*(a10*a21-a11*a20);
+    const inv = 1/det;
+    // Adjugate (transpose of cofactor matrix), then divide by det.
+    return new Float32Array([
+      (a11*a22-a12*a21)*inv, (a02*a21-a01*a22)*inv, (a01*a12-a02*a11)*inv,
+      (a12*a20-a10*a22)*inv, (a00*a22-a02*a20)*inv, (a02*a10-a00*a12)*inv,
+      (a10*a21-a11*a20)*inv, (a01*a20-a00*a21)*inv, (a00*a11-a01*a10)*inv,
+    ]);
+  },
+};
+
+// ══════════════════════════════════════════════════════════════
+// STEP 6c — Easing functions (carried forward from Demo 2)
+// ANIMATION CONCEPT: The same easing functions from Demo 2 are used here
+// to shape the dolly path timing. Easing is just a pure function f(t) → t'.
+// ══════════════════════════════════════════════════════════════
+
+/** Clamps t to [0, 1] and applies the chosen easing. */
+function applyEasing(name, t) {
+  const tc = Math.max(0, Math.min(1, t));
+  switch (name) {
+    case 'linear':       return tc;
+    case 'easeInOut':    return tc < 0.5 ? 2*tc*tc : -1 + (4 - 2*tc)*tc; // easeInOutQuad
+    case 'easeOutCubic': { const u = tc - 1; return u*u*u + 1; }
+    default:             return tc;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 6d — Vector lerp utility
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Linear interpolation between two 3-element arrays.
+ * ANIMATION CONCEPT: lerp(a, b, t) = a + (b - a) * t
+ * At t=0 the result is a; at t=1 the result is b.
+ * @param {number[]} a
+ * @param {number[]} b
+ * @param {number}   t  - blend factor in [0, 1]
+ * @returns {number[]}
+ */
+function lerpVec3(a, b, t) {
+  return [
+    a[0] + (b[0]-a[0])*t,
+    a[1] + (b[1]-a[1])*t,
+    a[2] + (b[2]-a[2])*t,
+  ];
+}
+
+/** Formats a vec3 for the stats display as "(x.xx, y.yy, z.zz)". */
+function fmtVec3(v) {
+  return `(${v[0].toFixed(1)}, ${v[1].toFixed(1)}, ${v[2].toFixed(1)})`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 7 — Wire UI events to state
+// ══════════════════════════════════════════════════════════════
+
+/** Shows only the control panel for the active mode. */
+function updateModeUI() {
+  ui.orbitControls.hidden      = (cameraMode !== 'orbit');
+  ui.dollyControls.hidden      = (cameraMode !== 'dolly');
+  ui.lookAtLerpControls.hidden = (cameraMode !== 'lookAtLerp');
+}
+
+ui.cameraMode.addEventListener('change', () => {
+  cameraMode = ui.cameraMode.value;
+  updateModeUI();
+});
+
+// ── FOV controls ──────────────────────────────────────────────
+ui.fovAnim.addEventListener('change', () => {
+  fovState.animating = ui.fovAnim.checked;
+  // Disable manual FOV slider while FOV is being animated.
+  ui.fov.disabled    = fovState.animating;
+});
+
+ui.fov.addEventListener('input', () => {
+  fovState.baseDeg   = Number(ui.fov.value);
+  fovState.currentDeg = fovState.baseDeg;
+  ui.fovVal.textContent = `${ui.fov.value}°`;
+});
+
+// ── Orbit controls ────────────────────────────────────────────
+ui.azimuth.addEventListener('input', () => {
+  orbit.azimuthDeg = Number(ui.azimuth.value);
+  ui.azimuthVal.textContent = `${ui.azimuth.value}°`;
+});
+ui.elevation.addEventListener('input', () => {
+  orbit.elevationDeg = Number(ui.elevation.value);
+  ui.elevationVal.textContent = `${ui.elevation.value}°`;
+});
+ui.radius.addEventListener('input', () => {
+  orbit.radius = Number(ui.radius.value);
+  ui.radiusVal.textContent = Number(ui.radius.value).toFixed(1);
+});
+ui.autoRotate.addEventListener('change', () => {
+  orbit.autoRotate = ui.autoRotate.checked;
+});
+ui.rotSpeed.addEventListener('input', () => {
+  orbit.rotSpeedDeg = Number(ui.rotSpeed.value);
+  ui.rotSpeedVal.textContent = Number(ui.rotSpeed.value).toFixed(2);
+});
+
+// ── Dolly controls ────────────────────────────────────────────
+ui.scrubber.addEventListener('input', () => {
+  dolly.t       = Number(ui.scrubber.value);
+  dolly.playing = false;
+  ui.dollyPlayBtn.textContent = 'Play';
+  ui.scrubberVal.textContent  = dolly.t.toFixed(3);
+});
+ui.dollyCurve.addEventListener('change', () => {
+  dolly.curve = ui.dollyCurve.value;
+});
+ui.dollyPlayBtn.addEventListener('click', () => {
+  dolly.playing = !dolly.playing;
+  ui.dollyPlayBtn.textContent = dolly.playing ? 'Pause' : 'Play';
+  if (dolly.playing && dolly.t >= 1.0) dolly.t = 0.0; // restart from beginning
+});
+
+// ── Look-at lerp controls ─────────────────────────────────────
+ui.cutBtn.addEventListener('click', () => {
+  // ANIMATION CONCEPT: a "cut" is an instantaneous switch — t jumps to 0 or 1.
+  // There is no interpolation; the camera teleports. This is the film-editing equivalent of a hard cut.
+  lerp2.blending = false;
+  lerp2.t        = lerp2.t < 0.5 ? 1.0 : 0.0; // toggle between the two cameras
+});
+
+ui.blendBtn.addEventListener('click', () => {
+  // ANIMATION CONCEPT: a "blend" drives t from its current value towards the opposite end
+  // over blendDur seconds using easeInOutCubic. The camera smoothly interpolates both
+  // eye and target simultaneously, producing a continuous arc through 3D space.
+  lerp2.blending  = true;
+  lerp2.blendDir  = lerp2.t < 0.5 ? 1 : -1; // decide which direction to blend
+});
+
+// ══════════════════════════════════════════════════════════════
+// STEP 8 — Render + animation update function
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Draws one mesh using the scene shader.
+ * @param {{ vao: WebGLVertexArrayObject, count: number, indexed: boolean }} geo
+ * @param {Float32Array} modelMatrix
+ */
+function drawMesh(geo, modelMatrix) {
+  gl.uniformMatrix4fv(sceneLoc.u_model, false, modelMatrix);
+  gl.uniformMatrix3fv(sceneLoc.u_normalMatrix, false, mat4.normalMatrix3(modelMatrix));
+  gl.bindVertexArray(geo.vao);
+  if (geo.indexed) {
+    gl.drawElements(gl.TRIANGLES, geo.count, gl.UNSIGNED_SHORT, 0);
+  } else {
+    gl.drawArrays(gl.TRIANGLES, 0, geo.count);
+  }
+}
+
+/**
+ * Main render + update function, called once per frame by requestAnimationFrame.
+ * @param {DOMHighResTimeStamp} timestamp - Time in ms since page load.
+ */
+function render(timestamp) {
+  const dt = Math.min((timestamp - lastFrameTime) / 1000, 0.1); // delta time in seconds, capped
+  lastFrameTime = timestamp;
+
+  // Smooth FPS estimate with exponential moving average.
+  fpsSmooth = fpsSmooth * 0.9 + (1 / (dt || 0.016)) * 0.1;
+  fps       = Math.round(fpsSmooth);
+
+  // ── Update canvas size ──────────────────────────────────────
+  const resized = resizeCanvasToDisplaySize(ui.canvas);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+  // ── Animate FOV ─────────────────────────────────────────────
+  // ANIMATION CONCEPT: animating FOV simulates a zoom lens ("dolly zoom" effect when
+  // combined with a dolly move). The FOV is a parameter of the projection matrix, not
+  // the view matrix — so even a stationary camera can appear to "zoom" by changing FOV.
+  if (fovState.animating) {
+    const phase = (timestamp / 1000) / fovState.periodSec * (2 * Math.PI);
+    fovState.currentDeg = fovState.minDeg +
+      (fovState.maxDeg - fovState.minDeg) * 0.5 * (1 + Math.sin(phase));
+    // Keep the slider in sync so students see the live value.
+    ui.fov.value          = Math.round(fovState.currentDeg);
+    ui.fovVal.textContent = `${Math.round(fovState.currentDeg)}°`;
+  } else {
+    fovState.currentDeg = fovState.baseDeg;
+  }
+
+  // ── Compute eye and target for the active camera mode ───────
+
+  let eye, target;
+
+  if (cameraMode === 'orbit') {
+    // ── Orbit mode ──────────────────────────────────────────
+    // ANIMATION CONCEPT: spherical coordinates define the eye position relative to the target.
+    // Azimuth (θ) is the horizontal angle; elevation (φ) is the vertical angle.
+    // Converting spherical → Cartesian:
+    //   eye.x = target.x + radius * sin(azimuth) * cos(elevation)
+    //   eye.y = target.y + radius * sin(elevation)
+    //   eye.z = target.z + radius * cos(azimuth) * cos(elevation)
+    // Incrementing azimuth over time produces a smooth circular orbit.
+    // This is the same math used in Three.js OrbitControls.
+
+    if (orbit.autoRotate) {
+      orbit.azimuthDeg += orbit.rotSpeedDeg * dt * (180 / Math.PI);
+      orbit.azimuthDeg  = orbit.azimuthDeg % 360;
+      // Keep the slider in sync so students can see the live azimuth value.
+      ui.azimuth.value  = orbit.azimuthDeg.toFixed(1);
+      ui.azimuthVal.textContent = `${orbit.azimuthDeg.toFixed(0)}°`;
+    }
+
+    const az  = orbit.azimuthDeg   * DEG;
+    const el  = orbit.elevationDeg * DEG;
+    const r   = orbit.radius;
+
+    eye = [
+      FIXED_TARGET[0] + r * Math.sin(az) * Math.cos(el),
+      FIXED_TARGET[1] + r * Math.sin(el),
+      FIXED_TARGET[2] + r * Math.cos(az) * Math.cos(el),
+    ];
+    target = FIXED_TARGET;
+
+    // Update stats.
+    ui.stats.textContent =
+      `eye: ${fmtVec3(eye)} · target: ${fmtVec3(target)} · fov: ${Math.round(fovState.currentDeg)}° · FPS: ${fps}`;
+
+  } else if (cameraMode === 'dolly') {
+    // ── Dolly mode ──────────────────────────────────────────
+    // ANIMATION CONCEPT: a dolly moves the camera along a straight line path.
+    // Here the path is defined by two endpoint positions (eyeStart, eyeEnd).
+    // The scrubber t ∈ [0,1] drives the lerp.
+    // Applying an easing function to t before the lerp shapes the timing:
+    // the camera can start slow, accelerate, and decelerate, even though the
+    // underlying path is a straight line.
+
+    if (dolly.playing) {
+      dolly.t = Math.min(dolly.t + dolly.speed * dt, 1.0);
+      ui.scrubber.value           = dolly.t;
+      ui.scrubberVal.textContent  = dolly.t.toFixed(3);
+      if (dolly.t >= 1.0) {
+        dolly.playing               = false;
+        ui.dollyPlayBtn.textContent = 'Play';
+      }
+    }
+
+    const easedT = applyEasing(dolly.curve, dolly.t);
+    eye    = lerpVec3(dolly.eyeStart, dolly.eyeEnd, easedT);
+    target = FIXED_TARGET;
+
+    ui.stats.textContent =
+      `t = ${dolly.t.toFixed(3)} · easing: ${dolly.curve} · eye: ${fmtVec3(eye)} · FPS: ${fps}`;
+
+  } else {
+    // ── Look-at lerp mode ───────────────────────────────────
+    // ANIMATION CONCEPT: interpolating both eye and target produces a camera move;
+    // interpolating neither is a cut; interpolating only t between 0 and 1 is a blend.
+    // Here we lerp both eye and target simultaneously using the same t value.
+    // This means the camera travels a straight line in (eye, target) space —
+    // which in world space is a simultaneous pan and arc.
+
+    if (lerp2.blending) {
+      // Use easeInOutCubic for the blend to give it a natural feel.
+      const step = dt / lerp2.blendDur;
+      lerp2.t    = Math.max(0, Math.min(1, lerp2.t + lerp2.blendDir * step));
+      if (lerp2.t <= 0 || lerp2.t >= 1) lerp2.blending = false;
+    }
+
+    eye    = lerpVec3(lerp2.camA.eye,    lerp2.camB.eye,    lerp2.t);
+    target = lerpVec3(lerp2.camA.target, lerp2.camB.target, lerp2.t);
+
+    ui.blendProgress.textContent = `t = ${lerp2.t.toFixed(2)}`;
+    ui.stats.textContent =
+      `blend: ${lerp2.t.toFixed(2)} · eye: ${fmtVec3(eye)} · FPS: ${fps}`;
+  }
+
+  // ── Build matrices ──────────────────────────────────────────
+
+  // ANIMATION CONCEPT: mat4.lookAt takes the animated eye and target values and
+  // produces the view matrix. All three camera modes feed into this single call.
+  // The camera animation lives entirely in the JavaScript that drives eye and target —
+  // the GPU sees only the resulting matrix.
+  const viewMatrix = mat4.lookAt(eye, target, UP);
+
+  const aspect     = gl.drawingBufferWidth / gl.drawingBufferHeight;
+  const projMatrix = mat4.perspective(
+    fovState.currentDeg * DEG,
+    aspect,
+    0.1,
+    100.0
+  );
+
+  // ── Render ──────────────────────────────────────────────────
+  gl.clearColor(0.12, 0.12, 0.18, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+
+  gl.useProgram(sceneProg);
+
+  // Upload shared uniforms (view and projection are the same for all objects).
+  gl.uniformMatrix4fv(sceneLoc.u_view, false, viewMatrix);
+  gl.uniformMatrix4fv(sceneLoc.u_proj, false, projMatrix);
+  gl.uniform3fv(sceneLoc.u_lightDir, LIGHT_DIR);
+  gl.uniform1f(sceneLoc.u_ambient, 0.18);
+
+  // Ground plane — identity model matrix (it lives at the world origin).
+  drawMesh(groundGeo, mat4.identity());
+
+  // Cube — translated to its position in the scene.
+  drawMesh(cubeGeo, mat4.translation(...CUBE_POS));
+
+  // Sphere — translated to its position, at radius 1 (scale is 1).
+  drawMesh(sphereGeo, mat4.translation(...SPHERE_POS));
+
+  // ── Schedule next frame ─────────────────────────────────────
+  requestAnimationFrame(render);
+}
+
+// ══════════════════════════════════════════════════════════════
+// STEP 9 — Start the loop
+// ══════════════════════════════════════════════════════════════
+
+// Set initial UI visibility.
+updateModeUI();
+
+// Handle window resize — resizeCanvasToDisplaySize is called every frame,
+// but we also want to redraw immediately on resize so there is no flash.
+window.addEventListener('resize', () => {
+  resizeCanvasToDisplaySize(ui.canvas);
+});
+
+// Kick off the animation loop.
+requestAnimationFrame((ts) => {
+  lastFrameTime = ts;
+  requestAnimationFrame(render);
+});
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Computeranimation — TU Ilmenau</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d0f14;
+    --surface:   #161a22;
+    --border:    #252b38;
+    --text:      #d8dce6;
+    --muted:     #5a6175;
+    --accent:    #4f9cf9;
+    --accent2:   #a78bfa;
+    --green:     #34d399;
+    --orange:    #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 24px 0 20px;
+  }
+
+  .header-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .header-logo img {
+    width: 100px;
+    border-radius: 10px;
+    display: block;
+  }
+
+  .header-info h1 {
+    font-size: clamp(18px, 3vw, 26px);
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  .header-info h2 {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 8px;
+  }
+
+  .header-meta {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── main layout ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+
+  section + section { margin-top: 52px; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── notebook rows ── */
+  .notebook-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .notebook-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .notebook-row.has-demos {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .notebook-row.has-demos .notebook-row-top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .notebook-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 28px;
+  }
+
+  .notebook-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #eef0f6;
+    flex: 1;
+    min-width: 160px;
+  }
+
+  .notebook-title a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .notebook-title a:hover {
+    color: var(--accent);
+  }
+
+  .notebook-title span {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: var(--mono);
+  }
+
+  .badge-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: border-color 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  .badge:hover { opacity: 0.8; }
+  .badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .badge svg { width: 13px; height: 13px; fill: currentColor; flex-shrink: 0; }
+
+  .badge-page {
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--accent2);
+    border-color: rgba(167, 139, 250, 0.25);
+  }
+
+  /* ── demo sub-section inside notebook rows ── */
+  .demo-subsection {
+    width: 100%;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .demo-sublabel {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+  }
+
+  .demo-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .demo-card:hover {
+    border-color: var(--accent);
+    background: #12151c;
+  }
+
+  .demo-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .demo-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-key  { background: rgba(79, 156, 249, 0.12); color: var(--accent); }
+  .icon-ease { background: rgba(167, 139, 250, 0.12); color: var(--accent2); }
+  .icon-cam  { background: rgba(52, 211, 153, 0.12); color: var(--green); }
+
+  .demo-icon svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .demo-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #eef0f6;
+  }
+
+  .demo-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  .demo-link-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .demo-link-label svg { width: 9px; height: 9px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 18px 32px 24px;
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .header-inner, main, footer { padding-left: 20px; padding-right: 20px; }
+    .notebook-row { flex-direction: column; align-items: flex-start; }
+    .notebook-row.has-demos .notebook-row-top { flex-direction: column; align-items: flex-start; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Seminar Materials</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <p class="section-label">Seminar notebooks</p>
+    <div class="notebook-list">
+
+      <!-- Chapter 00 -->
+      <div class="notebook-row">
+        <div class="notebook-num">00</div>
+        <div class="notebook-title">
+          <a href="00_computeranimation_intro.html">Introduction</a>
+        </div>
+        <div class="badge-group">
+          <a class="badge badge-page"
+             href="00_computeranimation_intro.html"
+             rel="noopener">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Read
+          </a>
+        </div>
+      </div>
+
+      <!-- Chapter 01 + demos -->
+      <div class="notebook-row has-demos">
+        <div class="notebook-row-top">
+          <div class="notebook-num">01</div>
+          <div class="notebook-title">
+            <a href="01_computeranimation_webgl.html">WebGL 2</a>
+          </div>
+          <div class="badge-group">
+            <a class="badge badge-page"
+               href="01_computeranimation_webgl.html"
+               rel="noopener">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Read
+            </a>
+          </div>
+        </div>
+
+        <div class="demo-subsection">
+          <p class="demo-sublabel">Interactive demos — WebGL 2 &amp; Animation</p>
+          <div class="demo-grid">
+
+            <a class="demo-card" href="https://tuiilmenauams.github.io/computer_animation_seminars/01_ca_keyframes.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-key">
+                <!-- keyframe / diamond path -->
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+              </div>
+              <div class="demo-title">Keyframes &amp; Interpolation</div>
+              <div class="demo-desc">Keyframe tracks with a sphere moving between five positions. Compare linear lerp vs. step interpolation mode.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+            <a class="demo-card" href="https://tuiilmenauams.github.io/computer_animation_seminars/01_ca_easing.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-ease">
+                <!-- easing curve -->
+                <svg viewBox="0 0 24 24"><path d="M3 20 C6 20 6 4 12 4 C18 4 18 20 21 20"/></svg>
+              </div>
+              <div class="demo-title">Easing &amp; Animation Curves</div>
+              <div class="demo-desc">Easing functions and cubic Bézier curves with a live interactive curve plot.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+            <a class="demo-card" href="https://tuiilmenauams.github.io/computer_animation_seminars/01_ca_camera.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-cam">
+                <!-- camera -->
+                <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </div>
+              <div class="demo-title">Camera Animation</div>
+              <div class="demo-desc">Orbit, dolly and lookAt interpolation on a 3D stage, plus FOV animation.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Seminar Materials<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Page maintained by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+</body>
+</html>
