@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo 4: Shadows and Environment — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 16px 0 14px;
+    flex-shrink: 0;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .header-logo img { width: 72px; border-radius: 8px; display: block; }
+  .header-info h1 { font-size: 18px; font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 2px; }
+  .header-info h2 { font-size: 12px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+  .header-meta { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 10px 24px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 5px; }
+
+  /* ── main layout ── */
+  main {
+    flex: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 20px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── demo title ── */
+  .demo-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.25;
+  }
+  .demo-title span {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 400;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .demo-desc {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 6px;
+    max-width: 700px;
+  }
+
+  /* ── error banner ── */
+  .error-banner {
+    display: none;
+    background: rgba(251,146,60,0.1);
+    border: 1px solid rgba(251,146,60,0.4);
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: var(--orange);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  /* loading banner */
+  .loading-banner {
+    background: rgba(79,156,249,0.06);
+    border: 1px solid rgba(79,156,249,0.2);
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* ── two-column layout: canvas + panel ── */
+  .demo-layout {
+    display: grid;
+    grid-template-columns: 1fr 272px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ── canvas wrapper ── */
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #07090d;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* stats overlay */
+  .stats {
+    position: absolute;
+    bottom: 10px;
+    left: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(216,220,230,0.6);
+    pointer-events: none;
+    line-height: 1.7;
+  }
+
+  /* env loading overlay */
+  #envStatus {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: rgba(216,220,230,0.5);
+    pointer-events: none;
+  }
+
+  /* ── controls panel ── */
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(37,43,56,0.7);
+    gap: 10px;
+  }
+  .control-row:last-child { border-bottom: none; }
+  .control-label {
+    font-size: 12px;
+    color: var(--text);
+    flex-shrink: 0;
+    min-width: 96px;
+  }
+  .control-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .value-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    min-width: 38px;
+    text-align: right;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { background: #74b3fb; }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+  }
+
+  select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+    width: 100%;
+  }
+  select:focus { border-color: var(--accent); }
+
+  input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: left 0.2s, background 0.2s;
+  }
+  input[type="checkbox"]:checked { background: rgba(79,156,249,0.25); }
+  input[type="checkbox"]:checked::after { left: 19px; background: var(--accent); }
+
+  .btn {
+    background: rgba(79,156,249,0.1);
+    border: 1px solid rgba(79,156,249,0.3);
+    border-radius: 6px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(79,156,249,0.2); border-color: rgba(79,156,249,0.5); }
+  .btn:active { background: rgba(79,156,249,0.3); }
+
+  /* divider label inside panel */
+  .panel-divider {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  /* ── annotations ── */
+  .annotation-box {
+    background: rgba(167,139,250,0.05);
+    border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .annotation-box strong { color: var(--accent2); font-weight: 500; }
+  .annotation-box code {
+    background: rgba(79,156,249,0.1);
+    color: #93c5fd;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .annotation-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* ── footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 14px 24px 18px;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  footer p + p { margin-top: 3px; font-size: 11px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 720px) {
+    .demo-layout { grid-template-columns: 1fr; }
+    .annotation-grid { grid-template-columns: 1fr; }
+    .header-inner, main, footer, .breadcrumb { padding-left: 16px; padding-right: 16px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 02: Three.js — Demo 4</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  <a href="02_computeranimation_threejs.html">Chapter 02: Three.js</a>
+  <span>›</span>
+  Demo 4: Shadows and Environment
+</nav>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div>
+    <div class="demo-title">
+      <span>02_ca_shadows.html</span>
+      Shadows and Environment
+    </div>
+    <p class="demo-desc">
+      A full shadow pipeline: PCFSoftShadowMap, a directional sun light with a configurable frustum,
+      a HemisphereLight fill, and an HDR environment map for PBR reflections. Explore shadow acne,
+      peter panning, and the shadow camera frustum interactively.
+    </p>
+  </div>
+
+  <!-- ── WebGL error banner ── -->
+  <div class="error-banner" id="errorBanner">
+    ⚠ WebGL 2 is not available in this browser or has been disabled. Try Chrome, Edge, Firefox, or Safari
+    with hardware acceleration enabled in settings.
+  </div>
+
+  <!-- ── canvas + controls ── -->
+  <div class="demo-layout">
+
+    <!-- Three.js canvas -->
+    <div class="canvas-wrap">
+      <canvas id="c" role="img" aria-label="Interactive Three.js shadows demo: a character placeholder on a ground plane lit by a configurable sun light with real-time shadow controls"></canvas>
+      <div class="stats" id="stats">FPS — · Calls — · Tris —</div>
+      <div id="envStatus">env: loading…</div>
+    </div>
+
+    <!-- Controls panel -->
+    <div class="demo-card">
+      <div class="panel-title">Sun Light</div>
+
+      <div class="control-row">
+        <span class="control-label">Elevation</span>
+        <div class="control-input">
+          <input type="range" id="sldElevation" min="5" max="85" step="1" value="45">
+          <span class="value-badge" id="valElevation">45°</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Azimuth</span>
+        <div class="control-input">
+          <input type="range" id="sldAzimuth" min="0" max="360" step="1" value="45">
+          <span class="value-badge" id="valAzimuth">45°</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Sun intensity</span>
+        <div class="control-input">
+          <input type="range" id="sldSunInt" min="0" max="4" step="0.05" value="2.0">
+          <span class="value-badge" id="valSunInt">2.00</span>
+        </div>
+      </div>
+
+      <div class="panel-divider">Shadow Quality</div>
+
+      <div class="control-row">
+        <span class="control-label">Map type</span>
+        <div class="control-input" style="flex-direction:column; align-items:stretch;">
+          <select id="selShadowType">
+            <option value="basic">BasicShadowMap (hard)</option>
+            <option value="pcf">PCFShadowMap (soft)</option>
+            <option value="pcfsoft" selected>PCFSoftShadowMap ✓</option>
+            <option value="vsm">VSMShadowMap (variance)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Resolution</span>
+        <div class="control-input" style="flex-direction:column; align-items:stretch;">
+          <select id="selMapSize">
+            <option value="512">512 (low)</option>
+            <option value="1024" selected>1024 (medium)</option>
+            <option value="2048">2048 (high)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Bias</span>
+        <div class="control-input">
+          <input type="range" id="sldBias" min="-0.01" max="0.01" step="0.0005" value="-0.001">
+          <span class="value-badge" id="valBias">-0.001</span>
+        </div>
+      </div>
+
+      <div class="panel-divider">Display</div>
+
+      <div class="control-row">
+        <span class="control-label">Shadow cam</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkShadowCam">
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Show env bg</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkEnvBg" checked>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Env intensity</span>
+        <div class="control-input">
+          <input type="range" id="sldEnvInt" min="0" max="3" step="0.05" value="1.0">
+          <span class="value-badge" id="valEnvInt">1.00</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Hemi fill</span>
+        <div class="control-input">
+          <input type="range" id="sldHemi" min="0" max="2" step="0.05" value="0.4">
+          <span class="value-badge" id="valHemi">0.40</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button class="btn" id="btnReset" style="width:100%">Reset Camera</button>
+      </div>
+    </div>
+
+  </div><!-- /.demo-layout -->
+
+  <!-- ── Concept annotations ── -->
+  <div class="annotation-grid">
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Shadow Map Pipeline</strong><br>
+      Three.js renders the scene <em>twice</em> when shadows are enabled: first from the
+      light's point of view into a depth texture (the shadow map), then from the camera.
+      During the camera pass, each fragment compares its depth from the light to the stored
+      value — if it is behind something, it is in shadow. The five required steps:
+      <code>renderer.shadowMap.enabled</code>, choose <code>shadowMap.type</code>,
+      <code>light.castShadow</code>, <code>mesh.castShadow</code>,
+      <code>mesh.receiveShadow</code>.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — Shadow Acne &amp; Peter Panning</strong><br>
+      Set <strong>Bias</strong> to <code>0</code> to see <em>shadow acne</em>: a surface
+      self-shadows itself because of floating-point precision in the depth comparison.
+      Increase bias to fix it. Push bias too far and the shadow detaches from the object —
+      this is <em>peter panning</em>. The sweet spot is typically a small negative value
+      around <code>−0.001</code>. Use the slider to find it live.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Shadow Camera Frustum</strong><br>
+      The <code>DirectionalLight</code>'s shadow is rendered through an internal
+      <code>OrthographicCamera</code>. Its frustum must enclose the entire scene: too small
+      and shadows are clipped at the edges; too large and the fixed shadow map resolution
+      is spread over a huge area, making shadows appear blocky. Toggle
+      <strong>Shadow cam</strong> to see the yellow frustum wireframe.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Environment Maps &amp; PBR</strong><br>
+      <code>scene.environment</code> applies an HDR cube map to every
+      <code>MeshStandardMaterial</code> in the scene, providing image-based lighting (IBL).
+      The raw HDR is pre-filtered by <code>PMREMGenerator</code> into a set of blurred
+      mip-levels that match different roughness values. A rough surface samples a blurry
+      mip; a mirror surface samples the sharpest one. This is the single biggest quality
+      upgrade you can give a PBR scene.
+    </div>
+  </div>
+
+</main>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 02: Three.js &middot; Demo 4: Shadows and Environment<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Created by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     THREE.JS DEMO — 02_ca_shadows.html
+     Shadows and Environment: full shadow pipeline, HDR environment map,
+     sun light with configurable elevation/azimuth, shadow quality controls,
+     CameraHelper for the shadow frustum, PCFSoftShadowMap.
+
+     Reading guide:
+       Each numbered STEP comment marks a logical block of setup.
+       // THREE.JS CONCEPT: explains the API call and its underlying mechanism.
+       // ANIMATION CONCEPT: explains the animation / rendering principle.
+       // SHADOW CONCEPT: explains shadow-specific behaviour.
+       Read from top to bottom — each step builds on the previous one.
+══════════════════════════════════════════════════════════════════════════════ -->
+
+<!-- STEP 0: Import map — must appear before any type="module" script.
+     We pin Three.js to exactly r0.165.0 (never 'latest').
+     RGBELoader lives in the three/addons/ folder, which maps to examples/jsm/
+     on the same CDN. The HDR environment is loaded from the Three.js examples
+     textures folder — reliable, same CDN origin, no CORS issues. -->
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+// ── ES module imports ──────────────────────────────────────────────────────
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// RGBELoader: parses Radiance HDR (.hdr) files — a floating-point image format
+// that stores light energy values beyond the 0–1 range. Required for proper
+// HDR environment maps that drive PBR reflections and ambient lighting.
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+
+// ── UI element references ──────────────────────────────────────────────────
+const canvas        = document.getElementById('c');
+const statsEl       = document.getElementById('stats');
+const errorBanner   = document.getElementById('errorBanner');
+const envStatus     = document.getElementById('envStatus');
+
+// Sun controls
+const sldElevation  = document.getElementById('sldElevation');
+const valElevation  = document.getElementById('valElevation');
+const sldAzimuth    = document.getElementById('sldAzimuth');
+const valAzimuth    = document.getElementById('valAzimuth');
+const sldSunInt     = document.getElementById('sldSunInt');
+const valSunInt     = document.getElementById('valSunInt');
+
+// Shadow quality controls
+const selShadowType = document.getElementById('selShadowType');
+const selMapSize    = document.getElementById('selMapSize');
+const sldBias       = document.getElementById('sldBias');
+const valBias       = document.getElementById('valBias');
+
+// Display controls
+const chkShadowCam  = document.getElementById('chkShadowCam');
+const chkEnvBg      = document.getElementById('chkEnvBg');
+const sldEnvInt     = document.getElementById('sldEnvInt');
+const valEnvInt     = document.getElementById('valEnvInt');
+const sldHemi       = document.getElementById('sldHemi');
+const valHemi       = document.getElementById('valHemi');
+const btnReset      = document.getElementById('btnReset');
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 1: RENDERER
+// THREE.JS CONCEPT: WebGLRenderer wraps the WebGL 2 context. We enable the
+// shadow map at construction time — this is the global switch that activates
+// the extra depth-only render pass before every main render.
+// PCFSoftShadowMap is chosen as the default: it uses a 5-tap Poisson disc
+// filter to produce soft shadow edges without requiring VSM's variance
+// prepass, making it the standard quality/cost tradeoff for most scenes.
+// ════════════════════════════════════════════════════════════════════════════
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,   // MSAA — smooths geometry edges independent of shadows
+});
+
+// THREE.JS CONCEPT: setPixelRatio(devicePixelRatio) makes the drawing buffer
+// match physical pixels on HiDPI / Retina screens. Capped at 2 — beyond
+// that the performance cost outweighs the visual gain.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+// ── Shadow map global settings ────────────────────────────────────────────
+// SHADOW CONCEPT: renderer.shadowMap.enabled activates the shadow render
+// pass. Without it, castShadow / receiveShadow flags on lights and meshes
+// have no effect — shadow maps are simply never rendered.
+renderer.shadowMap.enabled = true;
+
+// PCFSoftShadowMap: the standard quality choice.
+// See the selShadowType handler below to understand all four types.
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// THREE.JS CONCEPT: useLegacyLights = false (the default from r155+) makes
+// light intensities use physically correct SI units: candela for point/spot,
+// lux for directional. This demo uses values tuned for these units.
+// (No need to set it explicitly — r155+ defaults to false.)
+
+if (!renderer.getContext()) {
+  errorBanner.style.display = 'block';
+  throw new Error('WebGL 2 not available');
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 2: SCENE AND CAMERA
+// ════════════════════════════════════════════════════════════════════════════
+
+const scene = new THREE.Scene();
+// Background starts as the HDR environment; falls back to dark colour if
+// the user toggles it off. Set initially so we have something before the
+// HDR finishes loading.
+scene.background = new THREE.Color(0x0d0f14);
+
+// PerspectiveCamera(fov, aspect, near, far) — same projection matrix as
+// Chapter 01's mat4.perspective, now managed automatically by Three.js.
+const camera = new THREE.PerspectiveCamera(
+  55,
+  canvas.clientWidth / canvas.clientHeight,
+  0.1,
+  200
+);
+camera.position.set(4.5, 3.5, 6.0);
+
+const CAM_RESET_POS    = camera.position.clone();
+const CAM_RESET_TARGET = new THREE.Vector3(0, 1.0, 0);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 3: ENVIRONMENT MAP (HDR)
+// THREE.JS CONCEPT: An HDR environment map provides image-based lighting
+// (IBL) — it replaces or supplements explicit point/directional lights for
+// ambient and reflective illumination. Three.js includes several example HDR
+// files alongside its source; using these avoids external CDN dependencies.
+//
+// Pipeline:
+//   RGBELoader  → equirectangular HDR texture (raw floating-point)
+//   PMREMGenerator → pre-filtered radiance environment map (PMREM)
+//        └─ generates mip levels for each roughness value
+//   scene.environment = pmremTexture  → applied to ALL PBR materials
+//   scene.background  = pmremTexture  → also used as skybox
+//
+// The PMREM (Pre-filtered Mipmapped Radiance Environment Map) is the key:
+// a mirror-smooth surface (roughness 0) samples the finest mip; a fully
+// rough surface (roughness 1) samples the most blurred mip. This gives
+// physically correct ambient reflections at near-zero runtime cost.
+// ════════════════════════════════════════════════════════════════════════════
+
+// We keep a reference to the processed PMREM texture so we can toggle
+// scene.background without re-loading.
+let envTexture = null;
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+// THREE.JS CONCEPT: compileEquirectangularShader pre-compiles the GLSL
+// shader used to convert the equirectangular HDR into a cube map.
+// Call it before loading so the shader is ready when the file arrives.
+pmremGenerator.compileEquirectangularShader();
+
+// THREE.JS r0.165.0 ships with a set of example HDR files.
+// 'royal_esplanade_1k.hdr' is a neutral outdoor environment —
+// bright sky, warm sun direction, neutral ground — ideal for showing
+// shadow behaviour without a distracting background.
+const HDR_URL = 'https://cdn.jsdelivr.net/npm/three@0.165.0/examples/textures/equirectangular/royal_esplanade_1k.hdr';
+
+new RGBELoader().load(
+  HDR_URL,
+  (hdrTexture) => {
+    // THREE.JS CONCEPT: fromEquirectangular converts the panoramic HDR image
+    // into the PMREM cube map that Three.js PBR materials expect.
+    envTexture = pmremGenerator.fromEquirectangular(hdrTexture).texture;
+    hdrTexture.dispose();              // the source equirectangular is no longer needed
+    pmremGenerator.dispose();          // the PMREMGenerator is no longer needed
+
+    // Apply environment to the scene:
+    scene.environment = envTexture;    // IBL for all PBR materials
+    if (chkEnvBg.checked) {
+      scene.background = envTexture;   // also use as skybox
+    }
+
+    // Update all materials that are already in the scene to pick up the env map.
+    scene.traverse(obj => {
+      if (obj.isMesh && obj.material.isMeshStandardMaterial) {
+        obj.material.envMapIntensity = parseFloat(sldEnvInt.value);
+        obj.material.needsUpdate = true;
+      }
+    });
+
+    envStatus.textContent = 'env: royal_esplanade_1k ✓';
+  },
+  undefined,   // onProgress: not needed
+  (err) => {
+    console.warn('HDR load failed, continuing without environment map.', err);
+    envStatus.textContent = 'env: failed to load';
+  }
+);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 4: LIGHTING
+// THREE.JS CONCEPT: A common outdoor lighting rig uses two lights:
+//   1. HemisphereLight — sky colour from above, ground colour from below.
+//      No shadows, no direction. Good soft fill for outdoor scenes.
+//   2. DirectionalLight — the sun. Parallel rays, casts hard shadows.
+// Together they produce plausible outdoor illumination even before the HDR
+// environment map loads. Once the HDR is loaded, scene.environment adds
+// specular reflections on top.
+// ════════════════════════════════════════════════════════════════════════════
+
+// HemisphereLight(skyColor, groundColor, intensity)
+// ANIMATION CONCEPT: HemisphereLight simulates the gradient between a bright
+// sky and a darker ground — faces pointing up are lit with skyColor, faces
+// pointing down receive groundColor. It is cheap (no shadow pass, no
+// per-fragment direction) and dramatically improves the look of outdoor scenes
+// compared to a flat AmbientLight.
+const hemiLight = new THREE.HemisphereLight(
+  0xb0d8ff,   // sky: pale blue
+  0x443322,   // ground: warm dark brown
+  0.4         // initial intensity — driven by sldHemi
+);
+scene.add(hemiLight);
+
+// DirectionalLight — the sun.
+// THREE.JS CONCEPT: DirectionalLight position defines the direction of light
+// rays: rays travel from position toward the origin (0,0,0) in a perfectly
+// parallel fashion. Moving position does NOT change the intensity — only the
+// angle of the shadows. This is unlike PointLight where intensity falls off
+// with distance.
+const sunLight = new THREE.DirectionalLight(0xfff4d6, 2.0);
+sunLight.castShadow = true;
+
+// ── Shadow camera (OrthographicCamera) configuration ─────────────────────
+// SHADOW CONCEPT: Every shadow-casting DirectionalLight has an internal
+// OrthographicCamera (light.shadow.camera) that defines the shadow map
+// frustum. The shadow map only covers the volume inside this frustum —
+// anything outside is not shadowed.
+//
+// Sizing rules:
+//   • Frustum too small → shadows clip at the edges.
+//   • Frustum too large → the fixed shadow map resolution (1024×1024) is
+//     spread over a huge volume → shadows look blocky and pixelated.
+//   → Size it as tightly as possible around the visible, shadow-casting scene.
+//
+// Our scene is roughly 10×10 units on the ground, objects up to ~3 units tall.
+sunLight.shadow.camera.left   = -8;
+sunLight.shadow.camera.right  =  8;
+sunLight.shadow.camera.top    =  8;
+sunLight.shadow.camera.bottom = -8;
+sunLight.shadow.camera.near   = 0.5;
+sunLight.shadow.camera.far    = 30;
+
+// Shadow map resolution. We start at 1024. The UI dropdown lets students
+// compare quality levels interactively.
+sunLight.shadow.mapSize.set(1024, 1024);
+
+// SHADOW CONCEPT: shadow.bias is a depth offset applied to the shadow map
+// comparison to prevent shadow acne (self-shadowing noise).
+//
+// Shadow acne occurs because:
+//   1. The shadow map stores depth at discrete sample positions.
+//   2. When a surface's depth is compared to the map, floating-point errors
+//      cause some fragments to appear slightly "behind" their own depth value.
+//   3. These fragments incorrectly register as "in shadow" → noisy dark stripes.
+//
+// A small negative bias shifts the shadow comparison threshold just enough
+// to avoid self-shadowing. Too large a bias → peter panning (the shadow
+// appears to float above the surface). The slider lets students explore this.
+sunLight.shadow.bias = -0.001;
+
+scene.add(sunLight);
+
+// Store reference to recompute position when sliders change.
+// We start at elevation=45°, azimuth=45°.
+const SUN_DIST = 12;  // distance from origin — large for accurate parallel rays
+updateSunPosition(45, 45);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 5: SHADOW CAMERA HELPER
+// THREE.JS CONCEPT: CameraHelper draws the wireframe frustum of any Camera
+// object. Passing the light's shadow camera makes the shadow frustum visible —
+// an invaluable debug tool when shadows are clipping or the frustum is
+// over-sized. Toggle it with the "Shadow cam" checkbox.
+// ════════════════════════════════════════════════════════════════════════════
+
+const shadowCamHelper = new THREE.CameraHelper(sunLight.shadow.camera);
+shadowCamHelper.visible = false;   // hidden by default
+scene.add(shadowCamHelper);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 6: ORBIT CONTROLS
+// THREE.JS CONCEPT: OrbitControls converts mouse / touch events into spherical
+// coordinate updates on camera.position (the same orbit math from Chapter 01's
+// camera demo). enableDamping adds smooth inertia — requires controls.update()
+// every frame.
+// ════════════════════════════════════════════════════════════════════════════
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(CAM_RESET_TARGET);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.05;
+controls.minDistance    = 1.5;
+controls.maxDistance    = 40;
+controls.maxPolarAngle  = Math.PI / 2 - 0.04;   // prevent going below ground
+controls.update();
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 7: SCENE OBJECTS
+// We build a small environment with varied shapes to produce interesting,
+// readable shadows and demonstrate shadow coverage clearly:
+//   • Ground plane         — receives all shadows
+//   • Character capsule    — casts + receives shadows (the main subject)
+//   • Head sphere          — casts + receives
+//   • Three scene boxes    — casts interesting overlapping shadow patterns
+//   • Grid helper          — spatial reference (no shadows)
+//
+// THREE.JS CONCEPT: castShadow = true adds the mesh to the depth-only
+// shadow render pass. receiveShadow = true tells Three.js to sample the
+// shadow map in the mesh's fragment shader. Both flags are per-mesh and
+// independent — a transparent mesh might receiveShadow without castShadow.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Ground plane ──────────────────────────────────────────────────────────
+// PlaneGeometry lies in the XY plane by default — rotate -90° around X
+// to make it lie flat in the XZ plane (horizontal).
+const groundGeo = new THREE.PlaneGeometry(22, 22);
+const groundMat = new THREE.MeshStandardMaterial({
+  color:     0x1a1e2a,
+  roughness: 0.95,
+  metalness: 0.0,
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x    = -Math.PI / 2;
+ground.receiveShadow = true;    // the ground catches shadows from all objects
+scene.add(ground);
+
+// ── Grid helper ───────────────────────────────────────────────────────────
+// GridHelper is a Line object — it has no shadow interaction.
+// Tiny Y offset to prevent z-fighting with the ground plane.
+const grid = new THREE.GridHelper(22, 22, 0x1e2535, 0x1e2535);
+grid.position.y = 0.001;
+scene.add(grid);
+
+// ── Character placeholder: body (CapsuleGeometry) ─────────────────────────
+// A capsule standing at the origin represents a humanoid character.
+// CapsuleGeometry(radius, length, capSegments, radialSegments) — the length
+// is the cylindrical mid-section; total height = length + 2*radius.
+const bodyGeo = new THREE.CapsuleGeometry(0.38, 1.1, 8, 16);
+const bodyMat = new THREE.MeshStandardMaterial({
+  color:     0x4f9cf9,
+  roughness: 0.45,
+  metalness: 0.05,
+});
+const body = new THREE.Mesh(bodyGeo, bodyMat);
+// CapsuleGeometry is centred at origin; lift by half total height + radius
+// so the bottom sits exactly on the ground (y=0).
+body.position.set(0, 0.55 + 0.38, 0);   // 0.55 = half length, 0.38 = radius
+body.castShadow    = true;
+body.receiveShadow = true;
+scene.add(body);
+
+// ── Head sphere ────────────────────────────────────────────────────────────
+const headGeo = new THREE.SphereGeometry(0.28, 20, 16);
+const headMat = new THREE.MeshStandardMaterial({
+  color:     0x4f9cf9,
+  roughness: 0.4,
+  metalness: 0.05,
+});
+const head = new THREE.Mesh(headGeo, headMat);
+head.position.set(0, body.position.y + 0.55 + 0.38 + 0.05, 0);
+head.castShadow    = true;
+head.receiveShadow = true;
+scene.add(head);
+
+// ── Scene boxes — to cast varied shadow patterns ───────────────────────────
+// THREE.JS CONCEPT: any number of meshes can have castShadow = true and
+// they will all appear in the same shadow map render pass (one pass total
+// for this light, covering all casters).
+const boxConfigs = [
+  { pos: [-2.5, 0.5, -1.5], size: [1.0, 1.0, 1.0], color: 0xa78bfa, r: 0.6, m: 0.1 },
+  { pos: [ 2.8, 0.7,  0.5], size: [1.4, 1.4, 1.4], color: 0x34d399, r: 0.8, m: 0.0 },
+  { pos: [-1.8, 0.3,  2.2], size: [0.6, 0.6, 0.6], color: 0xfb923c, r: 0.5, m: 0.3 },
+];
+
+const boxes = boxConfigs.map(cfg => {
+  const geo  = new THREE.BoxGeometry(...cfg.size);
+  const mat  = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: cfg.r, metalness: cfg.m });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(...cfg.pos);
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return mesh;
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 8: RESIZE HANDLER
+// Update both the renderer drawing buffer and the camera projection matrix
+// whenever the browser window is resized.
+// camera.updateProjectionMatrix() recomputes the internal 4×4 projection
+// matrix from fov, aspect, near, far — must be called after any change.
+// ════════════════════════════════════════════════════════════════════════════
+
+function onResize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 9: ANIMATION LOOP
+// renderer.setAnimationLoop registers a callback that fires before every
+// screen repaint (equivalent to requestAnimationFrame, but managed by
+// Three.js). THREE.Clock.getDelta() returns exact seconds since last call.
+// ════════════════════════════════════════════════════════════════════════════
+
+const clock = new THREE.Clock();
+let frameTimes = [];
+let lastFpsUpdate = 0;
+let displayFps = 0;
+
+renderer.setAnimationLoop((timestamp) => {
+  const delta = clock.getDelta();
+
+  // ── Slow box rotation to show shadow movement ──────────────────────────
+  // ANIMATION CONCEPT: time-based rotation (speed × delta) is frame-rate-
+  // independent. The same angle accumulates per second regardless of FPS.
+  boxes[0].rotation.y += 0.4 * delta;
+  boxes[1].rotation.y -= 0.25 * delta;
+  boxes[2].rotation.x += 0.5 * delta;
+
+  // ── Update shadow camera helper ────────────────────────────────────────
+  // THREE.JS CONCEPT: CameraHelper must be updated every frame because
+  // the shadow camera's matrices change when the sun position changes.
+  // update() recomputes the helper's line geometry from the current matrices.
+  if (shadowCamHelper.visible) {
+    shadowCamHelper.update();
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+
+  // ── Stats ──────────────────────────────────────────────────────────────
+  frameTimes.push(timestamp);
+  frameTimes = frameTimes.filter(t => timestamp - t < 1000);
+  if (timestamp - lastFpsUpdate > 200) {
+    displayFps = frameTimes.length;
+    lastFpsUpdate = timestamp;
+  }
+  statsEl.textContent =
+    `FPS ${displayFps.toString().padStart(3)} · ` +
+    `Calls ${renderer.info.render.calls} · ` +
+    `Tris ${renderer.info.render.triangles.toLocaleString()}`;
+  renderer.info.reset();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 10: HELPER FUNCTIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Converts spherical (elevation, azimuth) to Cartesian and sets the sun
+ * light's position. The light's position defines the direction rays travel
+ * FROM — so the sun at elevation 45° azimuth 0° shines from the north-east
+ * sky down toward the origin.
+ *
+ * @param {number} elevDeg  - Elevation above the horizon in degrees (5–85).
+ * @param {number} aziDeg   - Azimuth measured clockwise from +Z axis (0–360).
+ */
+function updateSunPosition(elevDeg, aziDeg) {
+  const phi   = THREE.MathUtils.degToRad(90 - elevDeg);   // polar angle from +Y
+  const theta = THREE.MathUtils.degToRad(aziDeg);         // azimuth from +Z
+  sunLight.position.setFromSphericalCoords(SUN_DIST, phi, theta);
+  // THREE.JS CONCEPT: DirectionalLight.target defaults to (0,0,0). The
+  // light always aims at its target regardless of position — so changing
+  // position here changes the angle of the parallel rays, not their origin.
+  sunLight.shadow.camera.updateProjectionMatrix();
+}
+
+/**
+ * Rebuilds the shadow map when the user changes resolution or map type.
+ * Changing mapSize requires disposing the old render target and letting
+ * Three.js create a new one on the next render call.
+ * Changing shadowMap.type forces all shadow-related materials to recompile.
+ */
+function rebuildShadowMap() {
+  // Dispose the existing shadow map render target (GPU texture memory).
+  if (sunLight.shadow.map) {
+    sunLight.shadow.map.dispose();
+    sunLight.shadow.map = null;   // null triggers Three.js to create a new one
+  }
+  // Force all materials in the scene to re-evaluate the shadow program variant.
+  scene.traverse(obj => {
+    if (obj.isMesh) obj.material.needsUpdate = true;
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 11: UI EVENT HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Sun elevation slider ──────────────────────────────────────────────────
+sldElevation.addEventListener('input', () => {
+  const elev = parseFloat(sldElevation.value);
+  const azi  = parseFloat(sldAzimuth.value);
+  valElevation.textContent = `${elev}°`;
+  updateSunPosition(elev, azi);
+});
+
+// ── Sun azimuth slider ────────────────────────────────────────────────────
+sldAzimuth.addEventListener('input', () => {
+  const elev = parseFloat(sldElevation.value);
+  const azi  = parseFloat(sldAzimuth.value);
+  valAzimuth.textContent = `${azi}°`;
+  updateSunPosition(elev, azi);
+});
+
+// ── Sun intensity slider ──────────────────────────────────────────────────
+sldSunInt.addEventListener('input', () => {
+  sunLight.intensity = parseFloat(sldSunInt.value);
+  valSunInt.textContent = sunLight.intensity.toFixed(2);
+});
+
+// ── Shadow map type dropdown ───────────────────────────────────────────────
+// SHADOW CONCEPT: the four shadow map types differ in quality and cost:
+//
+//   BasicShadowMap     — 1 depth sample per fragment. Hard aliased edges.
+//                        Fastest. Shows shadow acne most clearly.
+//   PCFShadowMap       — Percentage Closer Filtering: 4-tap average.
+//                        Soft edges, slightly more expensive.
+//   PCFSoftShadowMap   — PCF with a larger Poisson disc kernel (5 taps).
+//                        Softer edges. The standard production choice.
+//   VSMShadowMap       — Variance Shadow Maps: stores depth mean + variance.
+//                        Very soft shadows but can bleed through thin geometry.
+//                        Requires a separate blur pass. Most expensive.
+//
+// Changing the type requires a full re-compilation of shadow shaders —
+// hence the rebuildShadowMap() call.
+selShadowType.addEventListener('change', () => {
+  const typeMap = {
+    basic:    THREE.BasicShadowMap,
+    pcf:      THREE.PCFShadowMap,
+    pcfsoft:  THREE.PCFSoftShadowMap,
+    vsm:      THREE.VSMShadowMap,
+  };
+  renderer.shadowMap.type = typeMap[selShadowType.value];
+  rebuildShadowMap();
+});
+
+// ── Shadow map resolution dropdown ────────────────────────────────────────
+// SHADOW CONCEPT: the shadow map is a square depth texture. Higher resolution
+// means more depth samples per world-space unit → sharper shadow edges.
+// Cost: GPU memory (512²=256 KB, 1024²=1 MB, 2048²=4 MB of depth data)
+// and fill rate (more pixels to rasterise during the depth pass).
+selMapSize.addEventListener('change', () => {
+  const size = parseInt(selMapSize.value);
+  sunLight.shadow.mapSize.set(size, size);
+  rebuildShadowMap();
+});
+
+// ── Shadow bias slider ─────────────────────────────────────────────────────
+// SHADOW CONCEPT: see the annotation box. Set bias to 0 to see acne;
+// push it to 0.005+ to see peter panning (shadow floats off the feet).
+// The range here deliberately includes bad values for educational purposes.
+sldBias.addEventListener('input', () => {
+  sunLight.shadow.bias = parseFloat(sldBias.value);
+  valBias.textContent = sunLight.shadow.bias.toFixed(4);
+});
+
+// ── Shadow camera helper toggle ───────────────────────────────────────────
+chkShadowCam.addEventListener('change', () => {
+  shadowCamHelper.visible = chkShadowCam.checked;
+});
+
+// ── Environment background toggle ─────────────────────────────────────────
+// THREE.JS CONCEPT: scene.environment drives PBR reflections and is always
+// set when the HDR is loaded. scene.background controls what is drawn as
+// the skybox — can be set independently. Here we toggle between the HDR
+// panorama and a plain dark colour.
+chkEnvBg.addEventListener('change', () => {
+  if (chkEnvBg.checked) {
+    scene.background = envTexture ?? new THREE.Color(0x0d0f14);
+  } else {
+    scene.background = new THREE.Color(0x0d0f14);
+  }
+});
+
+// ── Environment intensity slider ───────────────────────────────────────────
+// THREE.JS CONCEPT: envMapIntensity scales the contribution of the HDR
+// environment map to each material's diffuse and specular calculation.
+// At 0 the environment has no effect; at 1 it is physically correct;
+// above 1 it over-exposes reflections (useful for artistic effect).
+sldEnvInt.addEventListener('input', () => {
+  const intensity = parseFloat(sldEnvInt.value);
+  valEnvInt.textContent = intensity.toFixed(2);
+  scene.traverse(obj => {
+    if (obj.isMesh && obj.material.isMeshStandardMaterial) {
+      obj.material.envMapIntensity = intensity;
+    }
+  });
+});
+
+// ── Hemisphere light intensity slider ─────────────────────────────────────
+sldHemi.addEventListener('input', () => {
+  hemiLight.intensity = parseFloat(sldHemi.value);
+  valHemi.textContent = hemiLight.intensity.toFixed(2);
+});
+
+// ── Reset camera ──────────────────────────────────────────────────────────
+btnReset.addEventListener('click', () => {
+  camera.position.copy(CAM_RESET_POS);
+  controls.target.copy(CAM_RESET_TARGET);
+  controls.update();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// CLEANUP (for reference — not triggered in this single-page demo)
+// In a Single Page Application that mounts/unmounts this scene, call dispose
+// on every GPU resource to prevent memory leaks:
+//
+// function cleanup() {
+//   renderer.setAnimationLoop(null);
+//   controls.dispose();
+//   groundGeo.dispose();  groundMat.dispose();
+//   bodyGeo.dispose();    bodyMat.dispose();
+//   headGeo.dispose();    headMat.dispose();
+//   boxes.forEach(b => { b.geometry.dispose(); b.material.dispose(); });
+//   if (envTexture) envTexture.dispose();
+//   renderer.dispose();
+//   window.removeEventListener('resize', onResize);
+// }
+// ════════════════════════════════════════════════════════════════════════════
+
+</script>
+</body>
+</html>

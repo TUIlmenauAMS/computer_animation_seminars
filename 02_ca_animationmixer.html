@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo 5: AnimationMixer — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 16px 0 14px;
+    flex-shrink: 0;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .header-logo img { width: 72px; border-radius: 8px; display: block; }
+  .header-info h1 { font-size: 18px; font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 2px; }
+  .header-info h2 { font-size: 12px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+  .header-meta { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 10px 24px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 5px; }
+
+  /* ── main layout ── */
+  main {
+    flex: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 20px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── demo title ── */
+  .demo-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.25;
+  }
+  .demo-title span {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 400;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .demo-desc {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 6px;
+    max-width: 700px;
+  }
+
+  /* ── error banner ── */
+  .error-banner {
+    display: none;
+    background: rgba(251,146,60,0.1);
+    border: 1px solid rgba(251,146,60,0.4);
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: var(--orange);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  /* ── two-column layout: canvas + panel ── */
+  .demo-layout {
+    display: grid;
+    grid-template-columns: 1fr 272px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ── left column (canvas stack) ── */
+  .canvas-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ── Three.js canvas wrapper ── */
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #07090d;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* stats overlay */
+  .stats {
+    position: absolute;
+    bottom: 10px;
+    left: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(216,220,230,0.6);
+    pointer-events: none;
+    line-height: 1.7;
+  }
+
+  /* time overlay top-right */
+  .time-overlay {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(216,220,230,0.7);
+    pointer-events: none;
+  }
+
+  /* ── Curve canvas ── */
+  .curve-wrap {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+  }
+  .curve-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 8px 12px 0;
+  }
+  #curveCanvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 1;
+  }
+
+  /* ── controls panel ── */
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(37,43,56,0.7);
+    gap: 10px;
+  }
+  .control-row:last-child { border-bottom: none; }
+  .control-label {
+    font-size: 12px;
+    color: var(--text);
+    flex-shrink: 0;
+    min-width: 80px;
+  }
+  .control-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .value-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    min-width: 34px;
+    text-align: right;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { background: #74b3fb; }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* scrubber track styled in accent when active */
+  #sldScrub { accent-color: var(--accent2); }
+
+  select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 6px;
+    cursor: pointer;
+    outline: none;
+    width: 100%;
+  }
+  select:focus { border-color: var(--accent); }
+
+  .btn {
+    background: rgba(79,156,249,0.1);
+    border: 1px solid rgba(79,156,249,0.3);
+    border-radius: 6px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(79,156,249,0.2); border-color: rgba(79,156,249,0.5); }
+  .btn:active { background: rgba(79,156,249,0.3); }
+  .btn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .btn-row .btn { flex: 1; text-align: center; }
+
+  /* panel divider */
+  .panel-divider {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  /* ── annotations ── */
+  .annotation-box {
+    background: rgba(167,139,250,0.05);
+    border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .annotation-box strong { color: var(--accent2); font-weight: 500; }
+  .annotation-box code {
+    background: rgba(79,156,249,0.1);
+    color: #93c5fd;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .annotation-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* ── footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 14px 24px 18px;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  footer p + p { margin-top: 3px; font-size: 11px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 720px) {
+    .demo-layout { grid-template-columns: 1fr; }
+    .annotation-grid { grid-template-columns: 1fr; }
+    .header-inner, main, footer, .breadcrumb { padding-left: 16px; padding-right: 16px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 02: Three.js — Demo 5</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  <a href="02_computeranimation_threejs.html">Chapter 02: Three.js</a>
+  <span>›</span>
+  Demo 5: AnimationMixer
+</nav>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div>
+    <div class="demo-title">
+      <span>02_ca_animationmixer.html</span>
+      AnimationMixer &amp; KeyframeTrack
+    </div>
+    <p class="demo-desc">
+      Three animation tracks built entirely in code — position, rotation, scale — combined into one
+      <code style="font-family:var(--mono);font-size:12px;color:#93c5fd;">AnimationClip</code> and
+      played through an <code style="font-family:var(--mono);font-size:12px;color:#93c5fd;">AnimationMixer</code>.
+      Scrub, reverse, loop, and swap interpolation modes. The curve canvas below shows the live
+      position.x track with a moving playhead.
+    </p>
+  </div>
+
+  <!-- ── WebGL error banner ── -->
+  <div class="error-banner" id="errorBanner">
+    ⚠ WebGL 2 is not available in this browser or has been disabled. Try Chrome, Edge, Firefox, or Safari
+    with hardware acceleration enabled in settings.
+  </div>
+
+  <!-- ── canvas + controls ── -->
+  <div class="demo-layout">
+
+    <!-- Left column: Three.js canvas + curve canvas -->
+    <div class="canvas-col">
+
+      <!-- Three.js canvas -->
+      <div class="canvas-wrap">
+        <canvas id="c" role="img" aria-label="Three.js AnimationMixer demo: a sphere animated by KeyframeTracks for position, rotation, and scale, with a static reference box"></canvas>
+        <div class="stats" id="stats">FPS — · Calls — · Tris —</div>
+        <div class="time-overlay" id="timeOverlay">t = 0.000 s</div>
+      </div>
+
+      <!-- Curve canvas — position.x over time -->
+      <div class="curve-wrap">
+        <div class="curve-label">position.x — keyframe curve</div>
+        <canvas id="curveCanvas"></canvas>
+      </div>
+
+    </div>
+
+    <!-- Controls panel -->
+    <div class="demo-card">
+      <div class="panel-title">Playback</div>
+
+      <div class="control-row">
+        <span class="control-label">Scrub</span>
+        <div class="control-input">
+          <input type="range" id="sldScrub" min="0" max="1" step="0.001" value="0">
+          <span class="value-badge" id="valScrub">0.00</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Time scale</span>
+        <div class="control-input">
+          <input type="range" id="sldTimeScale" min="-3" max="3" step="0.05" value="1">
+          <span class="value-badge" id="valTimeScale">1.00×</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Loop mode</span>
+        <div class="control-input" style="flex-direction:column;align-items:stretch;">
+          <select id="selLoop">
+            <option value="repeat" selected>LoopRepeat</option>
+            <option value="once">LoopOnce</option>
+            <option value="pingpong">LoopPingPong</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="btnPlayPause">⏸ Pause</button>
+        <button class="btn" id="btnStop">⏹ Stop</button>
+      </div>
+
+      <div class="panel-divider">Position Track</div>
+
+      <div class="control-row">
+        <span class="control-label">Interpolation</span>
+        <div class="control-input" style="flex-direction:column;align-items:stretch;">
+          <select id="selInterp">
+            <option value="linear" selected>Linear</option>
+            <option value="smooth">Smooth (CatmullRom)</option>
+            <option value="discrete">Discrete (step)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-divider">Display</div>
+
+      <div class="control-row">
+        <span class="control-label">Show axes</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkAxes">
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Show path</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkPath" checked>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <button class="btn" id="btnReset" style="width:100%">Reset Camera</button>
+      </div>
+    </div>
+
+  </div><!-- /.demo-layout -->
+
+  <!-- ── Concept annotations ── -->
+  <div class="annotation-grid">
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — mixer.update(delta)</strong><br>
+      The mixer does not track wall-clock time itself — it advances by exactly the
+      <code>delta</code> you pass each frame. This is why pausing is as simple as
+      not calling <code>mixer.update()</code>, and scrubbing is as simple as setting
+      <code>action.time = value</code> and calling <code>mixer.update(0)</code> to
+      force a single evaluation at the new time without advancing the clock.
+      Every animation tool (Blender, Unity, Unreal) works on the same principle.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — QuaternionKeyframeTrack &amp; slerp</strong><br>
+      Rotation tracks use <em>slerp</em> (spherical linear interpolation) rather than
+      plain lerp. Regular lerp of two quaternions changes speed through the arc —
+      the angular velocity is not constant. Slerp travels the shortest arc on the
+      quaternion unit hypersphere at constant angular velocity. This is why
+      <code>QuaternionKeyframeTrack</code> always produces smooth, constant-speed
+      rotation — even across keyframes that are far apart.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — InterpolateSmooth (CatmullRom)</strong><br>
+      Switch the position track to <strong>Smooth</strong> and watch the curve in
+      the graph below become a flowing spline that overshoots slightly past each
+      keyframe. <code>THREE.InterpolateSmooth</code> uses a CatmullRom spline —
+      the same curve type used in Blender's and Maya's graph editors for
+      <em>smooth interpolation</em>. It passes through every keyframe and computes
+      tangents automatically from neighbouring points, producing organic motion
+      without manually placing handles.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — The Scrubber</strong><br>
+      Dragging the <strong>Scrub</strong> slider sets <code>action.time</code>
+      directly — exactly what every NLE and animation tool does when you drag the
+      playhead. The mixer is paused during scrubbing and a zero-delta update forces
+      it to evaluate the tracks at the new time. Notice how <strong>Discrete</strong>
+      interpolation makes the position jump between values rather than interpolate —
+      this is the step-function mode used for boolean properties (visibility, mesh
+      swap) in real rigs.
+    </div>
+  </div>
+
+</main>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 02: Three.js &middot; Demo 5: AnimationMixer &amp; KeyframeTrack<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Created by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     THREE.JS DEMO — 02_ca_animationmixer.html
+     AnimationMixer and KeyframeTrack: three tracks (position, rotation, scale)
+     built entirely in code, combined into one AnimationClip, played through
+     an AnimationMixer. Full playback controls: play/pause, stop, scrub,
+     time scale, loop mode. Live 2D curve canvas showing position.x.
+
+     Reading guide:
+       Each numbered STEP marks a logical block of setup.
+       // THREE.JS CONCEPT: — explains the API and its mechanism.
+       // ANIMATION CONCEPT: — explains the animation principle.
+       Read top-to-bottom; each step builds on the previous one.
+══════════════════════════════════════════════════════════════════════════════ -->
+
+<!-- STEP 0: Import map — pinned to Three.js r0.165.0. Must appear before
+     any type="module" script. No addons beyond OrbitControls are needed
+     for this demo — the animation system is part of Three.js core. -->
+<script type="importmap">
+{
+  "imports": {
+    "three":         "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── UI element references ──────────────────────────────────────────────────
+const canvas        = document.getElementById('c');
+const statsEl       = document.getElementById('stats');
+const timeOverlay   = document.getElementById('timeOverlay');
+const errorBanner   = document.getElementById('errorBanner');
+const curveCanvas   = document.getElementById('curveCanvas');
+
+const sldScrub      = document.getElementById('sldScrub');
+const valScrub      = document.getElementById('valScrub');
+const sldTimeScale  = document.getElementById('sldTimeScale');
+const valTimeScale  = document.getElementById('valTimeScale');
+const selLoop       = document.getElementById('selLoop');
+const selInterp     = document.getElementById('selInterp');
+const btnPlayPause  = document.getElementById('btnPlayPause');
+const btnStop       = document.getElementById('btnStop');
+const chkAxes       = document.getElementById('chkAxes');
+const chkPath       = document.getElementById('chkPath');
+const btnReset      = document.getElementById('btnReset');
+
+// ── Playback state ─────────────────────────────────────────────────────────
+// ANIMATION CONCEPT: we track play/pause state ourselves. When paused,
+// we still call renderer.render() every frame (so OrbitControls stay smooth),
+// but we skip mixer.update(delta). When scrubbing, we temporarily pause,
+// set action.time manually, and call mixer.update(0) to force evaluation.
+let isPlaying   = true;
+let isScrubbing = false;   // true while the scrub slider is being dragged
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 1: RENDERER, SCENE, CAMERA, LIGHTING
+// ════════════════════════════════════════════════════════════════════════════
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+
+if (!renderer.getContext()) {
+  errorBanner.style.display = 'block';
+  throw new Error('WebGL 2 not available');
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0f14);
+scene.fog        = new THREE.Fog(0x0d0f14, 18, 40);
+
+const camera = new THREE.PerspectiveCamera(
+  55,
+  canvas.clientWidth / canvas.clientHeight,
+  0.1,
+  100
+);
+camera.position.set(5, 4, 7);
+
+const CAM_RESET_POS    = camera.position.clone();
+const CAM_RESET_TARGET = new THREE.Vector3(0, 1, 0);
+
+// Hemisphere (sky/ground fill) + directional (sun) — same rig as Demo 4.
+const hemi = new THREE.HemisphereLight(0xb0d8ff, 0x443322, 0.6);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff4d6, 1.8);
+sun.position.set(5, 10, 5);
+sun.castShadow                 = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left         = -8;
+sun.shadow.camera.right        =  8;
+sun.shadow.camera.top          =  8;
+sun.shadow.camera.bottom       = -8;
+sun.shadow.camera.near         = 1;
+sun.shadow.camera.far          = 25;
+sun.shadow.bias                = -0.001;
+scene.add(sun);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(CAM_RESET_TARGET);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.05;
+controls.minDistance    = 2;
+controls.maxDistance    = 30;
+controls.maxPolarAngle  = Math.PI / 2 - 0.02;
+controls.update();
+
+// Ground plane
+const groundGeo = new THREE.PlaneGeometry(24, 24);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1e2a, roughness: 0.95, metalness: 0 });
+const ground    = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x    = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(24, 24, 0x1e2535, 0x1e2535);
+grid.position.y = 0.001;
+scene.add(grid);
+
+// Axes helper (toggleable)
+const axesHelper = new THREE.AxesHelper(3);
+axesHelper.visible = false;
+scene.add(axesHelper);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 2: SCENE OBJECTS
+// The sphere is the animated object — all three tracks target it.
+// The box is a static reference so students can see motion clearly.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Animated sphere ───────────────────────────────────────────────────────
+const sphereGeo = new THREE.SphereGeometry(0.5, 32, 24);
+const sphereMat = new THREE.MeshStandardMaterial({
+  color:     0x4f9cf9,
+  roughness: 0.3,
+  metalness: 0.1,
+});
+const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+sphere.position.set(0, 1, 0);
+sphere.castShadow    = true;
+sphere.receiveShadow = true;
+scene.add(sphere);
+
+// ── Static reference box ──────────────────────────────────────────────────
+// This box stays at the origin to give the eye a fixed reference point,
+// making the sphere's animated position changes much easier to read.
+const boxGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
+const boxMat = new THREE.MeshStandardMaterial({
+  color:     0xa78bfa,
+  roughness: 0.6,
+  metalness: 0.1,
+});
+const box = new THREE.Mesh(boxGeo, boxMat);
+box.position.set(0, 0.35, 0);
+box.castShadow    = true;
+box.receiveShadow = true;
+scene.add(box);
+
+// ── Motion path line ──────────────────────────────────────────────────────
+// A dashed line tracing the sphere's keyframe positions — helps students
+// see the path shape change when switching interpolation modes.
+// We rebuild this whenever the interpolation mode changes.
+let pathLine = null;
+
+/**
+ * Build (or rebuild) the dashed line that visualises the sphere's path.
+ * Samples the position track at 120 points across the clip duration.
+ * Called once at startup and again whenever the interpolation dropdown changes.
+ *
+ * @param {THREE.VectorKeyframeTrack} posTrack  — the current position track
+ * @param {number} clipDuration                 — total clip duration in seconds
+ */
+function buildPathLine(posTrack, clipDuration) {
+  if (pathLine) {
+    scene.remove(pathLine);
+    pathLine.geometry.dispose();
+    pathLine.material.dispose();
+    pathLine = null;
+  }
+
+  // Sample the track at 120 evenly-spaced times across the clip.
+  // THREE.JS CONCEPT: KeyframeTrack.InterpolantFactoryMethod* returns an
+  // interpolant object. Call .evaluate(t) to get the interpolated value
+  // at any time without running the full mixer pipeline.
+  const interpolant = posTrack.createInterpolant();
+  const points = [];
+  const SAMPLES = 120;
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = (i / SAMPLES) * clipDuration;
+    const v = interpolant.evaluate(t);   // returns Float32Array [x, y, z]
+    points.push(new THREE.Vector3(v[0], v[1], v[2]));
+  }
+
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineDashedMaterial({
+    color:       0x5a6175,
+    dashSize:    0.15,
+    gapSize:     0.1,
+    transparent: true,
+    opacity:     0.6,
+  });
+  pathLine = new THREE.Line(geo, mat);
+  pathLine.computeLineDistances();   // required for LineDashedMaterial
+  pathLine.visible = chkPath.checked;
+  scene.add(pathLine);
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 3: BUILD KEYFRAME TRACKS
+//
+// THREE.JS CONCEPT: A KeyframeTrack stores one animated property as two
+// parallel arrays: times[] and values[]. During playback the mixer looks up
+// the current time, finds the surrounding keyframes, and interpolates between
+// their values according to the track's interpolation mode.
+//
+// Three subclasses cover the main property types:
+//   VectorKeyframeTrack      — position, scale (3 floats per keyframe)
+//   QuaternionKeyframeTrack  — rotation (4 floats per keyframe — a quaternion)
+//   NumberKeyframeTrack      — any single float property
+//   ColorKeyframeTrack       — color (3 floats, interpolated in linear space)
+//
+// Constructor: new VectorKeyframeTrack(propertyPath, times, values, interp)
+//   propertyPath — '.position', '.scale', '.quaternion', etc.
+//   times        — Float32Array or plain array of times in seconds
+//   values       — flat Float32Array [x0,y0,z0, x1,y1,z1, …] (3 per keyframe)
+//   interp       — optional: THREE.InterpolateLinear (default),
+//                  THREE.InterpolateSmooth, or THREE.InterpolateDiscrete
+// ════════════════════════════════════════════════════════════════════════════
+
+// Clip duration — all tracks must be defined within this range.
+const CLIP_DURATION = 4.0;   // seconds
+
+// ── Position track (VectorKeyframeTrack) ─────────────────────────────────
+// ANIMATION CONCEPT: 5 keyframes oscillating the sphere along the X axis
+// while it rises and falls in Y. This gives the curve canvas something
+// visually interesting to display and clearly shows the difference between
+// linear, smooth (CatmullRom), and discrete interpolation.
+//
+// times:  [0,   1,   2,   3,   4]  seconds
+// x:      [0,   3,   0,  -3,   0]  — left/right oscillation
+// y:      [1,   2,   1,   2,   1]  — rise and fall
+// z:      [0,   0,   0,   0,   0]  — stays in the XY plane
+
+const POS_TIMES  = new Float32Array([0,  1,   2,   3,   4]);
+const POS_VALUES = new Float32Array([
+   0, 1, 0,    //  t=0  — origin
+   3, 2, 0,    //  t=1  — right, high
+   0, 1, 0,    //  t=2  — centre, low
+  -3, 2, 0,    //  t=3  — left, high
+   0, 1, 0,    //  t=4  — back to origin (matches t=0 for seamless looping)
+]);
+
+// We build the position track via a factory function so we can rebuild it
+// with a different interpolation mode when the dropdown changes.
+/**
+ * Build a VectorKeyframeTrack for sphere position with the given interpolation.
+ *
+ * @param {number} interpConst  — THREE.InterpolateLinear | InterpolateSmooth | InterpolateDiscrete
+ * @returns {THREE.VectorKeyframeTrack}
+ */
+function buildPositionTrack(interpConst) {
+  // THREE.JS CONCEPT: the property path '.position' targets the object's
+  // position Vector3 directly. The mixer resolves the path relative to the
+  // root object passed to new AnimationMixer(root).
+  return new THREE.VectorKeyframeTrack(
+    '.position',
+    POS_TIMES,
+    POS_VALUES,
+    interpConst
+  );
+}
+
+// ── Rotation track (QuaternionKeyframeTrack) ──────────────────────────────
+// ANIMATION CONCEPT: We store rotations as quaternions, not Euler angles.
+// Reason: Euler angles interpolate each component independently → non-constant
+// angular speed and gimbal-lock risk. Quaternion slerp interpolates along the
+// shortest arc on the unit hypersphere → constant angular speed, no gimbal lock.
+//
+// 4 keyframes: one full 360° spin around the Y axis over 4 seconds.
+// THREE.MathUtils.setFromEuler is not a static — use Quaternion directly.
+
+const q = new THREE.Quaternion();
+const ROT_TIMES  = new Float32Array([0, 1.333, 2.666, 4.0]);
+const ROT_VALUES = (() => {
+  // Build flat [x,y,z,w, x,y,z,w, …] array from Euler angles.
+  const angles = [0, 120, 240, 360].map(deg => THREE.MathUtils.degToRad(deg));
+  const flat = new Float32Array(angles.length * 4);
+  angles.forEach((rad, i) => {
+    q.setFromEuler(new THREE.Euler(0, rad, 0));
+    flat[i * 4 + 0] = q.x;
+    flat[i * 4 + 1] = q.y;
+    flat[i * 4 + 2] = q.z;
+    flat[i * 4 + 3] = q.w;
+  });
+  return flat;
+})();
+
+// QuaternionKeyframeTrack always uses slerp — there is no interpolation
+// mode argument; it ignores any you pass. This is intentional: quaternion
+// lerp is mathematically incorrect for rotations.
+const rotTrack = new THREE.QuaternionKeyframeTrack(
+  '.quaternion',
+  ROT_TIMES,
+  ROT_VALUES
+  // No interpolation arg — slerp is the only correct option for quaternions.
+);
+
+// ── Scale track (VectorKeyframeTrack) ────────────────────────────────────
+// ANIMATION CONCEPT: a "pulse" effect — the sphere scales up and back down
+// in sync with the position oscillation. Combine this with the position and
+// rotation tracks to show that multiple tracks can animate simultaneously
+// on the same object through a single mixer.
+const SCL_TIMES  = new Float32Array([0,  0.5, 1,   1.5, 2,   2.5, 3,   3.5, 4]);
+const SCL_VALUES = new Float32Array([
+  1,1,1,   1.35,1.35,1.35,   1,1,1,   1.35,1.35,1.35,
+  1,1,1,   1.35,1.35,1.35,   1,1,1,   1.35,1.35,1.35,
+  1,1,1,
+]);
+
+const scaleTrack = new THREE.VectorKeyframeTrack(
+  '.scale',
+  SCL_TIMES,
+  SCL_VALUES
+  // Default: InterpolateLinear — linear scale produces a smooth pulse
+);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 4: BUILD ANIMATIONCLIP
+//
+// THREE.JS CONCEPT: An AnimationClip is a named container for an array of
+// KeyframeTracks, plus a duration. One clip can contain tracks for any number
+// of properties on the same root object.
+//
+// Constructor: new AnimationClip(name, duration, tracks)
+//   name      — string identifier (used by AnimationMixer.clipAction(name))
+//   duration  — seconds; -1 = infer from the longest track
+//   tracks    — array of KeyframeTracks
+// ════════════════════════════════════════════════════════════════════════════
+
+// Build the initial position track with Linear interpolation.
+let posTrack = buildPositionTrack(THREE.InterpolateLinear);
+
+// Assemble all three tracks into one clip.
+let clip = new THREE.AnimationClip('sphereAnim', CLIP_DURATION, [
+  posTrack,
+  rotTrack,
+  scaleTrack,
+]);
+
+// Build the initial path visualisation using the Linear track.
+buildPathLine(posTrack, CLIP_DURATION);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 5: ANIMATIONMIXER
+//
+// THREE.JS CONCEPT: AnimationMixer is the playback engine. It is attached to
+// a root Object3D (here: the sphere). When you call mixer.update(delta),
+// the mixer advances its internal clock by delta seconds and evaluates all
+// active AnimationActions, writing interpolated values directly to the target
+// object's properties (.position, .quaternion, .scale, etc.).
+//
+// One mixer can manage multiple clips on the same root object. Clips can be
+// weighted and crossfaded — this is the foundation of character animation
+// blending (covered in Seminar 04).
+// ════════════════════════════════════════════════════════════════════════════
+
+const mixer = new THREE.AnimationMixer(sphere);
+
+// ── mixer.addEventListener ────────────────────────────────────────────────
+// The mixer emits 'finished' when a LoopOnce clip reaches its end.
+// ANIMATION CONCEPT: listening to this event lets you trigger transitions —
+// e.g. switch from a 'walk' clip to an 'idle' clip when the character stops.
+mixer.addEventListener('finished', () => {
+  if (selLoop.value === 'once') {
+    isPlaying = false;
+    btnPlayPause.textContent = '▶ Play';
+  }
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 6: ANIMATIONACTION
+//
+// THREE.JS CONCEPT: An AnimationAction is the handle that controls how one
+// clip plays on the mixer. Key properties:
+//   .loop        — LoopRepeat (default), LoopOnce, LoopPingPong
+//   .timeScale   — playback speed multiplier (negative = reverse)
+//   .weight      — blend weight (0 = silent, 1 = full effect)
+//   .time        — current playback position in seconds (read/write)
+//
+// Call .play() to activate. The action does nothing until mixer.update(delta)
+// is called each frame. Calling .stop() resets time to 0 and deactivates.
+// Calling .paused = true freezes time advancement but keeps the action active
+// (so the current pose is held). Setting .time manually lets you scrub.
+// ════════════════════════════════════════════════════════════════════════════
+
+let action = mixer.clipAction(clip);
+action.loop      = THREE.LoopRepeat;
+action.timeScale = 1.0;
+action.play();
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 7: RESIZE HANDLER
+// ════════════════════════════════════════════════════════════════════════════
+
+function onResize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 8: CURVE CANVAS — 2D position.x visualiser
+//
+// A separate <canvas> element drawn with the Canvas 2D API.
+// Displays the position.x keyframe curve over the full clip duration,
+// with a vertical playhead showing the current time.
+// Redrawn every frame in sync with the Three.js render.
+//
+// ANIMATION CONCEPT: this is the "graph editor" view — the same display
+// used in Blender's Graph Editor, Maya's Graph Editor, and After Effects'
+// Graph Editor. It shows exactly what the interpolation curve looks like
+// and makes the difference between Linear, Smooth, and Discrete immediately
+// visible.
+// ════════════════════════════════════════════════════════════════════════════
+
+const ctx2d = curveCanvas.getContext('2d');
+
+// Colour palette — dark theme matching the design system.
+const CURVE_BG       = '#0d0f14';
+const CURVE_GRID     = '#1e2535';
+const CURVE_AXIS     = '#252b38';
+const CURVE_LINE     = '#4f9cf9';   // accent blue — the curve itself
+const CURVE_DOT      = '#34d399';   // green — keyframe dots
+const CURVE_HEAD     = '#fb923c';   // orange — playhead
+const CURVE_TEXT     = '#5a6175';   // muted — axis labels
+
+// Value range for position.x — from the keyframe data above.
+const CURVE_Y_MIN = -3.5;
+const CURVE_Y_MAX =  3.5;
+
+/**
+ * Map a time value (seconds) to a canvas X pixel, accounting for padding.
+ * @param {number} t  — time in [0, CLIP_DURATION]
+ * @param {number} W  — canvas physical width in pixels
+ * @param {number} PAD — horizontal padding in pixels
+ */
+function timeToX(t, W, PAD) {
+  return PAD + (t / CLIP_DURATION) * (W - PAD * 2);
+}
+
+/**
+ * Map a position.x value to a canvas Y pixel (inverted: high value = top).
+ * @param {number} v   — value in [CURVE_Y_MIN, CURVE_Y_MAX]
+ * @param {number} H   — canvas physical height in pixels
+ * @param {number} PAD — vertical padding in pixels
+ */
+function valToY(v, H, PAD) {
+  const norm = (v - CURVE_Y_MIN) / (CURVE_Y_MAX - CURVE_Y_MIN);
+  return H - PAD - norm * (H - PAD * 2);
+}
+
+/**
+ * Draw the 2D curve canvas for the current playback time.
+ * Called every frame from the animation loop.
+ *
+ * @param {number} currentTime  — mixer's current time in seconds
+ * @param {THREE.VectorKeyframeTrack} track  — the active position track
+ */
+function drawCurve(currentTime, track) {
+  // ── Resize canvas to its CSS display size (DPR-aware) ─────────────────
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  const cssW = curveCanvas.clientWidth;
+  const cssH = curveCanvas.clientHeight;
+  const W = Math.round(cssW * dpr);
+  const H = Math.round(cssH * dpr);
+
+  if (curveCanvas.width !== W || curveCanvas.height !== H) {
+    curveCanvas.width  = W;
+    curveCanvas.height = H;
+  }
+
+  const PAD_X = 36 * dpr;
+  const PAD_Y = 14 * dpr;
+
+  // ── Background ─────────────────────────────────────────────────────────
+  ctx2d.fillStyle = CURVE_BG;
+  ctx2d.fillRect(0, 0, W, H);
+
+  // ── Grid lines (horizontal — value levels) ─────────────────────────────
+  ctx2d.strokeStyle = CURVE_GRID;
+  ctx2d.lineWidth   = 1 * dpr;
+  [-3, -2, -1, 0, 1, 2, 3].forEach(v => {
+    const y = valToY(v, H, PAD_Y);
+    ctx2d.beginPath();
+    ctx2d.moveTo(PAD_X, y);
+    ctx2d.lineTo(W - PAD_Y, y);
+    ctx2d.stroke();
+    // Value label on the left
+    ctx2d.fillStyle  = CURVE_TEXT;
+    ctx2d.font       = `${9 * dpr}px 'IBM Plex Mono', monospace`;
+    ctx2d.textAlign  = 'right';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(v.toString(), PAD_X - 4 * dpr, y);
+  });
+
+  // ── Grid lines (vertical — time markers at each second) ───────────────
+  ctx2d.strokeStyle = CURVE_GRID;
+  [0, 1, 2, 3, 4].forEach(t => {
+    const x = timeToX(t, W, PAD_X);
+    ctx2d.beginPath();
+    ctx2d.moveTo(x, PAD_Y);
+    ctx2d.lineTo(x, H - PAD_Y);
+    ctx2d.stroke();
+    // Time label on the bottom
+    ctx2d.fillStyle    = CURVE_TEXT;
+    ctx2d.textAlign    = 'center';
+    ctx2d.textBaseline = 'top';
+    ctx2d.fillText(`${t}s`, x, H - PAD_Y + 3 * dpr);
+  });
+
+  // ── Zero line (y=0 emphasis) ───────────────────────────────────────────
+  const yZero = valToY(0, H, PAD_Y);
+  ctx2d.strokeStyle = CURVE_AXIS;
+  ctx2d.lineWidth   = 1.5 * dpr;
+  ctx2d.beginPath();
+  ctx2d.moveTo(PAD_X, yZero);
+  ctx2d.lineTo(W - PAD_Y, yZero);
+  ctx2d.stroke();
+
+  // ── Interpolated curve — sampled at 300 points ─────────────────────────
+  // ANIMATION CONCEPT: we sample the same interpolant that the mixer uses,
+  // so the curve here is pixel-perfect: it exactly matches what the sphere
+  // does in the 3D viewport. Changing the interpolation dropdown rebuilds
+  // the track → changes the interpolant → the curve shape changes instantly.
+  const interpolant = track.createInterpolant();
+  const SAMPLES     = 300;
+
+  ctx2d.strokeStyle = CURVE_LINE;
+  ctx2d.lineWidth   = 2 * dpr;
+  ctx2d.beginPath();
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = (i / SAMPLES) * CLIP_DURATION;
+    const v = interpolant.evaluate(t)[0];   // [0] = x component
+    const px = timeToX(t, W, PAD_X);
+    const py = valToY(v, H, PAD_Y);
+    if (i === 0) ctx2d.moveTo(px, py);
+    else         ctx2d.lineTo(px, py);
+  }
+  ctx2d.stroke();
+
+  // ── Keyframe dots ──────────────────────────────────────────────────────
+  // Draw a dot at each raw keyframe position — students see where the
+  // "hard" data points are vs where the interpolation runs between them.
+  const R = 4 * dpr;
+  for (let i = 0; i < POS_TIMES.length; i++) {
+    const t  = POS_TIMES[i];
+    const v  = POS_VALUES[i * 3];   // x component of keyframe i
+    const px = timeToX(t, W, PAD_X);
+    const py = valToY(v, H, PAD_Y);
+    ctx2d.beginPath();
+    ctx2d.arc(px, py, R, 0, Math.PI * 2);
+    ctx2d.fillStyle   = CURVE_DOT;
+    ctx2d.fill();
+    ctx2d.strokeStyle = '#0d0f14';
+    ctx2d.lineWidth   = 1.5 * dpr;
+    ctx2d.stroke();
+  }
+
+  // ── Playhead — vertical orange line + dot on the curve ────────────────
+  // ANIMATION CONCEPT: the playhead is the visual representation of
+  // action.time — it shows where in the clip the mixer currently is.
+  // Dragging the scrub slider moves this line by setting action.time directly.
+  const headT  = currentTime % CLIP_DURATION;
+  const headX  = timeToX(headT, W, PAD_X);
+  const headV  = interpolant.evaluate(headT)[0];
+  const headY  = valToY(headV, H, PAD_Y);
+
+  // Vertical line
+  ctx2d.strokeStyle = CURVE_HEAD;
+  ctx2d.lineWidth   = 1.5 * dpr;
+  ctx2d.setLineDash([3 * dpr, 3 * dpr]);
+  ctx2d.beginPath();
+  ctx2d.moveTo(headX, PAD_Y);
+  ctx2d.lineTo(headX, H - PAD_Y);
+  ctx2d.stroke();
+  ctx2d.setLineDash([]);
+
+  // Dot on the curve at current time
+  ctx2d.beginPath();
+  ctx2d.arc(headX, headY, 5 * dpr, 0, Math.PI * 2);
+  ctx2d.fillStyle   = CURVE_HEAD;
+  ctx2d.fill();
+  ctx2d.strokeStyle = '#0d0f14';
+  ctx2d.lineWidth   = 1.5 * dpr;
+  ctx2d.stroke();
+
+  // ── Axis label ─────────────────────────────────────────────────────────
+  ctx2d.fillStyle    = CURVE_TEXT;
+  ctx2d.font         = `${8.5 * dpr}px 'IBM Plex Mono', monospace`;
+  ctx2d.textAlign    = 'left';
+  ctx2d.textBaseline = 'top';
+  ctx2d.fillText('position.x', PAD_X + 4 * dpr, PAD_Y + 2 * dpr);
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 9: ANIMATION LOOP
+// ════════════════════════════════════════════════════════════════════════════
+
+const clock = new THREE.Clock();
+let frameTimes    = [];
+let lastFpsUpdate = 0;
+let displayFps    = 0;
+
+renderer.setAnimationLoop((timestamp) => {
+  const delta = clock.getDelta();
+
+  // ── Update the mixer ──────────────────────────────────────────────────
+  // ANIMATION CONCEPT: mixer.update(delta) is the heart of the system.
+  // It advances the mixer's internal clock by `delta` seconds (not absolute
+  // time), evaluates all active AnimationActions at the new time, and writes
+  // the interpolated values directly to the sphere's .position, .quaternion,
+  // and .scale properties. If delta is 0, the mixer evaluates at the current
+  // time without advancing — used for scrubbing (see sldScrub handler).
+  if (isPlaying && !isScrubbing) {
+    mixer.update(delta);
+  }
+
+  // Sync the scrub slider to the current action time (when playing).
+  // action.time wraps within [0, CLIP_DURATION] on LoopRepeat.
+  if (isPlaying && !isScrubbing) {
+    const t = action.time / CLIP_DURATION;
+    sldScrub.value         = t.toFixed(4);
+    valScrub.textContent   = action.time.toFixed(2);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+
+  // ── Curve canvas ──────────────────────────────────────────────────────
+  drawCurve(action.time, posTrack);
+
+  // ── Time overlay ──────────────────────────────────────────────────────
+  timeOverlay.textContent = `t = ${action.time.toFixed(3)} s`;
+
+  // ── Stats ─────────────────────────────────────────────────────────────
+  frameTimes.push(timestamp);
+  frameTimes = frameTimes.filter(t => timestamp - t < 1000);
+  if (timestamp - lastFpsUpdate > 200) {
+    displayFps    = frameTimes.length;
+    lastFpsUpdate = timestamp;
+  }
+  statsEl.textContent =
+    `FPS ${displayFps.toString().padStart(3)} · ` +
+    `Calls ${renderer.info.render.calls} · ` +
+    `Tris ${renderer.info.render.triangles.toLocaleString()}`;
+  renderer.info.reset();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 10: UI EVENT HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Play / Pause ───────────────────────────────────────────────────────────
+btnPlayPause.addEventListener('click', () => {
+  isPlaying = !isPlaying;
+  btnPlayPause.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+  // THREE.JS CONCEPT: action.paused halts time advancement inside the mixer
+  // while keeping the action active (the current pose is held). We manage
+  // pause state ourselves (isPlaying flag) so the scrub slider and time
+  // overlay continue to work correctly.
+  if (isPlaying && selLoop.value === 'once' && action.time >= CLIP_DURATION - 0.001) {
+    // LoopOnce at the end — restart from the beginning.
+    action.reset();
+    action.play();
+  }
+});
+
+// ── Stop ──────────────────────────────────────────────────────────────────
+// ANIMATION CONCEPT: action.stop() calls reset() + deactivates the action.
+// reset() sets action.time = 0 and clears the 'finished' state.
+// We then call action.play() immediately so the mixer is ready to play
+// from t=0 on the next mixer.update(). The isPlaying flag controls whether
+// the loop actually calls update().
+btnStop.addEventListener('click', () => {
+  action.stop();
+  action.play();     // re-activate so it's ready at t=0
+  isPlaying = false;
+  btnPlayPause.textContent = '▶ Play';
+  sldScrub.value        = '0';
+  valScrub.textContent  = '0.00';
+  // Force a single evaluation at t=0 so the sphere snaps to its start pose.
+  mixer.update(0);
+});
+
+// ── Scrub slider ──────────────────────────────────────────────────────────
+// ANIMATION CONCEPT: scrubbing is the fundamental "random access" operation
+// on an animation. We set action.time to the desired position and call
+// mixer.update(0) — a zero-delta update evaluates all tracks at the new time
+// without advancing the clock. This is exactly how every professional NLE
+// and animation tool implements timeline scrubbing.
+sldScrub.addEventListener('mousedown',  () => { isScrubbing = true; });
+sldScrub.addEventListener('touchstart', () => { isScrubbing = true; }, { passive: true });
+
+sldScrub.addEventListener('input', () => {
+  const t = parseFloat(sldScrub.value);
+  valScrub.textContent = (t * CLIP_DURATION).toFixed(2);
+
+  // Set the action's time directly and evaluate.
+  // action.time must be set BEFORE mixer.update(0).
+  action.time = t * CLIP_DURATION;
+  mixer.update(0);
+});
+
+sldScrub.addEventListener('mouseup',  () => { isScrubbing = false; });
+sldScrub.addEventListener('touchend', () => { isScrubbing = false; });
+
+// ── Time scale slider ─────────────────────────────────────────────────────
+// ANIMATION CONCEPT: action.timeScale scales how fast the mixer's clock
+// advances. 2× = double speed. −1 = full reverse playback. This is the same
+// parameter exposed as "Speed" in Blender's NLA editor and "Playback Rate"
+// in Unreal's AnimMontage.
+sldTimeScale.addEventListener('input', () => {
+  const ts = parseFloat(sldTimeScale.value);
+  action.timeScale         = ts;
+  valTimeScale.textContent = `${ts.toFixed(2)}×`;
+});
+
+// ── Loop mode dropdown ─────────────────────────────────────────────────────
+// THREE.JS CONCEPT:
+//   LoopRepeat   — wraps from end back to start seamlessly.
+//   LoopOnce     — plays to the end and stops (fires 'finished' event).
+//   LoopPingPong — plays forward to the end, then backward to the start,
+//                  then forward again — useful for idle animations that
+//                  should reverse smoothly.
+selLoop.addEventListener('change', () => {
+  const modeMap = {
+    repeat:   THREE.LoopRepeat,
+    once:     THREE.LoopOnce,
+    pingpong: THREE.LoopPingPong,
+  };
+  action.loop = modeMap[selLoop.value];
+
+  // If we were in LoopOnce and it had finished, reset so it can play again.
+  action.reset();
+  action.play();
+  isPlaying            = true;
+  btnPlayPause.textContent = '⏸ Pause';
+});
+
+// ── Interpolation dropdown ─────────────────────────────────────────────────
+// ANIMATION CONCEPT: changing interpolation mode rebuilds the track and the
+// entire clip/action. This is the most instructive control in the demo —
+// compare Linear (straight lines between keyframes), Smooth (CatmullRom
+// spline that overshoots), and Discrete (step function that snaps instantly).
+//
+// THREE.InterpolateLinear   — straight line between keyframes
+// THREE.InterpolateSmooth   — CatmullRom cubic spline (same as Blender/Maya smooth)
+// THREE.InterpolateDiscrete — step function: value holds until the next keyframe
+selInterp.addEventListener('change', () => {
+  const interpMap = {
+    linear:   THREE.InterpolateLinear,
+    smooth:   THREE.InterpolateSmooth,
+    discrete: THREE.InterpolateDiscrete,
+  };
+  const interpConst = interpMap[selInterp.value];
+
+  // Remember current playback position so we can resume from the same time.
+  const savedTime = action.time;
+
+  // Stop and destroy the old action so the mixer releases the old clip.
+  // THREE.JS CONCEPT: mixer.uncacheClip() removes the clip's cached action
+  // from the mixer, freeing it to accept a new clip with the same name.
+  action.stop();
+  mixer.uncacheClip(clip);
+
+  // Rebuild position track with new interpolation mode.
+  posTrack = buildPositionTrack(interpConst);
+
+  // Rebuild the clip with the new track.
+  clip = new THREE.AnimationClip('sphereAnim', CLIP_DURATION, [
+    posTrack,
+    rotTrack,
+    scaleTrack,
+  ]);
+
+  // Create a new action from the rebuilt clip.
+  action = mixer.clipAction(clip);
+  action.loop      = { repeat: THREE.LoopRepeat, once: THREE.LoopOnce, pingpong: THREE.LoopPingPong }[selLoop.value];
+  action.timeScale = parseFloat(sldTimeScale.value);
+  action.time      = savedTime;   // restore the playback position
+  action.play();
+
+  // Rebuild the path line with the new interpolation.
+  buildPathLine(posTrack, CLIP_DURATION);
+});
+
+// ── Display toggles ────────────────────────────────────────────────────────
+chkAxes.addEventListener('change', () => { axesHelper.visible = chkAxes.checked; });
+
+chkPath.addEventListener('change', () => {
+  if (pathLine) pathLine.visible = chkPath.checked;
+});
+
+// ── Reset camera ──────────────────────────────────────────────────────────
+btnReset.addEventListener('click', () => {
+  camera.position.copy(CAM_RESET_POS);
+  controls.target.copy(CAM_RESET_TARGET);
+  controls.update();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// CLEANUP (for reference — not triggered in this single-page demo)
+// In an SPA that destroys and recreates scenes, dispose all GPU resources:
+//
+// function cleanup() {
+//   renderer.setAnimationLoop(null);
+//   controls.dispose();
+//   mixer.stopAllAction();
+//   mixer.uncacheRoot(sphere);
+//   sphereGeo.dispose();  sphereMat.dispose();
+//   boxGeo.dispose();     boxMat.dispose();
+//   groundGeo.dispose();  groundMat.dispose();
+//   if (pathLine) { pathLine.geometry.dispose(); pathLine.material.dispose(); }
+//   renderer.dispose();
+//   window.removeEventListener('resize', onResize);
+// }
+// ════════════════════════════════════════════════════════════════════════════
+
+</script>
+</body>
+</html>
