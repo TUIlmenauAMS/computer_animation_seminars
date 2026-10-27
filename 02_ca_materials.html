@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo 3: Material & Lighting Explorer — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px; line-height: 1.6;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  header { border-bottom: 2px solid var(--border); padding: 16px 0 14px; flex-shrink: 0; }
+  .header-inner { max-width: 1100px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 18px; }
+  .header-logo img { width: 72px; border-radius: 8px; display: block; }
+  .header-info h1 { font-size: 18px; font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 2px; }
+  .header-info h2 { font-size: 12px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+  .header-meta { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  .breadcrumb { max-width: 1100px; margin: 0 auto; padding: 10px 24px 0; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 5px; }
+
+  main { flex: 1; max-width: 1100px; margin: 0 auto; width: 100%; padding: 20px 24px 48px; display: flex; flex-direction: column; gap: 20px; }
+
+  .demo-title { font-size: 22px; font-weight: 500; color: #f0f2f7; }
+  .demo-title span { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 400; display: block; margin-bottom: 4px; }
+  .demo-desc { color: var(--muted); font-size: 13px; margin-top: 6px; max-width: 700px; }
+
+  .error-banner { display: none; background: rgba(251,146,60,0.1); border: 1px solid rgba(251,146,60,0.4); border-radius: 8px; padding: 16px 20px; color: var(--orange); font-family: var(--mono); font-size: 13px; }
+
+  /* ── layout ── */
+  .demo-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+
+  .canvas-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #10121a; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+
+  /* floating sphere labels */
+  #label-container { position: absolute; inset: 0; pointer-events: none; }
+  .sphere-label {
+    position: absolute; transform: translate(-50%, 0);
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    color: rgba(216,220,230,0.8); white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    letter-spacing: 0.04em;
+  }
+
+  .stats { position: absolute; bottom: 10px; left: 12px; font-family: var(--mono); font-size: 11px; color: rgba(216,220,230,0.5); pointer-events: none; line-height: 1.7; }
+
+  /* ── panel ── */
+  .demo-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 16px; display: flex; flex-direction: column; gap: 0; max-height: 90vh; overflow-y: auto; }
+  .panel-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .panel-divider { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; padding: 10px 0 4px; border-top: 1px solid var(--border); margin-top: 4px; }
+  .control-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(37,43,56,0.7); gap: 8px; }
+  .control-row:last-child { border-bottom: none; }
+  .control-label { font-size: 12px; color: var(--text); flex-shrink: 0; min-width: 100px; }
+  .control-input { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; }
+  .value-badge { font-family: var(--mono); font-size: 11px; color: var(--accent); min-width: 34px; text-align: right; }
+
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--border); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; background: var(--accent); border-radius: 50%; cursor: pointer; }
+  input[type="range"]::-moz-range-thumb { width: 13px; height: 13px; background: var(--accent); border-radius: 50%; border: none; cursor: pointer; }
+
+  input[type="color"] { -webkit-appearance: none; appearance: none; width: 28px; height: 22px; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; padding: 2px; flex-shrink: 0; }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+  input[type="checkbox"] { -webkit-appearance: none; appearance: none; width: 34px; height: 18px; background: var(--border); border-radius: 9px; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+  input[type="checkbox"]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--muted); border-radius: 50%; transition: left 0.2s, background 0.2s; }
+  input[type="checkbox"]:checked { background: rgba(79,156,249,0.25); }
+  input[type="checkbox"]:checked::after { left: 18px; background: var(--accent); }
+
+  select {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 4px 8px; cursor: pointer; outline: none; appearance: none;
+    -webkit-appearance: none; min-width: 110px;
+  }
+  select:focus { border-color: var(--accent); }
+
+  .btn { background: rgba(79,156,249,0.1); border: 1px solid rgba(79,156,249,0.3); border-radius: 6px; color: var(--accent); font-family: var(--mono); font-size: 11px; padding: 5px 12px; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+  .btn:hover { background: rgba(79,156,249,0.2); }
+
+  /* ── annotation grid ── */
+  .annotation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .annotation-box { background: rgba(167,139,250,0.05); border: 1px solid rgba(167,139,250,0.2); border-radius: 8px; padding: 14px 18px; font-size: 13px; color: var(--text); line-height: 1.65; }
+  .annotation-box strong { color: var(--accent2); font-weight: 500; }
+  .annotation-box code { background: rgba(79,156,249,0.1); color: #93c5fd; font-family: var(--mono); font-size: 0.88em; padding: 1px 5px; border-radius: 3px; }
+
+  /* material comparison table */
+  .mat-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .mat-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .mat-table-wrap th { text-align: left; padding: 8px 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+  .mat-table-wrap td { padding: 9px 12px; border-bottom: 1px solid rgba(37,43,56,0.5); color: var(--text); vertical-align: top; }
+  .mat-table-wrap tr:last-child td { border-bottom: none; }
+  .mat-table-wrap code { background: rgba(79,156,249,0.1); color: #93c5fd; font-family: var(--mono); font-size: 0.85em; padding: 1px 5px; border-radius: 3px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  footer { border-top: 2px solid var(--border); padding: 14px 24px 18px; max-width: 1100px; margin: 0 auto; width: 100%; text-align: center; font-size: 12px; color: var(--text); line-height: 1.7; }
+  footer p + p { margin-top: 3px; font-size: 11px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 800px) {
+    .demo-layout { grid-template-columns: 1fr; }
+    .annotation-grid { grid-template-columns: 1fr; }
+    .header-inner, main, footer, .breadcrumb { padding-left: 16px; padding-right: 16px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 02: Three.js — Demo 3</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  <a href="02_computeranimation_threejs.html">Chapter 02: Three.js</a>
+  <span>›</span>
+  Demo 3: Material &amp; Lighting Explorer
+</nav>
+
+<main>
+
+  <div>
+    <div class="demo-title">
+      <span>02_ca_materials.html</span>
+      Material &amp; Lighting Explorer
+    </div>
+    <p class="demo-desc">
+      Four spheres — one per material type — under the same lights. Change ambient, directional, and point light
+      parameters and watch each material respond differently. The left sphere never changes; the right one reacts to everything.
+    </p>
+  </div>
+
+  <div class="error-banner" id="errorBanner">
+    ⚠ WebGL 2 is not available in this browser. Try Chrome, Edge, Firefox or Safari with hardware acceleration enabled.
+  </div>
+
+  <div class="demo-layout">
+
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <canvas id="c" role="img" aria-label="Four spheres comparing MeshBasicMaterial, MeshLambertMaterial, MeshPhongMaterial, and MeshStandardMaterial under interactive lighting"></canvas>
+      <div id="label-container"></div>
+      <div class="stats" id="stats">FPS — · Calls — · Tris —</div>
+    </div>
+
+    <!-- Controls panel -->
+    <div class="demo-card">
+      <div class="panel-title">Lighting Controls</div>
+
+      <div class="control-row">
+        <span class="control-label">Ambient</span>
+        <div class="control-input">
+          <input type="range" id="sldAmbient" min="0" max="3" step="0.05" value="0.3">
+          <span class="value-badge" id="valAmbient">0.30</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Dir. intensity</span>
+        <div class="control-input">
+          <input type="range" id="sldDir" min="0" max="4" step="0.05" value="1.5">
+          <input type="color" id="pickDir" value="#ffffff">
+          <span class="value-badge" id="valDir">1.50</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Point intensity</span>
+        <div class="control-input">
+          <input type="range" id="sldPoint" min="0" max="6" step="0.1" value="2.0">
+          <input type="color" id="pickPoint" value="#ff8844">
+          <span class="value-badge" id="valPoint">2.00</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Point orbit spd</span>
+        <div class="control-input">
+          <input type="range" id="sldPointOrbit" min="0" max="3" step="0.05" value="0.7">
+          <span class="value-badge" id="valPointOrbit">0.70</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Light helpers</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkHelpers">
+        </div>
+      </div>
+
+      <div class="panel-divider">Phong Sphere</div>
+
+      <div class="control-row">
+        <span class="control-label">Shininess</span>
+        <div class="control-input">
+          <input type="range" id="sldShininess" min="1" max="300" step="1" value="60">
+          <span class="value-badge" id="valShininess">60</span>
+        </div>
+      </div>
+
+      <div class="panel-divider">Standard (PBR) Sphere</div>
+
+      <div class="control-row">
+        <span class="control-label">Roughness</span>
+        <div class="control-input">
+          <input type="range" id="sldRoughness" min="0" max="1" step="0.01" value="0.4">
+          <span class="value-badge" id="valRoughness">0.40</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Metalness</span>
+        <div class="control-input">
+          <input type="range" id="sldMetalness" min="0" max="1" step="0.01" value="0.1">
+          <span class="value-badge" id="valMetalness">0.10</span>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">PBR Preset</span>
+        <div class="control-input">
+          <select id="selPreset">
+            <option value="custom">Custom</option>
+            <option value="chrome">Chrome</option>
+            <option value="gold">Gold</option>
+            <option value="rubber">Rubber</option>
+            <option value="wood">Wood</option>
+            <option value="glass">Frosted glass</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-divider">Display</div>
+
+      <div class="control-row">
+        <span class="control-label">Wireframe</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkWireframe">
+        </div>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Auto-rotate</span>
+        <div class="control-input">
+          <input type="checkbox" id="chkRotate" checked>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Material comparison table -->
+  <div class="mat-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Material</th>
+          <th>Lighting</th>
+          <th>Specular</th>
+          <th>Performance</th>
+          <th>Best for</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="dot" style="background:#a78bfa"></span><code>MeshBasicMaterial</code></td>
+          <td>None — always shows base color</td>
+          <td>No</td>
+          <td>Minimal</td>
+          <td>UI overlays, unlit objects, skyboxes, debug</td>
+        </tr>
+        <tr>
+          <td><span class="dot" style="background:#34d399"></span><code>MeshLambertMaterial</code></td>
+          <td>Diffuse (Lambertian cosine law)</td>
+          <td>No</td>
+          <td>Low</td>
+          <td>Foliage, terrain, matte surfaces, many low-priority objects</td>
+        </tr>
+        <tr>
+          <td><span class="dot" style="background:#fb923c"></span><code>MeshPhongMaterial</code></td>
+          <td>Diffuse + specular (Phong model)</td>
+          <td>Yes (shininess)</td>
+          <td>Medium</td>
+          <td>Shiny plastic, legacy projects — not physically correct</td>
+        </tr>
+        <tr>
+          <td><span class="dot" style="background:#4f9cf9"></span><code>MeshStandardMaterial</code></td>
+          <td>Full PBR (metalness/roughness)</td>
+          <td>Yes (energy-conserving)</td>
+          <td>Medium–High</td>
+          <td><strong>Default choice</strong> for any realistic surface</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Concept annotations -->
+  <div class="annotation-grid">
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — MeshBasicMaterial ignores all lights</strong><br>
+      Its fragment shader samples only <code>material.color</code> (and an optional texture map)
+      — there is no lighting calculation at all. Set ambient and directional intensity to zero:
+      only the Basic sphere stays fully visible. This is useful for skyboxes, UI overlays,
+      and any object that should always appear at full brightness regardless of scene lighting.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — Diffuse-only vs specular</strong><br>
+      Lambert computes <code>dot(normal, lightDir)</code> — intensity by angle of incidence only.
+      Phong adds a specular term: <code>dot(reflect(lightDir, normal), viewDir)^shininess</code>.
+      That's the white highlight you see on Phong but not Lambert. Orbit the point light
+      slowly and watch: Lambert changes smoothly, Phong adds a bright flash as the light
+      passes the reflection angle.
+    </div>
+    <div class="annotation-box">
+      <strong>ANIMATION CONCEPT — Orbiting point light</strong><br>
+      The orange point light orbits the four spheres using the same pivot technique from
+      Demo 2: <code>pointPivot.rotation.y += orbitSpeed × delta</code>. The light is a child
+      of the pivot, offset on the X axis. This drives a circular orbit with zero trigonometry
+      — the scene graph does the work. Watch how Lambert barely reacts while Phong and
+      Standard produce a traveling specular highlight.
+    </div>
+    <div class="annotation-box">
+      <strong>THREE.JS CONCEPT — PBR energy conservation</strong><br>
+      <code>MeshStandardMaterial</code> enforces that reflected + absorbed energy ≤ incident energy.
+      A rough surface (<code>roughness = 1</code>) scatters light widely — a large, dim highlight.
+      A smooth surface (<code>roughness = 0</code>) concentrates it — a tiny, bright mirror reflection.
+      The total energy is the same. This is why PBR looks consistent under any lighting condition,
+      unlike Phong, which can produce arbitrarily bright and energy-violating highlights.
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 02: Three.js &middot; Demo 3: Material &amp; Lighting Explorer<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Created by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     THREE.JS DEMO — 02_ca_materials.html
+     Material & Lighting Explorer: four spheres, one per material type,
+     under interactive ambient + directional + orbiting point light.
+
+     Reading guide:
+       STEP 0  — imports
+       STEP 1  — renderer, scene, camera, controls
+       STEP 2  — four spheres: same geometry, different materials
+       STEP 3  — HTML overlay labels (vector.project → CSS position)
+       STEP 4  — lighting: AmbientLight + DirectionalLight + PointLight
+       STEP 5  — light helpers (DirectionalLightHelper, PointLightHelper)
+       STEP 6  — UI event handlers
+       STEP 7  — animation loop
+
+     Key concepts:
+       // THREE.JS CONCEPT: MeshBasicMaterial ignores lights
+       // THREE.JS CONCEPT: Phong specular vs Lambert diffuse-only
+       // THREE.JS CONCEPT: PBR energy conservation
+       // ANIMATION CONCEPT: orbiting point light via pivot
+       // THREE.JS CONCEPT: vector.project(camera) for HTML label positioning
+══════════════════════════════════════════════════════════════════════════════ -->
+
+<script type="importmap">
+{
+  "imports": {
+    "three":         "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── UI refs ────────────────────────────────────────────────────────────────
+const canvas         = document.getElementById('c');
+const statsEl        = document.getElementById('stats');
+const labelContainer = document.getElementById('label-container');
+const errorBanner    = document.getElementById('errorBanner');
+
+const sldAmbient     = document.getElementById('sldAmbient');
+const valAmbient     = document.getElementById('valAmbient');
+const sldDir         = document.getElementById('sldDir');
+const valDir         = document.getElementById('valDir');
+const pickDir        = document.getElementById('pickDir');
+const sldPoint       = document.getElementById('sldPoint');
+const valPoint       = document.getElementById('valPoint');
+const pickPoint      = document.getElementById('pickPoint');
+const sldPointOrbit  = document.getElementById('sldPointOrbit');
+const valPointOrbit  = document.getElementById('valPointOrbit');
+const chkHelpers     = document.getElementById('chkHelpers');
+const sldShininess   = document.getElementById('sldShininess');
+const valShininess   = document.getElementById('valShininess');
+const sldRoughness   = document.getElementById('sldRoughness');
+const valRoughness   = document.getElementById('valRoughness');
+const sldMetalness   = document.getElementById('sldMetalness');
+const valMetalness   = document.getElementById('valMetalness');
+const selPreset      = document.getElementById('selPreset');
+const chkWireframe   = document.getElementById('chkWireframe');
+const chkRotate      = document.getElementById('chkRotate');
+
+// PBR presets: [roughness, metalness, color hex]
+const PRESETS = {
+  chrome:  [0.05, 1.0,  0xcccccc],
+  gold:    [0.2,  1.0,  0xfbbf24],
+  rubber:  [0.95, 0.0,  0x222222],
+  wood:    [0.85, 0.0,  0x8b5e3c],
+  glass:   [0.05, 0.0,  0xaaccff],
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 1: RENDERER, SCENE, CAMERA, CONTROLS
+// ════════════════════════════════════════════════════════════════════════════
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+if (!renderer.getContext()) {
+  errorBanner.style.display = 'block';
+  throw new Error('WebGL 2 not available');
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x10121a);
+
+// Ground plane — gives a surface for the point light to cast on
+const groundGeo = new THREE.PlaneGeometry(30, 30);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x141820, roughness: 0.9, metalness: 0.0 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1.4;
+scene.add(ground);
+
+const camera = new THREE.PerspectiveCamera(52, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+camera.position.set(0, 1.5, 7);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance   = 2;
+controls.maxDistance   = 20;
+controls.update();
+
+window.addEventListener('resize', () => {
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+  camera.aspect = canvas.clientWidth / canvas.clientHeight;
+  camera.updateProjectionMatrix();
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 2: FOUR SPHERES — SAME GEOMETRY, FOUR DIFFERENT MATERIALS
+//
+// THREE.JS CONCEPT: Geometry reuse.
+// One SphereGeometry object is shared across all four meshes.
+// The GPU holds only one copy of the vertex data. Each mesh has its own
+// transform (position) and its own material, but they share the geometry.
+// This is the correct pattern — never create a new geometry per mesh
+// if the shape is identical.
+// ════════════════════════════════════════════════════════════════════════════
+
+// One shared geometry — 32×24 segments for a smooth silhouette
+const sphereGeo = new THREE.SphereGeometry(0.9, 32, 24);
+
+// Sphere X positions: evenly spaced along X
+const POSITIONS = [-4.5, -1.5, 1.5, 4.5];
+const SPHERE_COLOR = 0xdddddd;  // neutral grey — makes lighting differences obvious
+
+// ── Sphere 0: MeshBasicMaterial ───────────────────────────────────────────
+// THREE.JS CONCEPT: MeshBasicMaterial has no lighting computation at all.
+// Its fragment shader ignores every light in the scene.
+// It samples only material.color (and optionally a texture map).
+// Use case: skyboxes, wireframe overlays, UI objects, unlit icons.
+const matBasic = new THREE.MeshBasicMaterial({ color: SPHERE_COLOR });
+const meshBasic = new THREE.Mesh(sphereGeo, matBasic);
+meshBasic.position.set(POSITIONS[0], 0, 0);
+scene.add(meshBasic);
+
+// ── Sphere 1: MeshLambertMaterial ─────────────────────────────────────────
+// THREE.JS CONCEPT: MeshLambertMaterial computes Lambertian (diffuse-only) shading.
+// The formula: intensity = max(dot(N, L), 0) where N=surface normal, L=light direction.
+// This gives the cosine falloff of light with angle — surfaces facing the light
+// are bright, surfaces at 90° are dark. No specular highlight.
+// It is the simplest physically motivated lighting model and is cheap on the GPU.
+const matLambert = new THREE.MeshLambertMaterial({ color: SPHERE_COLOR });
+const meshLambert = new THREE.Mesh(sphereGeo, matLambert);
+meshLambert.position.set(POSITIONS[1], 0, 0);
+scene.add(meshLambert);
+
+// ── Sphere 2: MeshPhongMaterial ───────────────────────────────────────────
+// THREE.JS CONCEPT: MeshPhongMaterial adds a specular highlight to Lambert.
+// The specular term: pow(max(dot(R, V), 0), shininess) where R=reflection vector,
+// V=view direction. High shininess = tiny bright spot (polished). Low = wide glow.
+// Phong is NOT physically correct — it can produce arbitrarily bright specular
+// and doesn't conserve energy — but it's cheap and looks good for shiny plastics.
+const matPhong = new THREE.MeshPhongMaterial({
+  color:     SPHERE_COLOR,
+  shininess: 60,           // controlled by the Shininess slider
+  specular:  0x888888,     // specular color (default white is too strong)
+});
+const meshPhong = new THREE.Mesh(sphereGeo, matPhong);
+meshPhong.position.set(POSITIONS[2], 0, 0);
+scene.add(meshPhong);
+
+// ── Sphere 3: MeshStandardMaterial (PBR) ──────────────────────────────────
+// THREE.JS CONCEPT: MeshStandardMaterial implements the metalness/roughness
+// PBR model — the same model used in Unreal Engine 4+, Unity 5+, and Blender's
+// Principled BSDF. It is energy-conserving: the specular and diffuse components
+// sum to ≤ 1, so the material can't reflect more light than it receives.
+// roughness=0 → mirror; roughness=1 → fully diffuse.
+// metalness=0 → dielectric (plastic/wood/skin); metalness=1 → metal.
+const matStandard = new THREE.MeshStandardMaterial({
+  color:     SPHERE_COLOR,
+  roughness: 0.4,
+  metalness: 0.1,
+});
+const meshStandard = new THREE.Mesh(sphereGeo, matStandard);
+meshStandard.position.set(POSITIONS[3], 0, 0);
+scene.add(meshStandard);
+
+// Collect all materials for easy iteration (wireframe toggle, etc.)
+const allMaterials = [matBasic, matLambert, matPhong, matStandard];
+const allMeshes    = [meshBasic, meshLambert, meshPhong, meshStandard];
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 3: HTML OVERLAY LABELS
+//
+// THREE.JS CONCEPT: vector.project(camera) converts a 3D world-space position
+// into 2D Normalized Device Coordinates (NDC): x and y in [-1, +1].
+// We then map NDC to CSS pixel coordinates to position HTML labels exactly
+// above each sphere, updating them every frame as the camera moves.
+//
+// This is the standard technique for 3D HTML labels when a full CSS3D renderer
+// or WebGL text geometry would be overkill.
+// ════════════════════════════════════════════════════════════════════════════
+
+const LABEL_TEXTS = [
+  'MeshBasicMaterial',
+  'MeshLambertMaterial',
+  'MeshPhongMaterial',
+  'MeshStandardMaterial',
+];
+const LABEL_COLORS = ['#a78bfa', '#34d399', '#fb923c', '#4f9cf9'];
+
+// Create one <div> per sphere, absolutely positioned inside label-container
+const labelEls = POSITIONS.map((_, i) => {
+  const div = document.createElement('div');
+  div.className = 'sphere-label';
+  div.textContent = LABEL_TEXTS[i];
+  div.style.color = LABEL_COLORS[i];
+  labelContainer.appendChild(div);
+  return div;
+});
+
+// Reusable Vector3 for projection — avoid per-frame allocation
+const _labelPos = new THREE.Vector3();
+
+function updateLabels() {
+  // THREE.JS CONCEPT: vector.project(camera) performs the view + projection
+  // transform, giving us NDC coordinates we can map to CSS pixels.
+  allMeshes.forEach((mesh, i) => {
+    // Sample a point slightly above the sphere's center
+    _labelPos.set(mesh.position.x, mesh.position.y + 1.15, mesh.position.z);
+    _labelPos.project(camera);   // in-place: modifies _labelPos to NDC
+
+    // NDC to CSS: (ndcX + 1) / 2 * width, (1 - ndcY) / 2 * height
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    const x  = (_labelPos.x  + 1) / 2 * cw;
+    const y  = (-_labelPos.y + 1) / 2 * ch;
+
+    // Hide the label if the point is behind the camera (ndcZ > 1)
+    labelEls[i].style.display = _labelPos.z > 1 ? 'none' : 'block';
+    labelEls[i].style.left    = `${x}px`;
+    labelEls[i].style.top     = `${y}px`;
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 4: LIGHTING
+// Three light sources illuminate the scene:
+//   1. AmbientLight  — uniform fill, no direction, no shadows
+//   2. DirectionalLight — parallel rays (sun-like), from upper right
+//   3. PointLight (orbiting) — demonstrates specular differences between materials
+// ════════════════════════════════════════════════════════════════════════════
+
+// Ambient: a dim fill so dark-side surfaces aren't fully black
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+scene.add(ambientLight);
+
+// Directional: the main key light from upper-right
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(6, 8, 4);
+scene.add(dirLight);
+
+// Point light: orbits the spheres via a pivot (same technique as Demo 2)
+// ANIMATION CONCEPT: pivot-based orbit.
+// pointPivot is at the world origin. The point light is offset from it.
+// Rotating pointPivot.rotation.y each frame drives a circular orbit.
+const pointPivot = new THREE.Object3D();
+scene.add(pointPivot);
+
+const pointLight = new THREE.PointLight(0xff8844, 2.0, 20, 1.5);
+pointLight.position.set(5, 1.5, 0);   // offset = orbital radius from pivot
+pointPivot.add(pointLight);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 5: LIGHT HELPERS
+// Helpers draw a visual representation of each light's position and direction.
+// Essential for understanding why the lighting looks the way it does.
+// ════════════════════════════════════════════════════════════════════════════
+
+// DirectionalLightHelper: draws a flat square at the light's position
+// and an arrow showing the light direction.
+const dirHelper = new THREE.DirectionalLightHelper(dirLight, 1.2, 0xffffff);
+dirHelper.visible = false;
+scene.add(dirHelper);
+
+// PointLightHelper: draws a wireframe sphere at the light's position.
+// Because pointLight is a child of pointPivot, the helper should also be
+// a child of pointPivot so it follows the orbiting light.
+const pointHelper = new THREE.PointLightHelper(pointLight, 0.25, 0xff8844);
+pointHelper.visible = false;
+pointPivot.add(pointHelper);
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 6: UI EVENT HANDLERS
+// ════════════════════════════════════════════════════════════════════════════
+
+sldAmbient.addEventListener('input', () => {
+  ambientLight.intensity = parseFloat(sldAmbient.value);
+  valAmbient.textContent = ambientLight.intensity.toFixed(2);
+});
+
+sldDir.addEventListener('input', () => {
+  dirLight.intensity = parseFloat(sldDir.value);
+  valDir.textContent = dirLight.intensity.toFixed(2);
+});
+pickDir.addEventListener('input', () => {
+  dirLight.color.set(pickDir.value);
+});
+
+sldPoint.addEventListener('input', () => {
+  pointLight.intensity = parseFloat(sldPoint.value);
+  valPoint.textContent = pointLight.intensity.toFixed(2);
+});
+pickPoint.addEventListener('input', () => {
+  pointLight.color.set(pickPoint.value);
+  pointHelper.color = pointLight.color;
+});
+
+sldPointOrbit.addEventListener('input', () => {
+  valPointOrbit.textContent = parseFloat(sldPointOrbit.value).toFixed(2);
+});
+
+// Light helpers visibility
+chkHelpers.addEventListener('change', () => {
+  dirHelper.visible   = chkHelpers.checked;
+  pointHelper.visible = chkHelpers.checked;
+});
+
+// Phong shininess — controls the sharpness/size of the specular highlight.
+// High shininess = small, sharp highlight (polished surface).
+// Low shininess  = large, soft highlight (rough, glossy surface like wet clay).
+sldShininess.addEventListener('input', () => {
+  matPhong.shininess = parseFloat(sldShininess.value);
+  valShininess.textContent = matPhong.shininess;
+});
+
+// PBR roughness — controls microscopic surface texture (and thus specular spread)
+sldRoughness.addEventListener('input', () => {
+  matStandard.roughness = parseFloat(sldRoughness.value);
+  valRoughness.textContent = matStandard.roughness.toFixed(2);
+  selPreset.value = 'custom';
+});
+
+// PBR metalness — 0 = dielectric, 1 = metal (specular from base color)
+sldMetalness.addEventListener('input', () => {
+  matStandard.metalness = parseFloat(sldMetalness.value);
+  valMetalness.textContent = matStandard.metalness.toFixed(2);
+  selPreset.value = 'custom';
+});
+
+// PBR preset dropdown — applies known real-world roughness/metalness values
+selPreset.addEventListener('change', () => {
+  const preset = PRESETS[selPreset.value];
+  if (!preset) return;
+  const [roughness, metalness, color] = preset;
+  matStandard.roughness = roughness;
+  matStandard.metalness = metalness;
+  matStandard.color.setHex(color);
+  sldRoughness.value    = roughness;
+  sldMetalness.value    = metalness;
+  valRoughness.textContent = roughness.toFixed(2);
+  valMetalness.textContent = metalness.toFixed(2);
+});
+
+// Wireframe — shows the shared geometry on all four meshes simultaneously.
+// This demonstrates that all four share the same underlying vertex data.
+chkWireframe.addEventListener('change', () => {
+  allMaterials.forEach(m => { m.wireframe = chkWireframe.checked; });
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STEP 7: ANIMATION LOOP
+// ════════════════════════════════════════════════════════════════════════════
+
+const clock = new THREE.Clock();
+let frameTimes = [], lastFpsUpdate = 0, displayFps = 0;
+
+renderer.setAnimationLoop((timestamp) => {
+  const delta = clock.getDelta();
+
+  // ── Auto-rotate all spheres on their Y axis ──────────────────────────────
+  // ANIMATION CONCEPT: each sphere rotates at the same angular speed.
+  // Because they share the geometry but have independent Mesh transforms,
+  // the rotation of one does not affect any other.
+  if (chkRotate.checked) {
+    allMeshes.forEach(m => { m.rotation.y += 0.4 * delta; });
+  }
+
+  // ── Orbit the point light around the spheres ─────────────────────────────
+  // ANIMATION CONCEPT: pivot rotation drives circular motion (see Demo 2).
+  // The point light is offset from the pivot on the X axis.
+  // As the pivot rotates, the light traces a circle at constant radius.
+  // Watch the specular highlight travel across the Phong and Standard spheres
+  // while the Lambert sphere only shows diffuse brightening.
+  pointPivot.rotation.y += parseFloat(sldPointOrbit.value) * delta;
+
+  // Update the directional light helper — it reads the light's current
+  // position and direction each frame (needed if the light were moving).
+  if (chkHelpers.checked) {
+    dirHelper.update();
+  }
+
+  controls.update();
+
+  // Update HTML label positions every frame (camera may have moved)
+  updateLabels();
+
+  renderer.render(scene, camera);
+
+  // Stats
+  frameTimes.push(timestamp);
+  frameTimes = frameTimes.filter(t => timestamp - t < 1000);
+  if (timestamp - lastFpsUpdate > 200) { displayFps = frameTimes.length; lastFpsUpdate = timestamp; }
+  statsEl.textContent =
+    `FPS ${displayFps.toString().padStart(3)} · Calls ${renderer.info.render.calls} · Tris ${renderer.info.render.triangles.toLocaleString()}`;
+  renderer.info.reset();
+});
+
+// ── Cleanup (for reference) ────────────────────────────────────────────────
+// function cleanup() {
+//   sphereGeo.dispose();   // shared geometry — dispose once
+//   allMaterials.forEach(m => m.dispose());
+//   groundGeo.dispose(); groundMat.dispose();
+//   renderer.dispose();  controls.dispose();
+// }
+
+</script>
+</body>
+</html>
