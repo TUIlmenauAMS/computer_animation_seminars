@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 02: Three.js — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 24px 0 20px;
+  }
+  .header-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .header-logo img { width: 100px; border-radius: 10px; display: block; }
+  .header-info h1 { font-size: clamp(18px,3vw,26px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
+  .header-info h2 { font-size: 14px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
+  .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 14px 32px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 6px; }
+
+  /* ── main ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+
+  /* ── notebook content ── */
+  .nb-content { display: flex; flex-direction: column; gap: 0; }
+  .nb-cell { padding: 0; }
+
+  /* ── prose styling ── */
+  .nb-cell h1 {
+    font-size: clamp(22px, 3.5vw, 32px);
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.25;
+    margin: 40px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nb-cell h2 {
+    font-size: 20px;
+    font-weight: 500;
+    color: #e8eaf2;
+    margin: 48px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nb-cell h3 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--accent2);
+    margin: 28px 0 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+  }
+  .nb-cell p { margin-bottom: 14px; color: var(--text); }
+  .nb-cell ul, .nb-cell ol { margin: 0 0 14px 22px; }
+  .nb-cell li { margin-bottom: 6px; }
+  .nb-cell strong { color: #eef0f6; font-weight: 500; }
+  .nb-cell em { color: var(--text); }
+  .nb-cell a { color: var(--accent); text-decoration: none; }
+  .nb-cell a:hover { text-decoration: underline; }
+  .nb-cell hr { border: none; border-top: 1px solid var(--border); margin: 8px 0 0; }
+
+  /* tables */
+  .nb-cell table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 20px;
+    font-size: 13.5px;
+  }
+  .nb-cell th {
+    text-align: left;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .nb-cell td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(37,43,56,0.6);
+    vertical-align: top;
+    color: var(--text);
+  }
+  .nb-cell tr:last-child td { border-bottom: none; }
+  .nb-cell tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* inline code */
+  .nb-cell code {
+    background: rgba(79,156,249,0.08);
+    color: #93c5fd;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* code blocks */
+  .nb-cell pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 16px 0 20px;
+  }
+  .nb-cell pre code {
+    background: none;
+    color: #c9d1d9;
+    font-size: 13px;
+    padding: 0;
+    border-radius: 0;
+    line-height: 1.6;
+  }
+
+  /* pill links */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    margin: 4px 6px 4px 0;
+    border: 1px solid rgba(79,156,249,0.4);
+    border-radius: 20px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(79,156,249,0.07);
+    font-family: var(--mono);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .pill:hover {
+    background: rgba(79,156,249,0.14);
+    border-color: rgba(79,156,249,0.7);
+    text-decoration: none;
+  }
+
+  /* info callout boxes */
+  .info-box {
+    border-left: 4px solid var(--accent2);
+    background: rgba(167,139,250,0.06);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  .info-box p { margin: 0 0 6px 0; }
+  .info-box p:last-of-type { margin-bottom: 0; }
+
+  /* demo callout boxes */
+  .demo-box {
+    border-left: 4px solid var(--accent);
+    background: rgba(79,156,249,0.06);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  .demo-box p { margin: 0 0 6px 0; }
+  .demo-box p:last-of-type { margin-bottom: 8px; }
+
+  /* footer cell */
+  .nb-footer-cell {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 2px solid var(--border);
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .nb-footer-cell b { color: var(--text); }
+  .nb-footer-cell a { color: var(--accent); text-decoration: none; }
+  .nb-footer-cell a:hover { text-decoration: underline; }
+
+  /* ── page footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 18px 32px 24px;
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 02: Three.js</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  Chapter 02: Three.js
+</nav>
+
+<main>
+<div class="nb-content">
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<h1>Chapter 02: Three.js</h1>
+<p><strong>Three.js</strong> is a high-level JavaScript library that puts a scene-graph-based API on top of WebGL. Instead of managing shaders, buffer objects, and draw calls by hand — as you did in Chapter 01 — you describe your scene as a tree of objects (meshes, lights, cameras) and Three.js handles the GPU calls beneath the surface.</p>
+<p>This chapter builds on everything from Chapter 01. If you understand vertex buffers, shaders, the MVP matrix pipeline, and the animation loop, you are already prepared: Three.js is an abstraction of those exact ideas. By the end of this chapter you will be able to build complete interactive 3D scenes with materials, lighting, shadows, and keyframe animation — and you will understand precisely what Three.js is doing under the hood, because you have already done it yourself in raw WebGL.</p>
+<h3>What this chapter covers</h3>
+<table>
+<thead>
+<tr><th>#</th><th>Topic</th><th>What you will learn</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>What is Three.js</td><td>The library's role, history, and ecosystem</td></tr>
+<tr><td>2</td><td>Setup and the Rendering Loop</td><td>Import maps, WebGLRenderer, Scene, Camera, the animation loop</td></tr>
+<tr><td>3</td><td>The Scene Graph</td><td>Object3D hierarchy, parent–child transforms, world matrix</td></tr>
+<tr><td>4</td><td>Geometry</td><td>BufferGeometry, built-in shapes, custom geometry, GPU memory</td></tr>
+<tr><td>5</td><td>Materials</td><td>Material stack from basic to PBR; MeshStandardMaterial</td></tr>
+<tr><td>6</td><td>Lighting</td><td>Light types, helpers, physically correct intensities</td></tr>
+<tr><td>7</td><td>Cameras</td><td>PerspectiveCamera, OrthographicCamera, resize handling</td></tr>
+<tr><td>8</td><td>Controls</td><td>OrbitControls: orbit, pan, zoom, damping, touch</td></tr>
+<tr><td>9</td><td>Shadows</td><td>Shadow maps, PCF, bias, shadow camera tuning</td></tr>
+<tr><td>10</td><td>The Animation System</td><td>KeyframeTrack, AnimationClip, AnimationMixer, AnimationAction</td></tr>
+<tr><td>11</td><td>Textures and Environment Maps</td><td>TextureLoader, PBR texture maps, HDR environment maps</td></tr>
+<tr><td>12</td><td>Performance and Best Practices</td><td>Draw calls, InstancedMesh, renderer.info, dispose()</td></tr>
+<tr><td>13</td><td>Demo Index</td><td>Overview of the five interactive demos</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>1. What is Three.js</h2>
+<p><strong>Three.js</strong> is a JavaScript library for real-time 3D graphics on the web. It wraps the verbose, stateful WebGL API into a clean, object-oriented scene-graph system. You describe a scene — its objects, lights, and cameras — and Three.js renders it through WebGL without you writing a single line of GLSL or manually binding a single buffer.</p>
+<p>It was created by Ricardo Cabello (known as <strong>mrdoob</strong>), with the first commit in April 2010. As of 2024 it is at revision r165+, MIT licensed, and maintained by a large open-source community. With over 100,000 GitHub stars it is the most widely used 3D library on the web.</p>
+
+<h3>The Three.js ecosystem</h3>
+<p>Three.js sits at the base of a broader stack of libraries built on top of it:</p>
+<ul>
+  <li><strong>Three.js core</strong> — the renderer, scene graph, geometry, materials, animation system. This is what you will learn in this chapter.</li>
+  <li><strong>React Three Fiber (R3F)</strong> — a React renderer for Three.js. Lets you describe a Three.js scene in JSX. Used in production at many studios.</li>
+  <li><strong>Drei</strong> — a helper library for R3F with ready-made components (orbit controls, environment maps, text, etc.).</li>
+  <li><strong>Rapier, Cannon.js, Ammo.js</strong> — physics engines that integrate with Three.js (covered in Seminar 05).</li>
+  <li><strong>GSAP</strong> — a professional animation library for DOM, SVG, and Three.js objects (covered in Seminar 06).</li>
+</ul>
+
+<h3>What Three.js does not do</h3>
+<p>Three.js handles rendering only. It does not include physics simulation, spatial audio, AI behaviour, or networking. These are separate libraries that work alongside Three.js — you will meet several of them in later seminars.</p>
+
+<h3>The relationship to raw WebGL</h3>
+<p>Three.js is a layer on top of WebGL, not a replacement. Every object you create in Three.js — a <code>Mesh</code>, a <code>DirectionalLight</code>, a <code>MeshStandardMaterial</code> — eventually becomes WebGL calls: buffer uploads, shader uniform updates, draw calls. The underlying concepts from Chapter 01 (VBOs, VAOs, shaders, the depth buffer, the MVP matrix) are all still there. Three.js just manages them for you.</p>
+<p>Understanding raw WebGL first — as you now do — means you can read Three.js source code, debug unexpected behaviour, write custom <code>ShaderMaterial</code> effects, and understand the performance implications of every API call. That knowledge is the difference between using Three.js and understanding it.</p>
+
+<div class="info-box">
+  <p><strong>Industry adoption:</strong> Three.js is used by Google, NASA, The New York Times, Apple, and hundreds of interactive studios for product configurators, data visualizations, browser games, and immersive web experiences. It is the most likely library you will encounter on the job if you build for the web.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/" target="_blank" rel="noopener">Three.js Official Site ↗</a>
+  <a class="pill" href="https://github.com/mrdoob/three.js" target="_blank" rel="noopener">GitHub Repository ↗</a>
+  <a class="pill" href="https://threejs-journey.com/" target="_blank" rel="noopener">Three.js Journey (Bruno Simon) ↗</a>
+  <a class="pill" href="https://discoverthreejs.com/" target="_blank" rel="noopener">Discover Three.js ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>2. Setup and the Rendering Loop</h2>
+
+<h3>Importing Three.js with an import map</h3>
+<p>The modern official way to use Three.js is via <strong>ES module import maps</strong>. An import map tells the browser which URL to fetch when JavaScript code uses a bare module specifier like <code>import * as THREE from 'three'</code>. This is cleaner than the legacy <code>&lt;script src&gt;</code> approach: you get proper ES module syntax, tree-shaking potential, and the ability to import addons (OrbitControls, loaders) from the same CDN package.</p>
+<pre><code class="language-html">&lt;!-- 1. Declare the import map BEFORE any module scripts --&gt;
+&lt;script type="importmap"&gt;
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+&lt;/script&gt;
+
+&lt;!-- 2. Your code as a module script --&gt;
+&lt;script type="module"&gt;
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// Additional addons follow the same pattern:
+// import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+&lt;/script&gt;</code></pre>
+<p>Always pin Three.js to an exact version (<code>0.165.0</code> in this course). Never use <code>latest</code> — Three.js does not maintain backwards compatibility between revisions, and a silent version upgrade can break your code.</p>
+
+<h3>The four essential objects</h3>
+<p>Every Three.js scene needs four things:</p>
+<ul>
+  <li><strong><code>WebGLRenderer</code></strong> — manages the WebGL context and draws the scene to a canvas.</li>
+  <li><strong><code>Scene</code></strong> — the root container. All objects (meshes, lights) are added here.</li>
+  <li><strong><code>Camera</code></strong> — defines the viewpoint. Usually a <code>PerspectiveCamera</code>.</li>
+  <li><strong><code>Mesh</code></strong> — a visible object: geometry (shape) + material (appearance).</li>
+</ul>
+
+<h3>Complete minimal scene</h3>
+<pre><code class="language-javascript">import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── RENDERER ─────────────────────────────────────────────────────────────────
+// WebGLRenderer creates a &lt;canvas&gt; element and a WebGL2 context on it.
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+
+// setPixelRatio: multiplies the drawing buffer size by the screen's DPR.
+// Without this, the canvas looks blurry on retina / HiDPI screens.
+renderer.setPixelRatio(window.devicePixelRatio);
+
+// Fill the window. This sets canvas.width/height (the GPU buffer size),
+// not CSS size. We keep them in sync on resize (see below).
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// ── SCENE ────────────────────────────────────────────────────────────────────
+// THREE.Scene is the root of the scene graph.
+// Every visible object and light is added to the scene.
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0f14);  // match the page background
+
+// ── CAMERA ───────────────────────────────────────────────────────────────────
+// PerspectiveCamera(fov, aspect, near, far)
+// fov: vertical field of view in degrees
+// aspect: canvas width / height — must match the renderer size
+// near / far: the clipping planes — geometry outside this range is not drawn
+const camera = new THREE.PerspectiveCamera(
+  60,                                          // fov
+  window.innerWidth / window.innerHeight,      // aspect
+  0.1,                                         // near (not too small — see Section 7)
+  100                                          // far
+);
+camera.position.set(0, 1.5, 4);  // move the camera back so we can see the scene
+
+// ── LIGHT ────────────────────────────────────────────────────────────────────
+// AmbientLight: uniform fill light — no direction, no shadows.
+// Without it, the dark side of objects is completely black.
+const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambient);
+
+// DirectionalLight: parallel rays from a direction (like the sun).
+// The light's position defines the direction from which it comes.
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+sun.position.set(3, 5, 2);
+scene.add(sun);
+
+// ── GEOMETRY + MATERIAL ──────────────────────────────────────────────────────
+// Mesh = Geometry + Material. They are separate objects and can be reused.
+// BoxGeometry(width, height, depth, widthSegments, heightSegments, depthSegments)
+const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+// MeshStandardMaterial: PBR (Physically Based Rendering). The default choice.
+// It responds correctly to all light types and looks consistent under any lighting.
+const material = new THREE.MeshStandardMaterial({
+  color: 0x4f9cf9,   // base albedo color
+  roughness: 0.4,    // 0 = mirror, 1 = fully diffuse
+  metalness: 0.1     // 0 = plastic/dielectric, 1 = metal
+});
+
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+
+// ── ORBIT CONTROLS ───────────────────────────────────────────────────────────
+// OrbitControls lets the user rotate, pan and zoom the camera with the mouse.
+// It listens to pointer events on the renderer's canvas element.
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;     // smooth inertia effect
+controls.dampingFactor = 0.05;
+
+// ── RESIZE HANDLER ───────────────────────────────────────────────────────────
+// When the window resizes we must update both the renderer size
+// and the camera's aspect ratio, then call updateProjectionMatrix().
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── ANIMATION LOOP ───────────────────────────────────────────────────────────
+// THREE.Clock gives us accurate delta time (time since last frame in seconds).
+// Always use delta time — never animate by a fixed amount per frame,
+// because frame rate varies between devices.
+const clock = new THREE.Clock();
+
+// renderer.setAnimationLoop is Three.js's built-in loop helper.
+// Internally it calls requestAnimationFrame for you.
+renderer.setAnimationLoop(() => {
+  const delta = clock.getDelta();      // seconds since last frame
+
+  // ANIMATION CONCEPT: time-based rotation.
+  // Multiplying by delta makes the rotation speed frame-rate-independent.
+  // On a 30fps device and a 120fps device the cube rotates at the same angular speed.
+  cube.rotation.y += 0.6 * delta;
+  cube.rotation.x += 0.2 * delta;
+
+  controls.update();                   // required when enableDamping is true
+  renderer.render(scene, camera);      // draw the scene from the camera's viewpoint
+});</code></pre>
+
+<div class="info-box">
+  <p><strong>devicePixelRatio:</strong> On a MacBook with a Retina screen, <code>window.devicePixelRatio</code> is 2. Without <code>setPixelRatio(window.devicePixelRatio)</code>, Three.js renders at the CSS pixel resolution and the browser stretches the image to fill the physical pixels — the result looks blurry. With it, the GPU draws at full physical resolution. On most phones the DPR is 2 or 3. For performance-critical applications you can cap it: <code>renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))</code>.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/renderers/WebGLRenderer" target="_blank" rel="noopener">WebGLRenderer – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#manual/en/introduction/Creating-a-scene" target="_blank" rel="noopener">Creating a scene – Three.js ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Interactive Demo 1 — First Three.js Scene</strong></p>
+  <p>A complete minimal Three.js scene: a PBR-shaded cube with a directional light, OrbitControls, and a live stats readout. Every line of the source code is commented, mapping each Three.js call to the underlying WebGL concept from Chapter 01.</p>
+  <p><em>What to look for:</em> Enable wireframe to see the geometry segments. Adjust the light intensity slider and watch how <code>MeshStandardMaterial</code> responds. Check the draw call counter in the stats line.</p>
+  <a class="pill" href="02_ca_scene.html" target="_blank" rel="noopener">Open Demo 1 ↗</a>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>3. The Scene Graph</h2>
+<p>A <strong>scene graph</strong> is a tree of objects, each with its own local coordinate system. When you place an object in the scene you can set its position, rotation, and scale relative to its <strong>parent</strong>. The world transform of any object is the product of all the transforms from the root down to that object.</p>
+<p>In Three.js, the base class for every object in the scene graph is <code>THREE.Object3D</code>. Meshes, lights, cameras, and groups all inherit from it and all have a local transform: <code>.position</code> (<code>Vector3</code>), <code>.rotation</code> (<code>Euler</code>), and <code>.scale</code> (<code>Vector3</code>).</p>
+
+<h3>Parent–child relationships</h3>
+<pre><code class="language-javascript">// parent.add(child) attaches child to parent's local coordinate system.
+// Moving the parent moves the child with it.
+const parent = new THREE.Group();
+parent.position.set(2, 0, 0);    // parent is 2 units to the right
+
+const child = new THREE.Mesh(geometry, material);
+child.position.set(0, 1, 0);    // child is 1 unit up FROM THE PARENT
+
+parent.add(child);
+scene.add(parent);
+// child's world position = (2, 1, 0) — the two offsets stack</code></pre>
+
+<h3>How transforms propagate</h3>
+<p>Three.js computes each object's <strong>world matrix</strong> automatically every frame by multiplying the parent's world matrix by the child's local matrix:</p>
+<pre><code>worldMatrix(child) = worldMatrix(parent) × localMatrix(child)</code></pre>
+<p>You never call this yourself for standard scenes — Three.js handles the matrix update traversal during <code>renderer.render()</code>. If you need the world matrix early (before render), call <code>object.updateWorldMatrix(true, true)</code>.</p>
+
+<h3>Quaternion vs Euler rotation</h3>
+<p><code>object.rotation</code> is an <code>Euler</code> — three angles (x, y, z) applied in a fixed order. Euler angles are intuitive but suffer from <strong>gimbal lock</strong>: when two rotation axes align, one degree of freedom is lost and you can no longer rotate in all directions. Internally, Three.js represents rotation as a <strong>quaternion</strong> (<code>object.quaternion</code>), a 4-component value that never gimbal-locks and interpolates cleanly with <strong>slerp</strong> (spherical linear interpolation). For most animation work you can use Euler angles without issue; for smooth rotation interpolation (as in the <code>QuaternionKeyframeTrack</code> discussed in Section 10), the quaternion path is the correct one.</p>
+
+<h3>Traversal and lookup</h3>
+<pre><code class="language-javascript">// Visit every object in the scene graph depth-first:
+scene.traverse((object) => {
+  if (object.isMesh) {
+    console.log(object.name, object.position);
+  }
+});
+
+// Find a specific object by name (set with object.name = 'myBox'):
+const box = scene.getObjectByName('myBox');
+
+// Get the world position of any object (avoids computing it manually):
+const worldPos = new THREE.Vector3();
+object.getWorldPosition(worldPos);</code></pre>
+
+<div class="info-box">
+  <p><strong>The scene graph is universal:</strong> Unity's Transform hierarchy, Unreal's Actor/Component system, Blender's object parenting, and every major 3D tool use the same data structure — a tree of local transforms. A character rig is a scene graph (the hip is the root, limbs are children). A solar system is a scene graph (the Sun is the root, planets are children, moons are grandchildren). Learning it in Three.js transfers directly everywhere else.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/core/Object3D" target="_blank" rel="noopener">Object3D – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/math/Matrix4" target="_blank" rel="noopener">Matrix4 – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/math/Quaternion" target="_blank" rel="noopener">Quaternion – Three.js docs ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Interactive Demo 2 — Scene Graph Explorer</strong></p>
+  <p>A solar system built from Three.js scene graph primitives: the Sun at the origin, Earth orbiting via a pivot <code>Object3D</code>, the Moon orbiting the Earth via a second pivot. Each body rotates on its own axis independently. Axes helpers and orbit paths can be toggled to visualise the local coordinate frames.</p>
+  <p><em>What to look for:</em> Use the speed sliders to slow everything to near-zero, then enable the axes helpers. Notice how each body's local X/Y/Z axes are different from its parent's. Enable "Show World Position" to see how the Moon's world position accumulates all three transforms in the hierarchy.</p>
+  <a class="pill" href="02_ca_scenegraph.html" target="_blank" rel="noopener">Open Demo 2 ↗</a>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>4. Geometry</h2>
+<p>In Three.js, all geometry is represented as a <strong><code>BufferGeometry</code></strong>. This is a direct mapping of the GPU buffer model from Chapter 01: each vertex attribute (position, normal, UV, index) is stored as a typed JavaScript array and uploaded to the GPU as a VBO or EBO. A <code>BufferGeometry</code> is essentially the Three.js wrapper around what you built manually with <code>gl.createBuffer()</code> and <code>gl.vertexAttribPointer()</code>.</p>
+
+<h3>Key attributes</h3>
+<table>
+<thead>
+<tr><th>Attribute</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>position</code></td><td><code>Float32Array</code> (xyz per vertex)</td><td>Vertex positions in local space</td></tr>
+<tr><td><code>normal</code></td><td><code>Float32Array</code> (xyz per vertex)</td><td>Surface normals for lighting. Same as the normals uploaded to the GPU in Chapter 01.</td></tr>
+<tr><td><code>uv</code></td><td><code>Float32Array</code> (uv per vertex)</td><td>Texture coordinates. Built-in geometries include UVs; custom geometry needs them added manually.</td></tr>
+<tr><td><code>index</code></td><td><code>Uint16Array</code> or <code>Uint32Array</code></td><td>Index buffer — reuses vertices, exactly as the EBO in Chapter 01.</td></tr>
+</tbody>
+</table>
+
+<h3>Built-in geometries</h3>
+<p>Three.js ships a library of parametric geometries so you rarely need to build geometry by hand:</p>
+<table>
+<thead>
+<tr><th>Class</th><th>Parameters</th><th>Typical use</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BoxGeometry</code></td><td>width, height, depth, segments×3</td><td>Cube, wall, crate</td></tr>
+<tr><td><code>SphereGeometry</code></td><td>radius, widthSegs, heightSegs</td><td>Ball, planet, head</td></tr>
+<tr><td><code>PlaneGeometry</code></td><td>width, height, segments×2</td><td>Ground plane, quad</td></tr>
+<tr><td><code>CylinderGeometry</code></td><td>radiusTop, radiusBottom, height, segs</td><td>Pillar, tree trunk</td></tr>
+<tr><td><code>CapsuleGeometry</code></td><td>radius, length, capSegs, radialSegs</td><td>Character placeholder, rigid body</td></tr>
+<tr><td><code>TorusGeometry</code></td><td>radius, tube, radialSegs, tubularSegs</td><td>Ring, donut</td></tr>
+<tr><td><code>TorusKnotGeometry</code></td><td>radius, tube, p, q</td><td>Decorative organic shape</td></tr>
+</tbody>
+</table>
+<p>The <strong>segments</strong> parameter controls tessellation: more segments make a smoother curved surface but increase vertex count and draw time. A <code>SphereGeometry(1, 8, 6)</code> looks like a faceted gem; <code>SphereGeometry(1, 64, 48)</code> looks smooth. For most demos, 32×24 is a good balance.</p>
+
+<h3>Custom geometry</h3>
+<p>When built-in shapes are not enough, you can create a <code>BufferGeometry</code> from scratch — this is exactly the process you followed in Chapter 01:</p>
+<pre><code class="language-javascript">const geo = new THREE.BufferGeometry();
+
+// A flat quad (two triangles) in the XZ plane:
+const positions = new Float32Array([
+  -1, 0,  1,   // vertex 0
+   1, 0,  1,   // vertex 1
+   1, 0, -1,   // vertex 2
+  -1, 0, -1    // vertex 3
+]);
+geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+const indices = new Uint16Array([0, 1, 2,  0, 2, 3]);
+geo.setIndex(new THREE.BufferAttribute(indices, 1));
+
+// Compute normals automatically from position data:
+geo.computeVertexNormals();  // required for lighting to work on custom geometry</code></pre>
+
+<h3>Geometry reuse and disposal</h3>
+<p>A geometry object is a GPU resource. If you need the same shape for many meshes, share the geometry object — do not create a new one per mesh. When you remove an object from the scene permanently, call <code>geometry.dispose()</code> to free the GPU memory. The same applies to materials and textures.</p>
+
+<div class="info-box">
+  <p><strong>Mesh = Geometry + Material.</strong> The geometry defines the shape — the positions, normals, and UVs. The material defines the appearance — the shader, the color, and the texture maps. They are independent objects and can be mixed and matched freely. One geometry can be used with many different materials; one material can be shared across many meshes.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/core/BufferGeometry" target="_blank" rel="noopener">BufferGeometry – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/geometries/BoxGeometry" target="_blank" rel="noopener">Built-in geometries list ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>5. Materials</h2>
+<p>A material defines how a surface looks. Three.js provides a stack of materials ranging from the extremely cheap and simple to the physically accurate:</p>
+<table>
+<thead>
+<tr><th>Material</th><th>Lighting</th><th>Cost</th><th>Use case</th></tr>
+</thead>
+<tbody>
+<tr><td><code>MeshBasicMaterial</code></td><td>None — always shows base color</td><td>Minimal</td><td>Unlit overlays, debug visualization, skyboxes</td></tr>
+<tr><td><code>MeshLambertMaterial</code></td><td>Diffuse only (Lambertian)</td><td>Low</td><td>Large numbers of low-importance objects; foliage</td></tr>
+<tr><td><code>MeshPhongMaterial</code></td><td>Diffuse + specular (Phong model)</td><td>Medium</td><td>Legacy projects; shiny plastic look; not physically correct</td></tr>
+<tr><td><code>MeshStandardMaterial</code></td><td>Full PBR (metalness/roughness)</td><td>Medium–High</td><td><strong>The default choice</strong> for any realistic surface</td></tr>
+<tr><td><code>MeshPhysicalMaterial</code></td><td>PBR + clearcoat, sheen, transmission</td><td>High</td><td>Glass, car paint, fabric, skin</td></tr>
+<tr><td><code>MeshToonMaterial</code></td><td>Cel shading (stepped diffuse)</td><td>Low–Medium</td><td>Cartoon / anime aesthetic</td></tr>
+<tr><td><code>ShaderMaterial</code></td><td>Custom GLSL (you write the shader)</td><td>Depends</td><td>Any effect not achievable with the above; connects to Chapter 01</td></tr>
+</tbody>
+</table>
+
+<h3>PBR — Physically Based Rendering</h3>
+<p><code>MeshStandardMaterial</code> implements the <strong>metalness / roughness</strong> PBR model. Two parameters control the entire material response:</p>
+<ul>
+  <li><strong><code>metalness</code></strong> (0–1): 0 = dielectric (plastic, wood, skin), 1 = metal (iron, gold, chrome). Metals reflect light differently from dielectrics — their specular color comes from the base color, not from white highlights.</li>
+  <li><strong><code>roughness</code></strong> (0–1): 0 = perfectly smooth mirror surface, 1 = fully diffuse (no specular at all). Intermediate values produce realistic brushed or matte surfaces.</li>
+</ul>
+<p>Real-world reference values for common surfaces:</p>
+<table>
+<thead>
+<tr><th>Material</th><th>metalness</th><th>roughness</th></tr>
+</thead>
+<tbody>
+<tr><td>Chrome / polished metal</td><td>1.0</td><td>0.05–0.1</td></tr>
+<tr><td>Brushed aluminum</td><td>1.0</td><td>0.4–0.6</td></tr>
+<tr><td>Gold</td><td>1.0</td><td>0.15–0.3</td></tr>
+<tr><td>Matte plastic</td><td>0.0</td><td>0.8–1.0</td></tr>
+<tr><td>Glossy plastic</td><td>0.0</td><td>0.1–0.3</td></tr>
+<tr><td>Wood</td><td>0.0</td><td>0.7–0.9</td></tr>
+<tr><td>Wet concrete</td><td>0.0</td><td>0.4–0.6</td></tr>
+</tbody>
+</table>
+
+<h3>Shared material properties</h3>
+<pre><code class="language-javascript">const mat = new THREE.MeshStandardMaterial({
+  color: 0xffffff,           // base albedo color (Color, hex number, or string)
+  emissive: 0x000000,        // self-illumination color — not affected by lights
+  roughness: 0.5,
+  metalness: 0.0,
+  wireframe: false,          // render as wireframe instead of solid
+  side: THREE.FrontSide      // THREE.FrontSide | THREE.BackSide | THREE.DoubleSide
+});
+
+// When you no longer need the material, free the GPU program:
+mat.dispose();</code></pre>
+
+<div class="info-box">
+  <p><strong>PBR everywhere:</strong> Physically Based Rendering was adopted by every major real-time engine around 2013–2015 — Unreal Engine 4, Unity 5, and Frostbite all switched to metalness/roughness PBR in that period. <code>MeshStandardMaterial</code> implements the same model. The parameters you set in Three.js map directly to the PBR inputs in Unreal's Material Editor, Unity's Standard Shader, and Blender's Principled BSDF node.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/materials/MeshStandardMaterial" target="_blank" rel="noopener">MeshStandardMaterial – Three.js docs ↗</a>
+  <a class="pill" href="https://marmoset.co/posts/physically-based-rendering-and-you-can-too/" target="_blank" rel="noopener">PBR Theory – Marmoset ↗</a>
+  <a class="pill" href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#materials" target="_blank" rel="noopener">Khronos glTF PBR Spec ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>6. Lighting</h2>
+<p>Light is required for <code>MeshStandardMaterial</code>, <code>MeshLambertMaterial</code>, and <code>MeshPhongMaterial</code> to show any shading. Only <code>MeshBasicMaterial</code> ignores lights. Three.js supports several light types, each with a different physical model and performance cost.</p>
+
+<h3>Light types</h3>
+<table>
+<thead>
+<tr><th>Light</th><th>Model</th><th>Shadows</th><th>Parameters</th></tr>
+</thead>
+<tbody>
+<tr><td><code>AmbientLight</code></td><td>Uniform fill from all directions</td><td>No</td><td>color, intensity</td></tr>
+<tr><td><code>DirectionalLight</code></td><td>Parallel rays — like the sun</td><td>Yes</td><td>color, intensity, position (defines direction)</td></tr>
+<tr><td><code>PointLight</code></td><td>Radiates in all directions from a point</td><td>Yes (6 passes)</td><td>color, intensity, distance, decay</td></tr>
+<tr><td><code>SpotLight</code></td><td>Cone of light from a point toward a target</td><td>Yes</td><td>color, intensity, distance, angle, penumbra, decay</td></tr>
+<tr><td><code>HemisphereLight</code></td><td>Sky color from above, ground color below</td><td>No</td><td>skyColor, groundColor, intensity</td></tr>
+<tr><td><code>RectAreaLight</code></td><td>Rectangular area emitter — soft, realistic</td><td>No</td><td>color, intensity, width, height</td></tr>
+</tbody>
+</table>
+
+<h3>Light helpers</h3>
+<p>Lights are invisible objects. Helpers draw a visual representation of the light's position, direction, and frustum — essential for debugging:</p>
+<pre><code class="language-javascript">const sun = new THREE.DirectionalLight(0xfff5e0, 1.5);
+sun.position.set(5, 8, 3);
+scene.add(sun);
+
+// DirectionalLightHelper draws an arrow in the light's direction:
+const helper = new THREE.DirectionalLightHelper(sun, 1);
+scene.add(helper);
+
+// Update the helper when the light moves:
+helper.update();</code></pre>
+
+<h3>Physically correct light units</h3>
+<p>Since Three.js r155, the renderer uses physically correct light units by default (<code>renderer.useLegacyLights = false</code> is the new default). Point and Spot lights use <strong>candela</strong>; Directional lights use <strong>lux</strong>. If you are upgrading a scene from an older Three.js version and lights appear very bright or very dim, this is why. For this course, tune intensity values empirically — typical values are 0.5–2.0 for directional lights and 50–200 for point lights at close range.</p>
+
+<h3>Typical production lighting setup</h3>
+<pre><code class="language-javascript">// The standard outdoor scene setup:
+// HemisphereLight provides sky/ground ambient fill (no shadows, cheap).
+// DirectionalLight provides the sun (shadows, directional shading).
+const hemi = new THREE.HemisphereLight(0xb1e1ff, 0x5a3e2b, 0.6); // sky, ground, intensity
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.5);
+sun.position.set(5, 10, 5);
+scene.add(sun);</code></pre>
+
+<div class="info-box">
+  <p><strong>Common production setup:</strong> A <code>HemisphereLight</code> (sky/ground ambient) plus one <code>DirectionalLight</code> (sun) is the standard starting point for outdoor Three.js scenes. This is the setup used in Three.js Journey and most Three.js production work. For indoor scenes, substitute a low-intensity <code>AmbientLight</code> for the hemisphere, and one or two <code>PointLight</code>s for practical lamps.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/lights/DirectionalLight" target="_blank" rel="noopener">Lights overview – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/renderers/WebGLRenderer.useLegacyLights" target="_blank" rel="noopener">Physically correct lights ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Interactive Demo 3 — Material and Lighting Explorer</strong></p>
+  <p>Four spheres side by side, each with a different material (<code>MeshBasicMaterial</code>, <code>MeshLambertMaterial</code>, <code>MeshPhongMaterial</code>, <code>MeshStandardMaterial</code>). A live control panel lets you adjust ambient intensity, directional light intensity and color, and a point light that orbits the spheres. Wireframe and light helpers can be toggled.</p>
+  <p><em>What to look for:</em> Set ambient to zero and directional to zero — only <code>MeshBasicMaterial</code> stays visible. Orbit the point light to see how Lambert (no specular), Phong (white specular highlight), and Standard (PBR specular) respond differently. Use the metalness and roughness sliders on the Standard sphere.</p>
+  <a class="pill" href="02_ca_materials.html" target="_blank" rel="noopener">Open Demo 3 ↗</a>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>7. Cameras</h2>
+
+<h3>PerspectiveCamera</h3>
+<p>The standard camera for 3D scenes. It matches human vision — objects farther away appear smaller, parallel lines converge. Defined by four parameters:</p>
+<pre><code class="language-javascript">// PerspectiveCamera(fov, aspect, near, far)
+const camera = new THREE.PerspectiveCamera(
+  60,                                // fov — vertical field of view in degrees
+  window.innerWidth / window.innerHeight,  // aspect — must match renderer size
+  0.1,                               // near clip plane
+  1000                               // far clip plane
+);</code></pre>
+<ul>
+  <li><strong><code>fov</code></strong>: vertical field of view in degrees. Typical range: 45° (natural, telephoto) to 75° (wide, game-style). Higher FOV looks more dramatic; lower FOV looks more compressed.</li>
+  <li><strong><code>aspect</code></strong>: canvas width divided by height. Must be updated when the window resizes.</li>
+  <li><strong><code>near</code></strong>: the near clip plane. Geometry closer than this distance is not drawn. Keep it as large as possible — a very small near value (like 0.0001) degrades depth buffer precision and causes Z-fighting (flickering surfaces at similar depths).</li>
+  <li><strong><code>far</code></strong>: the far clip plane. Geometry beyond this distance is not drawn. Keep it as small as possible for the same depth precision reason.</li>
+</ul>
+<p>This is the same perspective projection matrix you built manually with <code>mat4.perspective</code> in Chapter 01. <code>camera.position</code> and <code>camera.lookAt()</code> produce the same view matrix you built with <code>mat4.lookAt</code>.</p>
+
+<h3>OrthographicCamera</h3>
+<p>An orthographic camera renders with no perspective distortion — objects appear the same size regardless of distance. Used for 2D UIs, technical/architectural views, and isometric game cameras:</p>
+<pre><code class="language-javascript">// OrthographicCamera(left, right, top, bottom, near, far)
+const aspect = window.innerWidth / window.innerHeight;
+const camera = new THREE.OrthographicCamera(
+  -aspect, aspect,  // left, right
+  1, -1,            // top, bottom
+  0.1, 100          // near, far
+);</code></pre>
+
+<h3>Resize handling</h3>
+<p>Whenever the window resizes you must update the camera and renderer together:</p>
+<pre><code class="language-javascript">window.addEventListener('resize', () => {
+  // Update renderer drawing buffer size:
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  // Update camera aspect ratio and recompute projection matrix:
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();  // required after any change to fov, aspect, near, far
+});</code></pre>
+
+<div class="info-box">
+  <p><strong>FOV and lens equivalence:</strong> A FOV of 50°–60° roughly matches a 50mm lens on a 35mm camera — the classic 'natural' look with minimal distortion. Wide FOV (90°+) gives peripheral vision and is common in first-person games. Narrow FOV (30°–40°) produces a telephoto, compressed-perspective look often used in cinematic shots. In Three.js, <code>fov</code> is the <em>vertical</em> field of view; horizontal FOV is derived automatically from the aspect ratio.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/cameras/PerspectiveCamera" target="_blank" rel="noopener">PerspectiveCamera – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/cameras/OrthographicCamera" target="_blank" rel="noopener">OrthographicCamera – Three.js docs ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>8. Controls</h2>
+<p><strong>OrbitControls</strong> is a Three.js addon that gives the user mouse and touch control over the camera: <strong>orbit</strong> (left-drag or one-finger), <strong>pan</strong> (right-drag or two-finger translate), and <strong>zoom</strong> (scroll wheel or pinch). It is not part of the Three.js core — it lives in the examples and is imported from <code>three/addons/</code>.</p>
+
+<h3>Basic setup</h3>
+<pre><code class="language-javascript">import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const controls = new OrbitControls(camera, renderer.domElement);
+
+// Damping: adds inertia so camera movement feels smooth.
+// When enabled, controls.update() must be called every frame.
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;   // lower = more inertia
+
+// The point the camera orbits around:
+controls.target.set(0, 0.5, 0); // orbit around a point slightly above the origin
+controls.update();               // apply target change immediately
+
+// Zoom limits:
+controls.minDistance = 1;
+controls.maxDistance = 50;
+
+// Elevation limits (prevent camera from going underground):
+controls.minPolarAngle = 0;             // 0 = directly above the target
+controls.maxPolarAngle = Math.PI / 2;   // PI/2 = horizon level
+
+// Auto-rotate when the user is not interacting:
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.0;  // rpm</code></pre>
+
+<h3>In the animation loop</h3>
+<pre><code class="language-javascript">renderer.setAnimationLoop(() => {
+  controls.update();  // must be called every frame when damping or autoRotate is on
+  renderer.render(scene, camera);
+});</code></pre>
+
+<h3>How OrbitControls works</h3>
+<p>OrbitControls listens to pointer events (<code>pointerdown</code>, <code>pointermove</code>, <code>pointerup</code>) on the renderer's canvas element. It converts the mouse delta into changes to <strong>spherical coordinates</strong> (azimuth angle, elevation angle, radius) around the <code>target</code> point, then converts those back to Cartesian coordinates and sets <code>camera.position</code>. This is exactly the orbit math from the camera demo in Chapter 01 — OrbitControls just wraps it in a reusable, production-hardened class.</p>
+<p>When you no longer need the controls (e.g. when destroying the renderer), call <code>controls.dispose()</code> to remove all event listeners.</p>
+
+<div class="info-box">
+  <p><strong>OrbitControls implements the Chapter 01 camera demo:</strong> The spherical coordinate orbit (azimuth, elevation, radius) from Seminar 01's <code>01_ca_camera.html</code> is exactly what OrbitControls does internally, with the addition of pan (truck + pedestal) and pinch zoom. Reading the <a href="https://github.com/mrdoob/three.js/blob/master/examples/jsm/controls/OrbitControls.js" target="_blank" rel="noopener">OrbitControls source</a> is an excellent exercise — it is well-commented and uses only the math you already know.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#examples/en/controls/OrbitControls" target="_blank" rel="noopener">OrbitControls – Three.js docs ↗</a>
+  <a class="pill" href="https://github.com/mrdoob/three.js/blob/master/examples/jsm/controls/OrbitControls.js" target="_blank" rel="noopener">OrbitControls source – GitHub ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>9. Shadows</h2>
+<p>Three.js renders shadows using a classic <strong>shadow map</strong> technique: the scene is first rendered from the light's point of view into a depth texture (the shadow map). During the main render, each fragment checks whether its position — when projected into the light's view — is behind the depth stored in the shadow map. If so, the fragment is in shadow.</p>
+
+<h3>Enabling shadows — five steps</h3>
+<pre><code class="language-javascript">// Step 1: Enable shadow rendering on the renderer.
+renderer.shadowMap.enabled = true;
+
+// Step 2: Choose the shadow map filter type.
+// PCFSoftShadowMap: soft edges via Percentage Closer Filtering — the standard choice.
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// Step 3: Enable shadow casting on the light.
+// Only DirectionalLight, SpotLight, and PointLight support shadows.
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+sun.castShadow = true;
+
+// Step 4: Set shadow map resolution (default: 512×512).
+// Higher = sharper shadows, more GPU memory.
+sun.shadow.mapSize.width  = 2048;
+sun.shadow.mapSize.height = 2048;
+
+// Step 5: Mark which meshes cast and receive shadows.
+cube.castShadow = true;       // this mesh casts a shadow onto other objects
+ground.receiveShadow = true;  // this mesh shows shadows from other objects
+// Note: objects can be both casters and receivers.</code></pre>
+
+<h3>The shadow camera</h3>
+<p>Every shadow-casting light has an internal camera (<code>light.shadow.camera</code>) that defines the frustum the shadow map covers. For a <code>DirectionalLight</code>, this is an <code>OrthographicCamera</code> — its <code>left</code>, <code>right</code>, <code>top</code>, and <code>bottom</code> extents must be sized to tightly enclose your scene. If the frustum is too small, shadows are clipped at the edges; if it is too large, the shadow map resolution is wasted over empty space.</p>
+<pre><code class="language-javascript">// Size the shadow camera frustum to fit a 10×10m scene:
+sun.shadow.camera.left   = -10;
+sun.shadow.camera.right  =  10;
+sun.shadow.camera.top    =  10;
+sun.shadow.camera.bottom = -10;
+sun.shadow.camera.near   = 0.5;
+sun.shadow.camera.far    = 50;
+
+// Visualize the shadow camera frustum for debugging:
+const shadowHelper = new THREE.CameraHelper(sun.shadow.camera);
+scene.add(shadowHelper);</code></pre>
+
+<h3>Shadow artifacts and fixes</h3>
+<table>
+<thead>
+<tr><th>Artifact</th><th>Cause</th><th>Fix</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Shadow acne</strong></td><td>A surface shadows itself due to floating-point precision in the shadow map lookup</td><td>Set a small negative <code>light.shadow.bias</code> (e.g. <code>-0.001</code>)</td></tr>
+<tr><td><strong>Peter panning</strong></td><td>Bias set too large — shadow detaches from the object casting it</td><td>Reduce <code>shadow.bias</code> until the gap disappears</td></tr>
+<tr><td><strong>Low-resolution blocky shadows</strong></td><td><code>mapSize</code> is too small, or the shadow camera frustum is too large</td><td>Increase <code>mapSize</code> to 2048; tighten the shadow camera frustum</td></tr>
+</tbody>
+</table>
+
+<h3>Shadow map types</h3>
+<table>
+<thead>
+<tr><th>Type</th><th>Quality</th><th>Cost</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BasicShadowMap</code></td><td>Hard edges</td><td>Lowest</td><td>Fastest, retro look</td></tr>
+<tr><td><code>PCFShadowMap</code></td><td>Soft edges (PCF)</td><td>Medium</td><td>Standard soft shadows</td></tr>
+<tr><td><code>PCFSoftShadowMap</code></td><td>Softer edges (better PCF kernel)</td><td>Medium–High</td><td><strong>Recommended default</strong></td></tr>
+<tr><td><code>VSMShadowMap</code></td><td>Very smooth, blurrable</td><td>High</td><td>Light bleeding on thin objects</td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+  <p><strong>Shadow maps are universal:</strong> This technique is used in Unity, Unreal Engine, Godot, and every major real-time renderer. The tradeoffs — resolution vs performance, shadow acne vs bias, cascade splits for large outdoor scenes — are identical across all engines. Mastering shadow maps in Three.js gives you the same mental model you will use in any engine.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/lights/shadows/LightShadow" target="_blank" rel="noopener">Shadow system – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/constants/Renderer" target="_blank" rel="noopener">Shadow map types ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Interactive Demo 4 — Shadows and Environment</strong></p>
+  <p>A scene with a capsule character on a ground plane, lit by a directional light (sun). Full PCFSoftShadowMap pipeline. Sliders to adjust sun elevation and azimuth, shadow map resolution, and shadow bias. The shadow camera frustum is visualized with a <code>CameraHelper</code>. An HDR environment map is applied for PBR reflections.</p>
+  <p><em>What to look for:</em> Set shadow bias to zero and watch shadow acne appear on the ground plane; increase it to fix it, then over-increase to see peter panning. Reduce mapSize to 128 to see blocky shadows; increase to 2048 for crisp ones. Toggle the shadow camera helper to see why clipping the frustum tightly matters.</p>
+  <a class="pill" href="02_ca_shadows.html" target="_blank" rel="noopener">Open Demo 4 ↗</a>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>10. The Animation System</h2>
+<p>Three.js has a complete, production-grade keyframe animation system. Its architecture is the same as what you built manually in Chapter 01 — keyframe arrays, interpolation, a time value that advances each frame — but wrapped in a reusable API that handles multiple properties, multiple clips, and blending between clips simultaneously.</p>
+
+<h3>The four core objects</h3>
+<p>Understanding the relationship between these four objects is the key to the animation system:</p>
+<table>
+<thead>
+<tr><th>Object</th><th>What it is</th><th>Analogy</th></tr>
+</thead>
+<tbody>
+<tr><td><code>KeyframeTrack</code></td><td>A single property animated over time — times array + values array + interpolation mode</td><td>One row in a spreadsheet — one column per keyframe</td></tr>
+<tr><td><code>AnimationClip</code></td><td>A named collection of tracks with a total duration</td><td>One "take" — e.g. "idle", "walk", "jump"</td></tr>
+<tr><td><code>AnimationMixer</code></td><td>The playback engine attached to a root object; advances internal time each frame</td><td>The playback head — moves through all active clips</td></tr>
+<tr><td><code>AnimationAction</code></td><td>Controls playback of one clip: play, pause, loop mode, time scale, blend weight</td><td>A track in a DAW — can be muted, soloed, faded</td></tr>
+</tbody>
+</table>
+
+<h3>KeyframeTrack subclasses</h3>
+<pre><code class="language-javascript">// VectorKeyframeTrack — for position and scale (Vector3 values):
+// Constructor: (propertyPath, times[], values[], interpolation)
+// propertyPath: '.position' animates object.position.x/y/z
+const posTrack = new THREE.VectorKeyframeTrack(
+  '.position',
+  [0,    1,    2,    3   ],  // times in seconds
+  [0,0,0, 2,0,0, 0,0,-2, 0,0,0],  // values: x,y,z at each time (flat array)
+  THREE.InterpolateLinear         // interpolation mode
+);
+
+// QuaternionKeyframeTrack — for rotation (Quaternion values, uses slerp):
+// ANIMATION CONCEPT: quaternion slerp produces constant angular speed.
+// Regular lerp on quaternions produces variable speed due to the unit sphere mapping.
+const rotTrack = new THREE.QuaternionKeyframeTrack(
+  '.quaternion',
+  [0,     2    ],
+  [0,0,0,1, 0,1,0,0]  // identity quaternion → 180° Y rotation (x,y,z,w)
+);
+
+// NumberKeyframeTrack — for a single numeric property:
+const scaleTrack = new THREE.VectorKeyframeTrack(
+  '.scale',
+  [0,   0.5,  1   ],
+  [1,1,1, 2,2,2, 1,1,1]  // pulse: grow and shrink
+);</code></pre>
+
+<h3>Interpolation modes</h3>
+<table>
+<thead>
+<tr><th>Mode</th><th>Behaviour</th><th>Use case</th></tr>
+</thead>
+<tbody>
+<tr><td><code>THREE.InterpolateLinear</code></td><td>Straight-line lerp between keyframes</td><td>Mechanical motion, simple loops</td></tr>
+<tr><td><code>THREE.InterpolateSmooth</code></td><td>CatmullRom spline — smooth, overshoots slightly</td><td>Organic character motion — the same curve type as Blender's Auto Bezier</td></tr>
+<tr><td><code>THREE.InterpolateDiscrete</code></td><td>Step / hold — jumps instantly at each keyframe</td><td>Frame-by-frame animation, visibility on/off</td></tr>
+</tbody>
+</table>
+
+<h3>Building and playing a clip</h3>
+<pre><code class="language-javascript">// Combine tracks into a named clip:
+const clip = new THREE.AnimationClip(
+  'bounce',        // name
+  3,               // duration in seconds (-1 = auto from tracks)
+  [posTrack, rotTrack, scaleTrack]
+);
+
+// Create a mixer attached to the object you want to animate:
+const mixer = new THREE.AnimationMixer(sphere);
+
+// Get an action for the clip:
+const action = mixer.clipAction(clip);
+
+// Configure playback:
+action.loop = THREE.LoopRepeat;   // LoopRepeat | LoopOnce | LoopPingPong
+action.timeScale = 1.0;          // 1 = normal, 2 = double speed, -1 = reverse
+
+// Start playback:
+action.play();</code></pre>
+
+<h3>Updating the mixer in the animation loop</h3>
+<pre><code class="language-javascript">const clock = new THREE.Clock();
+
+renderer.setAnimationLoop(() => {
+  // ANIMATION CONCEPT: mixer.update(delta) advances the mixer's internal time
+  // by delta seconds. The mixer then evaluates all active tracks at the new time
+  // and applies the interpolated values to the animated object.
+  // Passing delta (not absolute time) means pausing the mixer is trivial —
+  // just stop calling update(), or call it with 0.
+  const delta = clock.getDelta();
+  mixer.update(delta);
+
+  controls.update();
+  renderer.render(scene, camera);
+});</code></pre>
+
+<h3>Clip blending</h3>
+<p>Multiple <code>AnimationAction</code>s can play simultaneously on the same mixer. Each action has a <strong>weight</strong> (0 = silent, 1 = full influence). By animating the weights, you blend between clips — the core technique behind every character animation system:</p>
+<pre><code class="language-javascript">// Cross-fade from idle to walk over 0.5 seconds:
+idleAction.crossFadeTo(walkAction, 0.5, true);</code></pre>
+<p>This pattern — tracks → clips → mixer → weighted actions — is used in glTF 2.0 animations (Seminar 04), Unity's Animator Controller, and Unreal's Animation Blueprint. Learning it in Three.js is learning a transferable architectural pattern.</p>
+
+<div class="info-box">
+  <p><strong>The animation system is universal:</strong> Three.js <code>KeyframeTrack</code> is the same concept as the manual keyframe arrays in <code>01_ca_keyframes.html</code> — Three.js wraps the same lerp math into a reusable system. <code>QuaternionKeyframeTrack</code> uses <strong>slerp</strong> (spherical linear interpolation) instead of lerp for rotation — the quaternion equivalent of lerp, producing constant angular speed. <code>THREE.InterpolateSmooth</code> uses a CatmullRom spline — the same curve type as Blender's and Maya's graph editor "Auto" handles.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/animation/AnimationMixer" target="_blank" rel="noopener">AnimationMixer – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/animation/KeyframeTrack" target="_blank" rel="noopener">KeyframeTrack – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/animation/AnimationClip" target="_blank" rel="noopener">AnimationClip – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/animation/AnimationAction" target="_blank" rel="noopener">AnimationAction – Three.js docs ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Interactive Demo 5 — AnimationMixer and KeyframeTrack</strong></p>
+  <p>A sphere animated by three tracks created entirely in code: a <code>VectorKeyframeTrack</code> for position, a <code>QuaternionKeyframeTrack</code> for rotation, and a <code>VectorKeyframeTrack</code> for scale. Full playback controls: play, pause, stop, scrubber, time scale, loop mode, and interpolation mode (switch between Linear, Smooth/CatmullRom, and Discrete to see the difference live). A 2D canvas overlay shows the animated position.x curve with a moving playhead.</p>
+  <p><em>What to look for:</em> Switch interpolation mode and watch the curve shape change. Set time scale to −1 for reverse playback. Use the scrubber to manually set time — this is exactly what a DAW or NLE timeline scrubber does internally.</p>
+  <a class="pill" href="02_ca_animationmixer.html" target="_blank" rel="noopener">Open Demo 5 ↗</a>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>11. Textures and Environment Maps</h2>
+
+<h3>Loading textures</h3>
+<p>A texture in Three.js is a <code>Texture</code> object wrapping a GPU texture. The <code>TextureLoader</code> loads an image from a URL, uploads it to the GPU, and returns the texture:</p>
+<pre><code class="language-javascript">const loader = new THREE.TextureLoader();
+
+// Load a texture asynchronously. onLoad fires when the image is ready.
+const albedo = loader.load(
+  'https://example.com/textures/brick_albedo.jpg',
+  (texture) => { console.log('loaded'); },   // onLoad
+  undefined,                                  // onProgress
+  (err) => { console.error(err); }           // onError
+);
+
+// IMPORTANT: set colorSpace for color/albedo textures.
+// Normal, roughness, and metalness maps are NOT sRGB — don't set this for them.
+albedo.colorSpace = THREE.SRGBColorSpace;
+
+// Assign to material channel:
+const mat = new THREE.MeshStandardMaterial({
+  map:          albedo,     // albedo / base color
+  normalMap:    normalTex,  // surface detail normals (TBN space)
+  roughnessMap: roughTex,   // per-pixel roughness (R channel)
+  metalnessMap: metalTex,   // per-pixel metalness (R channel)
+  aoMap:        aoTex,      // ambient occlusion (R channel)
+});</code></pre>
+
+<h3>UV mapping</h3>
+<p>UV coordinates map a 2D texture to a 3D surface. Every vertex has a U (horizontal) and V (vertical) coordinate in 0–1 range. Three.js's built-in geometries all include UVs. For custom geometry you must add them manually as a <code>uv</code> attribute (<code>Float32Array</code>, 2 components per vertex).</p>
+<p>Texture tiling (repeating the texture across a large surface) is controlled by <code>texture.repeat</code> and <code>texture.wrapS</code>/<code>.wrapT</code>:</p>
+<pre><code class="language-javascript">albedo.wrapS = THREE.RepeatWrapping;   // repeat horizontally
+albedo.wrapT = THREE.RepeatWrapping;   // repeat vertically
+albedo.repeat.set(4, 4);              // tile 4 times in each direction</code></pre>
+
+<h3>Mipmaps</h3>
+<p>Three.js generates <strong>mipmaps</strong> automatically for power-of-two textures (<code>texture.generateMipmaps = true</code> by default). Mipmaps are pre-downscaled versions of the texture (half width, quarter size, etc.) stored alongside the full-resolution image. The GPU picks the mip level that best matches the on-screen texel density, which eliminates aliasing on distant surfaces and improves cache coherence — a measurable performance improvement on large scenes.</p>
+
+<h3>Environment maps for PBR</h3>
+<p>A <strong>scene environment map</strong> is the single biggest quality improvement for PBR materials. It is an HDR panorama of a real-world environment that acts as ambient light and reflection source. Setting <code>scene.environment</code> applies it to all <code>MeshStandardMaterial</code> objects in the scene:</p>
+<pre><code class="language-javascript">import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+const pmremGen = new THREE.PMREMGenerator(renderer);
+pmremGen.compileEquirectangularShader();
+
+// RGBELoader loads .hdr equirectangular panoramas:
+new RGBELoader().load('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_08_1k.hdr',
+  (hdr) => {
+    // PMREMGenerator pre-filters the HDR for PBR use — required for correct reflections:
+    const envMap = pmremGen.fromEquirectangular(hdr).texture;
+    scene.environment = envMap;     // all PBR materials use this for lighting and reflections
+    scene.background  = envMap;     // optional: use as the visible sky
+    hdr.dispose();
+    pmremGen.dispose();
+  }
+);</code></pre>
+
+<div class="info-box">
+  <p><strong>Environment maps are the biggest single upgrade:</strong> A well-chosen HDR environment makes <code>MeshStandardMaterial</code> look photorealistic with zero extra point or directional lights. Free, high-quality HDRIs are available at <a href="https://polyhaven.com/hdris" target="_blank" rel="noopener">Poly Haven</a> under a CC0 license — they can be loaded directly from their CDN in demos.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/loaders/TextureLoader" target="_blank" rel="noopener">TextureLoader – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#examples/en/loaders/RGBELoader" target="_blank" rel="noopener">RGBELoader – Three.js docs ↗</a>
+  <a class="pill" href="https://polyhaven.com/hdris" target="_blank" rel="noopener">Poly Haven HDRIs ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>12. Performance and Best Practices</h2>
+<p>Real-time animation must sustain 60 frames per second — a budget of <strong>16.6 ms per frame</strong>. Three.js gives you the tools to diagnose and fix performance problems, but the responsibility for efficient scene design is yours.</p>
+
+<h3>Draw calls</h3>
+<p>A <strong>draw call</strong> is a command from the CPU to the GPU to render a set of triangles. Each <code>Mesh.render()</code> produces one draw call. Draw calls are expensive not because of what they draw, but because of the overhead of the CPU–GPU communication per call. A scene with 1,000 draw calls of 10 triangles each is much slower than one draw call of 10,000 triangles.</p>
+<p>Monitor draw calls with <code>renderer.info</code>:</p>
+<pre><code class="language-javascript">// Print live stats (call inside the render loop):
+console.log(
+  `Draw calls: ${renderer.info.render.calls}  |  ` +
+  `Triangles:  ${renderer.info.render.triangles}  |  ` +
+  `Geometries: ${renderer.info.memory.geometries}  |  ` +
+  `Textures:   ${renderer.info.memory.textures}`
+);</code></pre>
+
+<h3>Instanced rendering</h3>
+<p><code>InstancedMesh</code> renders thousands of identical objects in a single draw call. Each instance has its own transform matrix (and optionally its own color), but they all share one geometry and one material:</p>
+<pre><code class="language-javascript">// InstancedMesh(geometry, material, count)
+// Renders 1000 boxes in ONE draw call:
+const count = 1000;
+const iMesh = new THREE.InstancedMesh(boxGeo, boxMat, count);
+scene.add(iMesh);
+
+const matrix = new THREE.Matrix4();
+for (let i = 0; i < count; i++) {
+  // Set each instance's world transform:
+  matrix.setPosition(
+    (Math.random() - 0.5) * 50,
+    Math.random() * 10,
+    (Math.random() - 0.5) * 50
+  );
+  iMesh.setMatrixAt(i, matrix);
+}
+iMesh.instanceMatrix.needsUpdate = true;  // upload to GPU</code></pre>
+
+<h3>Geometry and material reuse</h3>
+<p>Never create a new geometry or material inside the render loop. Create them once, reuse them across as many meshes as possible. One <code>BoxGeometry(1,1,1)</code> instance can be shared by a thousand meshes with no extra GPU memory.</p>
+
+<h3>Disposal</h3>
+<p>When you remove objects from the scene permanently, free the GPU resources they held. Forgetting to dispose is the most common cause of memory leaks in Three.js applications:</p>
+<pre><code class="language-javascript">// Remove and dispose a mesh:
+scene.remove(mesh);
+mesh.geometry.dispose();
+mesh.material.dispose();
+if (mesh.material.map) mesh.material.map.dispose();
+
+// Full renderer cleanup (when destroying the entire canvas):
+renderer.dispose();</code></pre>
+
+<h3>Shadow performance</h3>
+<p>Each shadow-casting light requires a full extra render pass of the scene into the shadow map. Two shadow-casting lights = three render passes total (two shadow passes + one main pass). Limit shadow-casting lights to the minimum needed — typically one directional (sun) is sufficient. For static geometry, consider baking shadows to textures instead.</p>
+
+<div class="info-box">
+  <p><strong><code>renderer.info</code> is your first diagnostic tool.</strong> Add a live stats line to every Three.js demo you build — displaying draw calls, triangle counts, and memory usage. A sudden spike in draw calls after adding an object tells you immediately that instancing or merging is needed. The Three.js team uses this internally, and so do professional studios.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/#api/en/objects/InstancedMesh" target="_blank" rel="noopener">InstancedMesh – Three.js docs ↗</a>
+  <a class="pill" href="https://threejs.org/docs/#api/en/renderers/WebGLRenderer" target="_blank" rel="noopener">renderer.info – Three.js docs ↗</a>
+  <a class="pill" href="https://discoverthreejs.com/tips-and-tricks/" target="_blank" rel="noopener">Discover Three.js – Performance tips ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>13. Demo Index</h2>
+<p>The five demos for this chapter are introduced inline after the sections they build on. Each is a standalone HTML file that imports Three.js from CDN via an import map — no build step, no local server required. Open the file in your browser and in your editor at the same time: the source code is commented step by step so you can read it like a tutorial.</p>
+<table>
+<thead>
+<tr><th>#</th><th>Demo</th><th>Animation concept demonstrated</th><th>Builds on</th><th>Link</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>First Three.js Scene</td>
+  <td>Renderer, scene graph, PBR material, delta-time rotation loop</td>
+  <td>Sections 2 – 6</td>
+  <td><a href="02_ca_scene.html" target="_blank" rel="noopener">Open ↗</a></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Scene Graph Explorer</td>
+  <td>Parent–child transforms, world vs local position, pivot-based orbit</td>
+  <td>Section 3</td>
+  <td><a href="02_ca_scenegraph.html" target="_blank" rel="noopener">Open ↗</a></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Material and Lighting Explorer</td>
+  <td>Material stack comparison, PBR vs Phong vs Lambert, light types</td>
+  <td>Sections 5 – 6</td>
+  <td><a href="02_ca_materials.html" target="_blank" rel="noopener">Open ↗</a></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Shadows and Environment</td>
+  <td>Shadow maps, PCF filtering, bias, HDR environment map</td>
+  <td>Section 9</td>
+  <td><a href="02_ca_shadows.html" target="_blank" rel="noopener">Open ↗</a></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>AnimationMixer and KeyframeTrack</td>
+  <td>KeyframeTrack, AnimationClip, AnimationMixer, clip scrubbing and blending</td>
+  <td>Section 10</td>
+  <td><a href="02_ca_animationmixer.html" target="_blank" rel="noopener">Open ↗</a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Requirements:</strong> A current browser with WebGL 2 support — Chrome, Edge, Firefox, or Safari. Each demo shows a clear error message if WebGL 2 is unavailable. All demos work offline once cached; the only network dependency is the Three.js CDN on first load.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>14. Further Resources</h2>
+<p>This chapter covered the Three.js fundamentals you need to build interactive 3D animation applications. The resources below are the best next steps.</p>
+<table>
+<thead>
+<tr><th>Resource</th><th>What it covers</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Three.js official documentation</strong></td><td>Complete API reference. Best read alongside the examples — open an example, read the source, then look up each class in the docs.</td></tr>
+<tr><td><strong>Three.js Journey (Bruno Simon)</strong></td><td>The most comprehensive Three.js course available. Covers everything in this chapter and beyond: post-processing, shaders, R3F, Blender to Three.js pipeline.</td></tr>
+<tr><td><strong>Discover Three.js</strong></td><td>A free open-source book covering Three.js in depth, with a strong focus on code quality and best practices.</td></tr>
+<tr><td><strong>Khronos glTF spec</strong></td><td>The glTF format is the standard way to load 3D assets into Three.js — understanding its structure is invaluable before Seminar 04.</td></tr>
+<tr><td><strong>Three.js examples (threejs.org/examples)</strong></td><td>Over 300 official examples covering every feature of the library. Source code is always one click away.</td></tr>
+<tr><td><strong>Poly Haven</strong></td><td>Free CC0 HDRIs, textures, and 3D assets. Essential for making PBR scenes look good quickly.</td></tr>
+</tbody>
+</table>
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://threejs.org/docs/" target="_blank" rel="noopener">Three.js Docs ↗</a>
+  <a class="pill" href="https://threejs-journey.com/" target="_blank" rel="noopener">Three.js Journey ↗</a>
+  <a class="pill" href="https://discoverthreejs.com/" target="_blank" rel="noopener">Discover Three.js ↗</a>
+  <a class="pill" href="https://threejs.org/examples/" target="_blank" rel="noopener">Three.js Examples ↗</a>
+  <a class="pill" href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html" target="_blank" rel="noopener">Khronos glTF Spec ↗</a>
+  <a class="pill" href="https://polyhaven.com/" target="_blank" rel="noopener">Poly Haven ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-footer-cell">
+  <p><b>Computeranimation</b> &middot; Chapter 02: Three.js<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>Notebook created by <b>Renato Fera P.</b> &middot;
+  <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a></p>
+</div>
+
+</div>
+</main>
+
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 02: Three.js &middot; Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Page maintained by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+</body>
+</html>
