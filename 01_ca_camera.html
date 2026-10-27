@@ -107,8 +107,34 @@
       background: var(--canvas-bg);
       margin-top: 20px;
       touch-action: none;
+      /* Show a grab cursor so the user knows the canvas is draggable. */
+      cursor: grab;
+    }
+    canvas.gl-canvas:active {
+      /* While dragging, switch to the "grabbing" cursor for feedback. */
+      cursor: grabbing;
     }
     .canvas-wrap { margin-bottom: 16px; }
+
+    /* Small overlay hint shown on the canvas before the first drag */
+    .drag-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      font-size: 0.78rem;
+      padding: 5px 12px;
+      border-radius: 20px;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.6s;
+      white-space: nowrap;
+    }
+    .drag-hint.hidden { opacity: 0; }
+    /* The canvas-wrap must be position:relative for the hint overlay to work */
+    .canvas-wrap { position: relative; }
 
     .stats {
       font-family: "SFMono-Regular", Consolas, monospace;
@@ -227,6 +253,10 @@
         role="img"
         aria-label="A 3D scene with a cube and sphere, viewed through an animated camera.">
       </canvas>
+      <!-- Hint overlay: fades out after the first drag so it does not clutter the view -->
+      <div class="drag-hint" id="dragHint">
+        🖱 drag to orbit · scroll to zoom · drag in dolly/lookAt to scrub
+      </div>
     </div>
 
     <!-- Controls shared by all modes -->
@@ -324,10 +354,13 @@
     The script follows the same nine-step structure as Demos 1 and 2. <strong>Steps 1–5</strong> are WebGL setup and geometry. The camera animation concepts are in <strong>Steps 6–8</strong>.
   </p>
   <p>
-    <strong>Step 6</strong> defines the three camera modes as pure data: spherical-coordinate parameters for orbit, two endpoint vectors for dolly, and two camera definitions (eye + target) for look-at lerp. <strong>Step 7</strong> wires the UI. <strong>Step 8</strong> computes the current <code>eye</code> and <code>target</code> each frame for the active mode, then calls <code>mat4.lookAt</code> exactly once to produce the view matrix.
+    <strong>Step 6</strong> defines the three camera modes as pure data: spherical-coordinate parameters for orbit, two endpoint vectors for dolly, and two camera definitions (eye + target) for look-at lerp. <strong>Step 7</strong> wires the UI sliders. <strong>Step 7b</strong> wires canvas drag, touch and scroll events. <strong>Step 8</strong> computes the current <code>eye</code> and <code>target</code> each frame for the active mode, then calls <code>mat4.lookAt</code> exactly once to produce the view matrix.
   </p>
   <p>
     All three modes converge on the same two values — <code>eye</code> and <code>target</code> — and use the same <code>mat4.lookAt</code> call. This is the key insight: <strong>any camera move is just a path through (eye, target) space</strong>.
+  </p>
+  <p>
+    <strong>Canvas interaction (Step 7b):</strong> Dragging on the canvas writes to the same state variables the sliders already control — the canvas never owns state. Drag events push new values through the slider elements using a synthetic <code>input</code> event, so the slider badges always stay in sync. In <strong>orbit mode</strong>, horizontal drag changes azimuth and vertical drag changes elevation; scroll changes radius. In <strong>dolly</strong> and <strong>lookAtLerp</strong> modes, horizontal drag scrubs the animation parameter <code>t</code> forward and backward.
   </p>
 
   <div class="info-box">
@@ -424,6 +457,9 @@ const ui = {
   cutBtn:           document.getElementById('cutBtn'),
   blendBtn:         document.getElementById('blendBtn'),
   blendProgress:    document.getElementById('blendProgress'),
+
+  // drag hint overlay
+  dragHint:         document.getElementById('dragHint'),
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -1035,6 +1071,218 @@ ui.blendBtn.addEventListener('click', () => {
   lerp2.blending  = true;
   lerp2.blendDir  = lerp2.t < 0.5 ? 1 : -1; // decide which direction to blend
 });
+
+// ══════════════════════════════════════════════════════════════
+// STEP 7b — Canvas mouse / touch / scroll interaction
+//
+// ANIMATION CONCEPT: direct canvas interaction mirrors exactly what professional
+// 3D tools do — you manipulate camera parameters (azimuth, elevation, radius, t)
+// by dragging on the viewport, and the sliders reflect the live values.
+// The key design rule is: the canvas never owns the state. It only reads the
+// current mode and writes to the same state variables the sliders already write to.
+// The sliders then stay in sync automatically because the render loop updates them
+// from state every frame (or the drag handler updates them explicitly below).
+// This "single source of truth" approach avoids bugs where the slider and the
+// viewport disagree.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Hides the drag-hint overlay after the first successful drag.
+ * We do this once and never show it again.
+ */
+function hideDragHint() {
+  ui.dragHint.classList.add('hidden');
+}
+
+// ── Pointer state for drag tracking ──────────────────────────
+// We track whether a drag is in progress and where it started,
+// so we can compute the delta on each move event.
+const drag = {
+  active:  false,   // is a drag currently in progress?
+  startX:  0,       // pointer X at drag start (client pixels)
+  startY:  0,       // pointer Y at drag start (client pixels)
+  lastX:   0,       // pointer X from the previous move event
+  lastY:   0,       // pointer Y from the previous move event
+};
+
+// ── Sensitivity constants ─────────────────────────────────────
+// These control how many degrees / t-units change per pixel dragged.
+// They are tuned so a full-width drag feels natural but not too fast.
+//
+// TUTORIAL NOTE: try changing these values to see how they affect the feel:
+//   - higher ORBIT_AZ_SENSITIVITY → faster horizontal rotation
+//   - higher ORBIT_EL_SENSITIVITY → faster vertical tilt
+//   - SCRUB_SENSITIVITY → how fast the dolly / lookAt scrubber moves
+const ORBIT_AZ_SENSITIVITY = 0.35;   // degrees per pixel (horizontal drag)
+const ORBIT_EL_SENSITIVITY = 0.25;   // degrees per pixel (vertical drag)
+const SCRUB_SENSITIVITY    = 0.004;  // t per pixel (dolly and lookAt scrub)
+const SCROLL_ZOOM_SPEED    = 0.15;   // radius units per scroll step
+
+// ── Helper: set a range slider value and fire its 'input' event ─
+// Firing the synthetic 'input' event means we do NOT have to duplicate the
+// slider logic here — the existing event handlers in Step 7 take care of
+// updating the state variables and value badges.
+//
+// TUTORIAL NOTE: this is the key to keeping sliders and canvas in sync.
+// Instead of setting orbit.azimuthDeg directly from the drag handler, we
+// push the new value into the slider element and dispatch its 'input' event.
+// The slider's own handler then updates both the state and the badge label.
+function setSlider(el, value) {
+  el.value = value;
+  el.dispatchEvent(new Event('input'));
+}
+
+// ── Clamp helper ──────────────────────────────────────────────
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+// ── Drag start ────────────────────────────────────────────────
+// Called for both mouse (mousedown) and touch (touchstart).
+// We record the starting position and mark the drag as active.
+function onDragStart(clientX, clientY) {
+  drag.active = true;
+  drag.startX = clientX;
+  drag.startY = clientY;
+  drag.lastX  = clientX;
+  drag.lastY  = clientY;
+
+  // In orbit mode: turning off auto-rotate lets the user take manual control.
+  // Without this, the auto-rotation would fight the drag.
+  if (cameraMode === 'orbit' && orbit.autoRotate) {
+    orbit.autoRotate       = false;
+    ui.autoRotate.checked  = false;
+  }
+}
+
+// ── Drag move ─────────────────────────────────────────────────
+// Called on every pointer move while dragging.
+// We compute the delta from the previous position (not from the start),
+// so the motion feels continuous even at slider boundaries.
+function onDragMove(clientX, clientY) {
+  if (!drag.active) return;
+
+  const dx = clientX - drag.lastX;   // pixels moved horizontally this frame
+  const dy = clientY - drag.lastY;   // pixels moved vertically this frame
+  drag.lastX = clientX;
+  drag.lastY = clientY;
+
+  if (cameraMode === 'orbit') {
+    // ANIMATION CONCEPT (orbit):
+    // Horizontal drag → azimuth (rotation around the Y axis).
+    //   Moving right increases azimuth, spinning the camera counter-clockwise
+    //   around the scene — exactly what rotating a globe does.
+    // Vertical drag → elevation (angle above the XZ plane).
+    //   Moving up increases elevation, tilting the camera above the scene.
+    //   We clamp elevation to the slider's min/max to avoid flipping upside-down.
+
+    const newAz = (orbit.azimuthDeg + dx * ORBIT_AZ_SENSITIVITY + 360) % 360;
+    const newEl = clamp(
+      orbit.elevationDeg - dy * ORBIT_EL_SENSITIVITY,
+      Number(ui.elevation.min),
+      Number(ui.elevation.max)
+    );
+
+    // Push values through the sliders so badges and state all update together.
+    setSlider(ui.azimuth,   newAz.toFixed(1));
+    setSlider(ui.elevation, newEl.toFixed(1));
+
+  } else if (cameraMode === 'dolly') {
+    // ANIMATION CONCEPT (dolly):
+    // Horizontal drag → scrubs the dolly animation forward/backward.
+    // Right = forward along the path (t increases), left = backward (t decreases).
+    // The easing is already applied inside the render loop, so the drag
+    // naturally follows whatever easing curve is selected.
+    const newT = clamp(dolly.t + dx * SCRUB_SENSITIVITY, 0, 1);
+    dolly.playing = false;
+    ui.dollyPlayBtn.textContent = 'Play';
+    setSlider(ui.scrubber, newT.toFixed(3));
+
+  } else {
+    // ANIMATION CONCEPT (lookAtLerp):
+    // Horizontal drag → scrubs the blend parameter t.
+    // Right = blend towards Camera B, left = blend towards Camera A.
+    // This is the same as clicking Blend but with direct manual control —
+    // you can pause the blend mid-way and hold any in-between position.
+    lerp2.blending = false; // cancel any running auto-blend while dragging
+    lerp2.t = clamp(lerp2.t + dx * SCRUB_SENSITIVITY, 0, 1);
+    ui.blendProgress.textContent = `t = ${lerp2.t.toFixed(2)}`;
+  }
+
+  hideDragHint();
+}
+
+// ── Drag end ──────────────────────────────────────────────────
+function onDragEnd() {
+  drag.active = false;
+}
+
+// ── Mouse events ──────────────────────────────────────────────
+// We listen on the canvas for mousedown (start), and on the window for
+// mousemove and mouseup — this way the drag continues even if the pointer
+// moves outside the canvas (common when dragging quickly).
+ui.canvas.addEventListener('mousedown', (e) => {
+  // Only respond to the primary (left) mouse button.
+  if (e.button !== 0) return;
+  onDragStart(e.clientX, e.clientY);
+});
+
+window.addEventListener('mousemove', (e) => {
+  onDragMove(e.clientX, e.clientY);
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
+  onDragEnd();
+});
+
+// ── Touch events ──────────────────────────────────────────────
+// Touch events use a "touches" list. We only handle single-finger touches here
+// (changedTouches[0]) to keep the logic simple and avoid conflicts with
+// two-finger pinch-zoom gestures on mobile.
+//
+// TUTORIAL NOTE: the canvas has touch-action: none in CSS, which prevents
+// the browser's default touch behaviour (scrolling) on the canvas element.
+// Without that CSS rule, the browser would swallow touch events for scrolling
+// and onDragMove would never be called.
+ui.canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault(); // prevent scroll / zoom
+  const t = e.changedTouches[0];
+  onDragStart(t.clientX, t.clientY);
+}, { passive: false });
+
+ui.canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  onDragMove(t.clientX, t.clientY);
+}, { passive: false });
+
+ui.canvas.addEventListener('touchend', (e) => {
+  onDragEnd();
+});
+
+// ── Scroll wheel (zoom) ───────────────────────────────────────
+// Scroll only affects radius in orbit mode — it's not meaningful for
+// dolly or lookAtLerp where the path is already defined.
+//
+// ANIMATION CONCEPT: changing the radius in orbit mode is called "dolly" in
+// film terminology (physically moving the camera closer or further).
+// When the FOV stays constant and only the distance changes, the perspective
+// distortion changes — unlike a zoom (which changes FOV and keeps distance).
+ui.canvas.addEventListener('wheel', (e) => {
+  e.preventDefault(); // prevent page scroll while cursor is over canvas
+
+  if (cameraMode !== 'orbit') return;
+
+  // deltaY is positive when scrolling down (zoom out = increase radius).
+  // We use Math.sign to get a consistent step regardless of scroll speed.
+  const delta   = Math.sign(e.deltaY) * SCROLL_ZOOM_SPEED;
+  const newR    = clamp(
+    orbit.radius + delta,
+    Number(ui.radius.min),
+    Number(ui.radius.max)
+  );
+  setSlider(ui.radius, newR.toFixed(1));
+  hideDragHint();
+}, { passive: false });
 
 // ══════════════════════════════════════════════════════════════
 // STEP 8 — Render + animation update function
