@@ -1,47 +1,36 @@
-"""03_ca_opengl_widget.py — QOpenGLWidget with Modern OpenGL 3.3.
-
-A QMainWindow containing a QOpenGLWidget that renders a rotating coloured cube
-using the modern OpenGL 3.3 core profile pipeline: VAO, VBO, EBO, GLSL vertex
-and fragment shaders, and a full MVP matrix pipeline computed with NumPy.
-
-Every OpenGL call is annotated with its WebGL 2 equivalent from seminar 01,
-making this demo the bridge between browser-based and desktop 3D rendering.
-
-How to run
-----------
-    uv sync                                  # first time only
-    uv run python 03_ca_opengl_widget.py
-
-Ubuntu system dependencies (once):
-    sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
-
-    libgl1          — Mesa OpenGL implementation (required by PyOpenGL)
-    libegl1         — EGL interface (required by PySide6's Qt platform plugin)
-    libxcb-cursor0  — XCB cursor library (required by Qt's xcb plugin on Ubuntu 22.04+)
-    libxcb-xinerama0— multi-monitor support for Qt
-
-Windows: no extra steps needed — PySide6 bundles everything.
-
-Connections to other seminars
-------------------------------
-- The VAO/VBO/EBO pipeline, vertex attributes, and GLSL shaders are
-  identical in concept to the WebGL 2 setup in seminar 01.  Every call
-  here has a one-to-one WebGL mapping, documented inline.
-- The MVP matrix pipeline (model × view × projection) is the same math
-  explored in seminar 01's camera demo and used by Three.js internally in
-  seminar 02.  Here we build it by hand with NumPy so the math is visible.
-- The QTimer → update() → paintGL() render loop is the desktop equivalent
-  of requestAnimationFrame (seminar 01) and setAnimationLoop (seminar 02).
-- The TimelineWidget from demo 2 uses the same QTimer-drives-update pattern.
-  In demo 5 (03_ca_animation_tool.py) this OpenGL viewport is combined with
-  that timeline and the curve editor from demo 3 into a complete tool.
-"""
+# =============================================================================
+# 03_ca_opengl_widget.py — QOpenGLWidget with Modern OpenGL 3.3
+# =============================================================================
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# -----------------------------------------------------------------------------
+# Description:
+#   A QMainWindow containing a QOpenGLWidget that renders a rotating coloured
+#   cube using the modern OpenGL 3.3 core profile pipeline: VAO, VBO, EBO,
+#   GLSL vertex and fragment shaders, and a full MVP matrix pipeline computed
+#   with NumPy.
+#
+#   Every OpenGL call is annotated with its WebGL 2 equivalent from seminar 01,
+#   making this demo the bridge between browser-based and desktop 3D rendering.
+#
+# How to run:
+#   uv sync                            # first time only
+#   uv run python 03_ca_opengl_widget.py
+#
+# Ubuntu system dependencies (once):
+#   sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
+#
+# Windows: no extra steps needed — PySide6 bundles everything.
+# =============================================================================
 
 from __future__ import annotations
 
 import ctypes
 import sys
 import math
+from pathlib import Path
 
 import numpy as np
 from OpenGL import GL
@@ -50,6 +39,7 @@ from PySide6.QtCore import Qt, QElapsedTimer, QTimer
 from PySide6.QtGui import (
     QColor,
     QKeySequence,
+    QPixmap,
     QShortcut,
     QSurfaceFormat,
 )
@@ -65,8 +55,8 @@ from PySide6.QtWidgets import (
     QSlider,
     QVBoxLayout,
     QWidget,
-    QOpenGLWidget,
 )
+from PySide6.QtOpenGLWidgets import QOpenGLWidget  # fix: moved module in PySide6 6.x
 
 # ── STEP 1: QSurfaceFormat — MUST be called before QApplication ───────────────
 #
@@ -128,6 +118,9 @@ DEFAULT_SPEED_X: int = 20            # slider default: degrees/second on X axis
 DEFAULT_SPEED_Y: int = 45            # slider default: degrees/second on Y axis
 DEFAULT_SPEED_Z: int = 0             # slider default: degrees/second on Z axis
 MAX_SPEED: int = 180                 # slider maximum: degrees/second
+
+# AMS logo path — one level up from the script's directory (repo root)
+LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 
 
 # ── STEP 2: GLSL shader source strings ────────────────────────────────────────
@@ -789,6 +782,30 @@ class ControlPanel(QWidget):
             "QCheckBox::indicator:checked { background: #4f9cf9; }"
         )
 
+        # ── AMS logo ───────────────────────────────────────────────────────────
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if LOGO_PATH.exists():
+            pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
+                CONTROL_PANEL_WIDTH - 24,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("AMS Group – TU Ilmenau")
+            logo_label.setStyleSheet("color: #4f9cf9; font-size: 10px;")
+        layout.addWidget(logo_label)
+
+        layout.addSpacing(4)
+
+        # ── Author credit ──────────────────────────────────────────────────────
+        author_label = QLabel("Renato Fera P.")
+        author_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_label.setStyleSheet("color: #5a6175; font-size: 10px; letter-spacing: 0.5px;")
+        layout.addWidget(author_label)
+
+        layout.addSpacing(12)
+
         # ── Section: Rotation speed ────────────────────────────────────────────
         layout.addWidget(self._section_label("Rotation Speed"))
 
@@ -1035,3 +1052,11 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# =============================================================================
+# End of 03_ca_opengl_widget.py
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# =============================================================================
