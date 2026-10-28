@@ -1,3 +1,12 @@
+# =============================================================================
+# 03_ca_timeline.py — Animation Timeline Widget
+# =============================================================================
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# -----------------------------------------------------------------------------
+# Description:
 """03_ca_timeline.py — Animation Timeline Widget.
 
 A reusable animation timeline component built with PySide6.
@@ -29,14 +38,16 @@ Connections to other seminars
 - Signal(int) makes TimelineWidget reusable: it is the observer pattern
   that connects animation controls to viewports in Maya and Houdini.
 """
+# =============================================================================
 
 from __future__ import annotations
 
 import sys
 import math
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QElapsedTimer, Signal
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont
+from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -76,6 +87,9 @@ PLAYHEAD_WIDTH: int = 2
 # Layout
 LAYOUT_MARGIN: int = 16
 LAYOUT_SPACING: int = 10
+
+# AMS logo path — one level up from the script's directory (repo root)
+LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 
 
 # ── STEP 2: Animation state dataclass ─────────────────────────────────────────
@@ -288,6 +302,31 @@ class TimelineWidget(QWidget):
         layout.setSpacing(LAYOUT_SPACING)
 
         self.setStyleSheet(f"background: {TIMELINE_BG_COLOR};")
+
+        # ── Logo and author credit ─────────────────────────────────────────────
+        #
+        # Mirrors the header used in every other Seminar 03 demo.
+        # The logo is loaded from the repo root; a text fallback is shown when
+        # the image file is not present (e.g. on a fresh clone without assets).
+
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if LOGO_PATH.exists():
+            pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
+                80,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("AMS Group – TU Ilmenau")
+            logo_label.setStyleSheet("color: #4f9cf9; font-size: 10px;")
+
+        author_label = QLabel("Renato Fera P.")
+        author_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_label.setStyleSheet("color: #5a6175; font-size: 10px; letter-spacing: 0.5px;")
+
+        layout.addWidget(logo_label)
+        layout.addWidget(author_label)
 
         # ── Scrubber row ──────────────────────────────────────────────────────
         self._scrubber = QSlider(Qt.Orientation.Horizontal)
@@ -542,3 +581,11 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# =============================================================================
+# End of 03_ca_timeline.py
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# =============================================================================

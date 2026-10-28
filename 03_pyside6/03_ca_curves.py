@@ -1,39 +1,36 @@
-"""03_ca_curves.py — Curve Editor with QPainter.
-
-A live animation curve editor built entirely with QPainter and NumPy.
-Three interpolation modes are selectable via a QComboBox:
-  - Linear
-  - Ease In-Out (cosine)
-  - Cubic Bézier (draggable handles)
-
-In Bézier mode the two control points P1 and P2 are draggable directly
-on the canvas.  A QTimer animates a moving dot along the curve and drives
-a second preview panel showing a ball moving left-to-right with the
-selected easing applied.
-
-How to run
-----------
-    uv sync                                  # first time only
-    uv run python 03_ca_curves.py
-
-Ubuntu system dependencies (once):
-    sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
-
-Connections to other seminars
-------------------------------
-- The cubic Bézier implementation here is the exact algorithm behind
-  CSS cubic-bezier() from seminar 01 and Three.js InterpolateSmooth
-  from seminar 02.  The math is identical across all platforms.
-- QPainter's cubicTo() is the same operation as ctx.bezierCurveTo()
-  in the HTML Canvas 2D API used in seminar 01's easing display.
-- The easing functions are pure NumPy — the same functions could drive
-  a Three.js animation or a PySide6 OpenGL viewport without changes.
-"""
+# =============================================================================
+# 03_ca_curves.py — Curve Editor with QPainter
+# =============================================================================
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# -----------------------------------------------------------------------------
+# Description:
+#   A live animation curve editor built entirely with QPainter and NumPy.
+#   Three interpolation modes are selectable via a QComboBox:
+#     - Linear
+#     - Ease In-Out (cosine)
+#     - Cubic Bézier (draggable handles)
+#
+#   In Bézier mode the two control points P1 and P2 are draggable directly
+#   on the canvas. A QTimer animates a moving dot along the curve and drives
+#   a second preview panel showing a ball moving left-to-right with the
+#   selected easing applied.
+#
+# How to run:
+#   uv sync                            # first time only
+#   uv run python 03_ca_curves.py
+#
+# Ubuntu system dependencies (once):
+#   sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
+# =============================================================================
 
 from __future__ import annotations
 
 import sys
 import math
+from pathlib import Path
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, QPoint, Signal
@@ -45,6 +42,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QCursor,
+    QPixmap,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -101,6 +99,9 @@ MODE_EASE_INOUT: int = 1
 MODE_BEZIER: int = 2
 MODE_NAMES: list[str] = ["Linear", "Ease In-Out (cosine)", "Cubic Bézier"]
 
+# AMS logo path — one level up from the script's directory (repo root)
+LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
+
 
 # ── STEP 1: Easing functions (pure NumPy) ─────────────────────────────────────
 
@@ -140,13 +141,6 @@ def ease_in_out_cosine(t: np.ndarray) -> np.ndarray:
 
 def bezier_x(u: np.ndarray, p1x: float, p2x: float) -> np.ndarray:
     """Evaluate the X component of a CSS-style cubic Bézier at parameter u.
-
-    The curve goes from (0,0) to (1,1) with two interior control points
-    at (p1x, p1y) and (p2x, p2y).  This function evaluates only the X
-    component (used for the binary search inversion).
-
-    The Bernstein form with P0=(0,0), P1=(p1x,_), P2=(p2x,_), P3=(1,1):
-        X(u) = 3·(1-u)²·u·p1x + 3·(1-u)·u²·p2x + u³
 
     Args:
         u: Parameter values in [0, 1].
@@ -204,16 +198,13 @@ def ease_cubic_bezier(
     Returns:
         Eased Y values in [0, 1] corresponding to each input t.
     """
-    # Binary search: find u such that bezier_x(u, p1x, p2x) ≈ t.
     lo = np.zeros_like(t)
     hi = np.ones_like(t)
 
     for _ in range(iterations):
         mid = (lo + hi) / 2.0
         x_mid = bezier_x(mid, p1x, p2x)
-        # Where bezier_x(mid) < t, the true u is to the right → raise lo.
         lo = np.where(x_mid < t, mid, lo)
-        # Where bezier_x(mid) >= t, the true u is to the left → lower hi.
         hi = np.where(x_mid >= t, mid, hi)
 
     u = (lo + hi) / 2.0
@@ -243,17 +234,10 @@ class CurveCanvas(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setCursor(QCursor(Qt.CursorShape.CrossCursor))
 
-        # Current interpolation mode
         self._mode: int = MODE_BEZIER
-
-        # Bézier control points in normalised [0,1]×[0,1] space
         self._p1x, self._p1y = DEFAULT_P1
         self._p2x, self._p2y = DEFAULT_P2
-
-        # Animated playhead position t ∈ [0, 1]
         self._t: float = 0.0
-
-        # Drag state
         self._dragging: int | None = None   # 1 = dragging P1, 2 = dragging P2
 
     # ── Public interface ───────────────────────────────────────────────────────
@@ -298,10 +282,6 @@ class CurveCanvas(QWidget):
     def _to_canvas(self, nx: float, ny: float) -> tuple[int, int]:
         """Convert normalised [0,1]×[0,1] coordinates to canvas pixels.
 
-        The graph occupies a padded inner region of the widget.
-        X axis: left (t=0) → right (t=1).
-        Y axis: bottom (value=0) → top (value=1).  Qt's Y is inverted.
-
         Args:
             nx: Normalised X (time) in [0, 1].
             ny: Normalised Y (value) in [0, 1].
@@ -312,7 +292,7 @@ class CurveCanvas(QWidget):
         pad = 32
         w, h = self.width() - pad * 2, self.height() - pad * 2
         px = int(pad + nx * w)
-        py = int(pad + (1.0 - ny) * h)   # flip Y: value=1 is at the top
+        py = int(pad + (1.0 - ny) * h)
         return px, py
 
     def _from_canvas(self, px: int, py: int) -> tuple[float, float]:
@@ -361,13 +341,7 @@ class CurveCanvas(QWidget):
     # ── Mouse interaction ──────────────────────────────────────────────────────
 
     def mousePressEvent(self, event) -> None:  # noqa: ANN001
-        """Start dragging a handle if the click lands on one.
-
-        QT CONCEPT — drag interaction requires three events:
-        mousePressEvent (start), mouseMoveEvent (update),
-        mouseReleaseEvent (end).  This is the Qt equivalent of
-        mousedown / mousemove / mouseup in the browser.
-        """
+        """Start dragging a handle if the click lands on one."""
         if self._mode != MODE_BEZIER:
             return
         self._dragging = self._hit_handle(event.pos())
@@ -375,7 +349,6 @@ class CurveCanvas(QWidget):
     def mouseMoveEvent(self, event) -> None:  # noqa: ANN001
         """Update the dragged handle position and emit easing_changed."""
         if self._dragging is None or self._mode != MODE_BEZIER:
-            # Update cursor to indicate draggable handles
             if self._hit_handle(event.pos()):
                 self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
             else:
@@ -408,32 +381,31 @@ class CurveCanvas(QWidget):
         w, h = self.width(), self.height()
         pad = 32
 
-        # ── Background ────────────────────────────────────────────────────────
+        # Background
         painter.fillRect(0, 0, w, h, QColor(CANVAS_BG))
 
-        # ── Grid ──────────────────────────────────────────────────────────────
+        # Grid
         grid_pen = QPen(QColor(GRID_COLOR), 1)
         painter.setPen(grid_pen)
         for i in range(1, 4):
             frac = i / 4.0
             gx1, gy1 = self._to_canvas(frac, 0.0)
             gx2, gy2 = self._to_canvas(frac, 1.0)
-            painter.drawLine(gx1, gy1, gx2, gy2)   # vertical grid
+            painter.drawLine(gx1, gy1, gx2, gy2)
             gx1, gy1 = self._to_canvas(0.0, frac)
             gx2, gy2 = self._to_canvas(1.0, frac)
-            painter.drawLine(gx1, gy1, gx2, gy2)   # horizontal grid
+            painter.drawLine(gx1, gy1, gx2, gy2)
 
-        # ── Axes ──────────────────────────────────────────────────────────────
+        # Axes
         axis_pen = QPen(QColor(AXIS_COLOR), 1)
         painter.setPen(axis_pen)
         ox0, oy0 = self._to_canvas(0.0, 0.0)
         ox1, oy1 = self._to_canvas(1.0, 0.0)
-        painter.drawLine(ox0, oy0, ox1, oy1)   # X axis
+        painter.drawLine(ox0, oy0, ox1, oy1)
         ox0, oy0 = self._to_canvas(0.0, 0.0)
         ox1, oy1 = self._to_canvas(0.0, 1.0)
-        painter.drawLine(ox0, oy0, ox1, oy1)   # Y axis
+        painter.drawLine(ox0, oy0, ox1, oy1)
 
-        # Axis labels
         painter.setPen(QPen(QColor("#5a6175")))
         painter.setFont(QFont("IBM Plex Mono", 9))
         lx, ly = self._to_canvas(1.0, 0.0)
@@ -441,7 +413,7 @@ class CurveCanvas(QWidget):
         lx, ly = self._to_canvas(0.0, 1.0)
         painter.drawText(lx - 22, ly + 4, "val")
 
-        # ── Bézier handle lines (dashed, behind the curve) ────────────────────
+        # Bézier handle lines
         if self._mode == MODE_BEZIER:
             dash_pen = QPen(QColor(HANDLE_LINE_COLOR), 1, Qt.PenStyle.DashLine)
             painter.setPen(dash_pen)
@@ -449,10 +421,10 @@ class CurveCanvas(QWidget):
             p1x, p1y = self._handle_pos(1)
             p2x, p2y = self._handle_pos(2)
             ex, ey = self._to_canvas(1.0, 1.0)
-            painter.drawLine(ax, ay, p1x, p1y)   # anchor → P1
-            painter.drawLine(ex, ey, p2x, p2y)   # anchor → P2
+            painter.drawLine(ax, ay, p1x, p1y)
+            painter.drawLine(ex, ey, p2x, p2y)
 
-        # ── Curve ─────────────────────────────────────────────────────────────
+        # Curve
         t_vals = np.linspace(0.0, 1.0, CURVE_SAMPLES)
         if self._mode == MODE_LINEAR:
             y_vals = ease_linear(t_vals)
@@ -461,8 +433,6 @@ class CurveCanvas(QWidget):
         else:
             y_vals = ease_cubic_bezier(t_vals, self._p1x, self._p1y, self._p2x, self._p2y)
 
-        # Build a QPainterPath through all sampled points.
-        # QPainterPath is the Qt equivalent of a canvas 2D Path2D object.
         path = QPainterPath()
         px0, py0 = self._to_canvas(float(t_vals[0]), float(y_vals[0]))
         path.moveTo(px0, py0)
@@ -474,34 +444,32 @@ class CurveCanvas(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
 
-        # ── Keyframe dots at t=0 and t=1 ─────────────────────────────────────
+        # Keyframe dots
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(KEYFRAME_COLOR)))
         for kx, ky in [(0.0, 0.0), (1.0, 1.0)]:
             kpx, kpy = self._to_canvas(kx, ky)
             painter.drawEllipse(kpx - 5, kpy - 5, 10, 10)
 
-        # ── Bézier handle dots ─────────────────────────────────────────────────
+        # Bézier handle dots
         if self._mode == MODE_BEZIER:
             painter.setPen(QPen(QColor(HANDLE_COLOR), 1.5))
             painter.setBrush(QBrush(QColor("#2a2540")))
-            for h in (1, 2):
-                hpx, hpy = self._handle_pos(h)
+            for hh in (1, 2):
+                hpx, hpy = self._handle_pos(hh)
                 r = HANDLE_RADIUS
                 painter.drawEllipse(hpx - r, hpy - r, r * 2, r * 2)
 
-        # ── Animated dot (current t position on the curve) ────────────────────
+        # Animated dot
         eased = self.get_eased_value(self._t)
         dpx, dpy = self._to_canvas(self._t, eased)
 
-        # Vertical dashed line at current t
         tx, _ = self._to_canvas(self._t, 0.0)
         _, by = self._to_canvas(0.0, 0.0)
         dash_t_pen = QPen(QColor("#fb923c"), 1, Qt.PenStyle.DashLine)
         painter.setPen(dash_t_pen)
         painter.drawLine(tx, dpy, tx, by)
 
-        # The dot itself
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(DOT_COLOR)))
         painter.drawEllipse(dpx - 6, dpy - 6, 12, 12)
@@ -531,8 +499,8 @@ class BallPreview(QWidget):
         """Update the current time and eased position and repaint.
 
         Args:
-            t: Raw normalised time in [0, 1] (used to draw the raw position faintly).
-            eased: Eased normalised position in [0, 1] (used for the ball).
+            t: Raw normalised time in [0, 1].
+            eased: Eased normalised position in [0, 1].
         """
         self._t = t
         self._eased = eased
@@ -548,30 +516,24 @@ class BallPreview(QWidget):
         cy = h // 2
         ball_r = 14
 
-        # Background
         painter.fillRect(0, 0, w, h, QColor(PREVIEW_BG))
 
-        # Track
         painter.setPen(QPen(QColor(TRACK_COLOR), 2))
         painter.drawLine(pad, cy, w - pad, cy)
 
-        # Track end markers
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor("#252b38")))
         for mx in (pad, w - pad):
             painter.drawEllipse(mx - 5, cy - 5, 10, 10)
 
-        # Ghost: raw linear position (faint, shows the difference from easing)
         raw_x = int(pad + self._t * (w - pad * 2))
         painter.setBrush(QBrush(QColor(60, 80, 120, 80)))
         painter.drawEllipse(raw_x - ball_r, cy - ball_r, ball_r * 2, ball_r * 2)
 
-        # Ball: eased position
         ball_x = int(pad + self._eased * (w - pad * 2))
         painter.setBrush(QBrush(QColor(BALL_COLOR)))
         painter.drawEllipse(ball_x - ball_r, cy - ball_r, ball_r * 2, ball_r * 2)
 
-        # Label
         painter.setPen(QPen(QColor("#5a6175")))
         painter.setFont(QFont("IBM Plex Mono", 9))
         painter.drawText(8, h - 6, f"t={self._t:.2f}  →  eased={self._eased:.2f}")
@@ -588,7 +550,6 @@ class ControlPanel(QWidget):
     Ease In-Out mode they are hidden to avoid confusion.
     """
 
-    # Emitted when any control changes: (mode, p1x, p1y, p2x, p2y)
     params_changed: Signal = Signal(int, float, float, float, float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -604,6 +565,28 @@ class ControlPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
+
+        # ── AMS logo ───────────────────────────────────────────────────────────
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if LOGO_PATH.exists():
+            pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
+                80,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("AMS Group – TU Ilmenau")
+            logo_label.setStyleSheet("color: #4f9cf9; font-size: 10px;")
+        layout.addWidget(logo_label)
+
+        # ── Author credit ──────────────────────────────────────────────────────
+        author_label = QLabel("Renato Fera P.")
+        author_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_label.setStyleSheet("color: #5a6175; font-size: 10px; letter-spacing: 0.5px;")
+        layout.addWidget(author_label)
+
+        layout.addSpacing(4)
 
         # Mode selector
         mode_label = QLabel("Interpolation mode")
@@ -658,7 +641,7 @@ class ControlPanel(QWidget):
         self._s_p2x.valueChanged.connect(self._on_slider_changed)
         self._s_p2y.valueChanged.connect(self._on_slider_changed)
 
-        self._on_mode_changed(MODE_BEZIER)   # set initial visibility
+        self._on_mode_changed(MODE_BEZIER)
 
     def _make_slider(self, default: int) -> QSlider:
         """Create a horizontal slider in range [0, 100].
@@ -701,9 +684,6 @@ class ControlPanel(QWidget):
 
     def sync_handles(self, p1x: float, p1y: float, p2x: float, p2y: float) -> None:
         """Update sliders to reflect handle positions dragged on the canvas.
-
-        Called by MainWindow when the canvas emits easing_changed.
-        Blocks slider signals to avoid a feedback loop.
 
         Args:
             p1x, p1y: New P1 coordinates in [0, 1].
@@ -749,10 +729,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
-        # Animation state
-        self._t: float = 0.0           # current normalised time [0,1]
-        self._direction: int = 1       # +1 forward, -1 backward (ping-pong)
-        self._elapsed = QTimer(self)   # drives the animation
+        self._t: float = 0.0
+        self._direction: int = 1
+        self._elapsed = QTimer(self)
         self._elapsed.setInterval(TIMER_INTERVAL_MS)
 
         self._build_ui()
@@ -761,7 +740,6 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         """Create and arrange all panels."""
-        # Left column: curve canvas (top) + ball preview (bottom)
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -773,10 +751,8 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self._curve, stretch=1)
         left_layout.addWidget(self._preview)
 
-        # Right column: control panel
         self._controls = ControlPanel()
 
-        # Horizontal splitter: left | right
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(left)
         splitter.addWidget(self._controls)
@@ -858,3 +834,11 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# =============================================================================
+# End of 03_ca_curves.py
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# =============================================================================

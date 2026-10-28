@@ -1,3 +1,12 @@
+# =============================================================================
+# 03_ca_hello_pyside6.py — Hello PySide6
+# =============================================================================
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# -----------------------------------------------------------------------------
+# Description:
 """03_ca_hello_pyside6.py — Hello PySide6.
 
 The simplest complete PySide6 desktop application.
@@ -28,14 +37,17 @@ Connections to other seminars
 - The slider → label signal connection is the same observer pattern
   that connects animation rig controls to their downstream solvers.
 """
+# =============================================================================
 
 from __future__ import annotations
 
 # stdlib
 import sys
+from pathlib import Path
 
 # third-party — installed by uv sync from pyproject.toml
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -60,6 +72,9 @@ SLIDER_DEFAULT: int = 50
 
 LAYOUT_MARGIN: int = 32       # pixels of padding around the layout edges
 LAYOUT_SPACING: int = 16      # pixels between widgets in the layout
+
+# AMS logo path — one level up from the script's directory (repo root)
+LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 
 
 # ── STEP 2: QMainWindow subclass ──────────────────────────────────────────────
@@ -94,6 +109,36 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         """Create all widgets, assemble the layout, and connect signals."""
+
+        # ── Logo and author credit ─────────────────────────────────────────────
+        #
+        # Mirrors the header used in every other Seminar 03 demo.
+        # The logo is loaded from the repo root; a text fallback is shown when
+        # the image file is not present (e.g. on a fresh clone without assets).
+
+        header = QWidget()
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(4)
+
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if LOGO_PATH.exists():
+            pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
+                80,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("AMS Group – TU Ilmenau")
+            logo_label.setStyleSheet("color: #4f9cf9; font-size: 10px;")
+
+        author_label = QLabel("Renato Fera P.")
+        author_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_label.setStyleSheet("color: #5a6175; font-size: 10px; letter-spacing: 0.5px;")
+
+        header_layout.addWidget(logo_label)
+        header_layout.addWidget(author_label)
 
         # ── STEP 3: Central widget and layout ─────────────────────────────────
         #
@@ -140,6 +185,7 @@ class MainWindow(QMainWindow):
         reset_btn = QPushButton("Reset")
 
         # Add widgets to the layout in top-to-bottom order.
+        layout.addWidget(header)
         layout.addWidget(title_label)
         layout.addWidget(self._value_label)
         layout.addWidget(self._slider)
@@ -217,3 +263,11 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# =============================================================================
+# End of 03_ca_hello_pyside6.py
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# =============================================================================
