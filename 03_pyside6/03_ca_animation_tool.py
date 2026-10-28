@@ -1,52 +1,41 @@
-"""03_ca_animation_tool.py — Mini Animation Tool.
-
-A complete, professional-feeling desktop animation application that combines
-all four previous seminar 03 components into one multi-panel window:
-
-  - GLViewport     — QOpenGLWidget rendering an animated sphere with Phong lighting
-  - TimelineWidget — frame scrubber, play/pause/stop, transport controls
-  - CurveEditor    — QPainter graph of the bounce easing curve, draggable Bézier handles
-  - ParameterPanel — sliders and colour pickers for all animation properties
-
-All panels communicate exclusively through Qt signals — no panel holds a reference
-to another panel.  MainWindow is the only place that knows all panels exist, and it
-wires them together.  This architecture mirrors (at a smaller scale) Maya, Blender,
-and Nuke.
-
-How to run
-----------
-    uv sync                                  # first time only
-    uv run python 03_ca_animation_tool.py
-
-Ubuntu system dependencies (once):
-    sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
-
-    libgl1           — Mesa OpenGL (required by PyOpenGL)
-    libegl1          — EGL interface (required by PySide6's Qt platform plugin)
-    libxcb-cursor0   — XCB cursor library (required by Qt's xcb plugin on Ubuntu 22.04+)
-    libxcb-xinerama0 — multi-monitor support for Qt
-
-Windows: no extra steps needed — PySide6 bundles everything.
-
-Connections to other seminars
-------------------------------
-- GLViewport uses the same OpenGL 3.3 pipeline as demo 4 (03_ca_opengl_widget.py),
-  now rendering a UV sphere instead of a cube, with Phong lighting in GLSL.
-- TimelineWidget is the same component as demo 2 (03_ca_timeline.py), extended
-  with an FPS selector and a total-frames spinbox.
-- CurveEditor draws the same cubic Bézier easing curve as demo 3 (03_ca_curves.py),
-  adapted to show the full bounce arc over all frames rather than t in [0,1].
-- BounceAnimation.evaluate() is a pure Python function — no Qt, no OpenGL.
-  The same function could drive a web animation, an audio envelope, or a render
-  farm script without modification.  Separating the math from the UI is the most
-  important architectural principle in animation tooling.
-"""
+# =============================================================================
+# 03_ca_animation_tool.py — Mini Animation Tool
+# =============================================================================
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# -----------------------------------------------------------------------------
+# Description:
+#   A complete, professional-feeling desktop animation application that combines
+#   all four previous seminar 03 components into one multi-panel window:
+#
+#     - GLViewport     — QOpenGLWidget rendering an animated sphere with Phong lighting
+#     - TimelineWidget — frame scrubber, play/pause/stop, transport controls
+#     - CurveEditor    — QPainter graph of the bounce easing curve, draggable Bézier handles
+#     - ParameterPanel — sliders and colour pickers for all animation properties
+#
+#   All panels communicate exclusively through Qt signals — no panel holds a
+#   reference to another panel. MainWindow is the only place that knows all
+#   panels exist, and it wires them together. This architecture mirrors (at a
+#   smaller scale) Maya, Blender, and Nuke.
+#
+# How to run:
+#   uv sync                            # first time only
+#   uv run python 03_ca_animation_tool.py
+#
+# Ubuntu system dependencies (once):
+#   sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
+#
+# Windows: no extra steps needed — PySide6 bundles everything.
+# =============================================================================
 
 from __future__ import annotations
 
 import ctypes
 import math
 import sys
+from pathlib import Path
 
 import numpy as np
 from OpenGL import GL
@@ -65,6 +54,7 @@ from PySide6.QtGui import (
     QPainter,
     QPen,
     QBrush,
+    QPixmap,
     QShortcut,
     QSurfaceFormat,
 )
@@ -87,9 +77,9 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QVBoxLayout,
     QWidget,
-    QOpenGLWidget,
     QMessageBox,
 )
+from PySide6.QtOpenGLWidgets import QOpenGLWidget  # fix: moved module in PySide6 6.x
 
 # ── QSurfaceFormat — MUST be set before QApplication ─────────────────────────
 #
@@ -174,6 +164,9 @@ PANEL_STYLESHEET: str = (
     f"             border-radius: 4px; padding: 4px 8px; color: {COLOR_TEXT}; }}"
 )
 
+# AMS logo path — one level up from the script's directory (repo root)
+LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
+
 
 # ── STEP 1: BounceAnimation — the pure model layer ────────────────────────────
 
@@ -249,15 +242,12 @@ class BounceAnimation:
             Y world-position of the sphere centre.
         """
         frame = max(0, min(frame, self.total_frames - 1))
-        # Normalise frame to [0, 1].
         t_raw = frame / max(self.total_frames - 1, 1)
-        # Apply Bézier easing to get the eased t in [0, 1].
         t_eased = _cubic_bezier(
             t_raw,
             self.easing_p1[0], self.easing_p1[1],
             self.easing_p2[0], self.easing_p2[1],
         )
-        # Map to a parabolic arc: 0 at t=0, peak at t=0.5, 0 at t=1.
         arc = math.sin(math.pi * t_eased) ** 2
         return GROUND_Y + self.sphere_radius + arc * self.bounce_height
 
@@ -286,23 +276,19 @@ def _cubic_bezier(t: float, p1x: float, p1y: float, p2x: float, p2y: float) -> f
     Returns:
         Eased output value in [0, 1] (the y-axis value at x=t).
     """
-    # Edge cases: t=0 always maps to 0, t=1 always maps to 1.
     if t <= 0.0:
         return 0.0
     if t >= 1.0:
         return 1.0
 
     def _bx(u: float) -> float:
-        """Cubic Bézier x(u)."""
         return 3 * p1x * u * (1 - u) ** 2 + 3 * p2x * u**2 * (1 - u) + u**3
 
     def _by(u: float) -> float:
-        """Cubic Bézier y(u)."""
         return 3 * p1y * u * (1 - u) ** 2 + 3 * p2y * u**2 * (1 - u) + u**3
 
-    # Binary search for u such that x(u) ≈ t.
     lo, hi = 0.0, 1.0
-    for _ in range(32):          # 32 iterations → precision ≈ 2⁻³² ≈ 2.3e-10
+    for _ in range(32):
         mid = (lo + hi) * 0.5
         if _bx(mid) < t:
             lo = mid
@@ -406,14 +392,13 @@ def _make_uv_sphere(
     """
     verts = []
     for i in range(stacks + 1):
-        phi = math.pi / 2 - i * math.pi / stacks     # from +π/2 to -π/2
+        phi = math.pi / 2 - i * math.pi / stacks
         y = math.sin(phi)
         xz = math.cos(phi)
         for j in range(sectors + 1):
             theta = j * 2 * math.pi / sectors
             x = xz * math.cos(theta)
             z = xz * math.sin(theta)
-            # For a unit sphere: normal == position.
             verts.extend([x, y, z, x, y, z])
 
     indices = []
@@ -654,7 +639,6 @@ class GLViewport(QOpenGLWidget):
 
     def paintGL(self) -> None:  # noqa: N802
         """Render one frame: ground plane + animated sphere."""
-        # FPS tracking
         now_ms = self._elapsed.elapsed()
         delta_ms = now_ms - self._last_ms
         self._last_ms = now_ms
@@ -672,7 +656,6 @@ class GLViewport(QOpenGLWidget):
         else:
             GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
 
-        # ── Draw ground with Phong ─────────────────────────────────────────────
         self._draw_phong(
             vao=self._ground_vao,
             index_count=6,
@@ -680,7 +663,6 @@ class GLViewport(QOpenGLWidget):
             color=self._anim.ground_color,
         )
 
-        # ── Draw sphere with Phong ─────────────────────────────────────────────
         self._draw_phong(
             vao=self._sphere_vao,
             index_count=self._sphere_index_count,
@@ -708,11 +690,6 @@ class GLViewport(QOpenGLWidget):
         """
         GL.glUseProgram(self._prog_phong)
 
-        # Normal matrix = transpose(inverse(model)) upper-left 3×3.
-        # Required for correct normal transformation when the model matrix
-        # contains non-uniform scaling.  (Our matrix only has uniform scale,
-        # so the normal matrix equals the model's rotation part — but we
-        # compute it correctly for generality.)
         normal_matrix = np.linalg.inv(model[:3, :3]).T.astype(np.float32)
 
         loc = lambda name: GL.glGetUniformLocation(self._prog_phong, name)  # noqa: E731
@@ -809,7 +786,6 @@ class CurveEditor(QWidget):
             px, py = self._anim.easing_p1
         else:
             px, py = self._anim.easing_p2
-        # The handle x maps to frame space, handle y maps to a fraction of bounce height.
         frame_x = self._frame_to_x(px * total)
         world_y = GROUND_Y + self._anim.sphere_radius + py * self._anim.bounce_height
         return frame_x, self._height_to_y(world_y)
@@ -831,7 +807,6 @@ class CurveEditor(QWidget):
         y_min = GROUND_Y
         y_max = GROUND_Y + DEFAULT_BOUNCE_HEIGHT * 1.2
         norm = 1.0 - (py - pad_y) / max(self.height() - 2 * pad_y, 1)
-        # Map norm back to [0, 1] where 0 = ground, 1 = peak
         world_y = y_min + norm * (y_max - y_min)
         v = (world_y - GROUND_Y - self._anim.sphere_radius) / max(self._anim.bounce_height, 0.01)
 
@@ -840,15 +815,7 @@ class CurveEditor(QWidget):
     # ── Mouse events ───────────────────────────────────────────────────────────
 
     def mousePressEvent(self, event) -> None:  # noqa: ANN001
-        """Begin dragging the nearest Bézier handle if click is within radius.
-
-        QT CONCEPT — mouse drag pattern:
-        Qt drag handling requires overriding three events:
-          mousePressEvent  → start drag if hit-test succeeds
-          mouseMoveEvent   → update while button held
-          mouseReleaseEvent→ end drag
-        This mirrors mousedown/mousemove/mouseup in the browser.
-        """
+        """Begin dragging the nearest Bézier handle if click is within radius."""
         mx, my = event.position().x(), event.position().y()
         for handle_id in (1, 2):
             hx, hy = self._bezier_handle_pixel(handle_id)
@@ -884,10 +851,8 @@ class CurveEditor(QWidget):
 
         w, h = self.width(), self.height()
 
-        # Background
         painter.fillRect(0, 0, w, h, QColor(COLOR_BG))
 
-        # Grid (horizontal lines at 0%, 50%, 100% height)
         grid_pen = QPen(QColor(COLOR_BORDER), 1, Qt.PenStyle.DotLine)
         painter.setPen(grid_pen)
         for frac in (0.0, 0.5, 1.0):
@@ -895,7 +860,6 @@ class CurveEditor(QWidget):
             gy = int(self._height_to_y(world_h))
             painter.drawLine(0, gy, w, gy)
 
-        # ── Sample and draw the full bounce curve ──────────────────────────────
         frames = self._anim.total_frames
         pts = [
             (
@@ -911,12 +875,10 @@ class CurveEditor(QWidget):
             x1, y1 = pts[i + 1]
             painter.drawLine(int(x0), int(y0), int(x1), int(y1))
 
-        # ── Playhead ───────────────────────────────────────────────────────────
         ph_x = int(self._frame_to_x(self._playhead_frame))
         painter.setPen(QPen(QColor(COLOR_ORANGE), 2))
         painter.drawLine(ph_x, 0, ph_x, h)
 
-        # ── Bézier handles + tangent lines ────────────────────────────────────
         anchor_start = (self._frame_to_x(0), self._height_to_y(GROUND_Y + self._anim.sphere_radius))
         anchor_end   = (self._frame_to_x(frames - 1), self._height_to_y(GROUND_Y + self._anim.sphere_radius))
 
@@ -934,7 +896,6 @@ class CurveEditor(QWidget):
             painter.drawEllipse(int(hx) - HANDLE_RADIUS, int(hy) - HANDLE_RADIUS,
                                 HANDLE_RADIUS * 2, HANDLE_RADIUS * 2)
 
-        # Label
         painter.setPen(QPen(QColor(COLOR_MUTED)))
         painter.setFont(QFont("IBM Plex Mono", 9))
         painter.drawText(6, h - 6, "Easing Curve")
@@ -995,7 +956,6 @@ class TimelineWidget(QWidget):
         info_row.addWidget(self._time_label)
         info_row.addStretch()
 
-        # FPS selector
         info_row.addWidget(QLabel("FPS:"))
         self._fps_combo = QComboBox()
         self._fps_combo.addItems(["12", "24", "30", "60"])
@@ -1003,7 +963,6 @@ class TimelineWidget(QWidget):
         self._fps_combo.setFixedWidth(56)
         info_row.addWidget(self._fps_combo)
 
-        # Total frames
         info_row.addWidget(QLabel("Frames:"))
         self._frames_spin = QSpinBox()
         self._frames_spin.setRange(12, 600)
@@ -1107,10 +1066,6 @@ class TimelineWidget(QWidget):
     def _set_frame(self, frame: int) -> None:
         """Single point through which all frame changes flow.
 
-        Updates state, syncs the scrubber without re-emitting, updates
-        labels, and emits frame_changed.  All downstream panels react
-        to frame_changed; none is called directly.
-
         Args:
             frame: New frame number.
         """
@@ -1184,14 +1139,49 @@ class ParameterPanel(QWidget):
         self._anim = anim
         self.setStyleSheet(PANEL_STYLESHEET)
 
-        form = QFormLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ── AMS logo + author ──────────────────────────────────────────────────
+        brand_widget = QWidget()
+        brand_widget.setStyleSheet(f"background: {COLOR_SURFACE};")
+        brand_layout = QVBoxLayout(brand_widget)
+        brand_layout.setContentsMargins(12, 10, 12, 6)
+        brand_layout.setSpacing(4)
+
+        logo_label = QLabel()
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if LOGO_PATH.exists():
+            pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
+                80,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("AMS Group – TU Ilmenau")
+            logo_label.setStyleSheet("color: #4f9cf9; font-size: 10px;")
+        brand_layout.addWidget(logo_label)
+
+        author_label = QLabel("Renato Fera P.")
+        author_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_label.setStyleSheet(
+            f"color: {COLOR_MUTED}; font-size: 10px; letter-spacing: 0.5px;"
+        )
+        brand_layout.addWidget(author_label)
+
+        outer.addWidget(brand_widget)
+
+        # ── Form controls ──────────────────────────────────────────────────────
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
         form.setContentsMargins(12, 12, 12, 12)
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         # Bounce height
         self._height_slider = QSlider(Qt.Orientation.Horizontal)
-        self._height_slider.setRange(10, 500)   # internal: ×0.01 → 0.10 … 5.00
+        self._height_slider.setRange(10, 500)
         self._height_slider.setValue(int(anim.bounce_height * 100))
         self._height_val = QLabel(f"{anim.bounce_height:.2f}")
         h_row = QHBoxLayout()
@@ -1201,7 +1191,7 @@ class ParameterPanel(QWidget):
 
         # Sphere radius
         self._radius_slider = QSlider(Qt.Orientation.Horizontal)
-        self._radius_slider.setRange(5, 100)    # internal: ×0.01 → 0.05 … 1.00
+        self._radius_slider.setRange(5, 100)
         self._radius_slider.setValue(int(anim.sphere_radius * 100))
         self._radius_val = QLabel(f"{anim.sphere_radius:.2f}")
         r_row = QHBoxLayout()
@@ -1228,6 +1218,9 @@ class ParameterPanel(QWidget):
         self._frame_display = QLabel("0")
         self._frame_display.setStyleSheet(f"color: {COLOR_TEXT};")
         form.addRow("Current frame:", self._frame_display)
+
+        outer.addWidget(form_widget)
+        outer.addStretch()
 
         # ── Connections ────────────────────────────────────────────────────────
         self._height_slider.valueChanged.connect(self._on_height)
@@ -1314,35 +1307,6 @@ class MainWindow(QMainWindow):
     MainWindow is the only object that holds references to all four panels
     and to the BounceAnimation model.  All inter-panel wiring happens here,
     in _connect_signals().  No panel imports any other panel.
-
-    The signal flow is:
-        TimelineWidget.frame_changed(int)
-            → MainWindow._on_frame_changed(frame)
-                → GLViewport.set_frame(frame)
-                → CurveEditor.set_playhead(frame)
-                → ParameterPanel.set_frame(frame)
-                → (status bar update)
-
-        ParameterPanel.bounce_height_changed(float)
-            → CurveEditor.update()   [redraws the curve]
-            → GLViewport.update()    [re-renders with new height]
-
-        ParameterPanel.color_changed()
-            → GLViewport.update()
-
-        ParameterPanel.wireframe_changed(bool)
-            → GLViewport.update()
-
-        CurveEditor.easing_changed(p1x, p1y, p2x, p2y)
-            → MainWindow._on_easing_changed(...)
-                → (updates BounceAnimation.easing_p1/p2)
-                → CurveEditor.update()
-                → GLViewport.update()
-
-    QT CONCEPT — QSplitter state persistence:
-    splitter.saveState() returns a QByteArray that QSettings can store.
-    splitter.restoreState(bytes) restores the panel sizes on next launch.
-    This is how professional applications persist panel layouts.
     """
 
     def __init__(self) -> None:
@@ -1353,10 +1317,6 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(f"QMainWindow {{ background: {COLOR_BG}; }}")
 
         # ── Shared model ──────────────────────────────────────────────────────
-        # ANIMATION CONCEPT — single source of truth:
-        # One BounceAnimation instance is created here and passed by reference
-        # to every panel.  Every panel reads from it; only ParameterPanel and
-        # CurveEditor write to it (via their signals, handled here).
         self._anim = BounceAnimation()
 
         # ── Panels ────────────────────────────────────────────────────────────
@@ -1400,14 +1360,12 @@ class MainWindow(QMainWindow):
         )
         status_bar = QStatusBar()
         status_bar.addWidget(self._status_label)
-        status_bar.setStyleSheet(f"background: {COLOR_SURFACE}; border-top: 1px solid {COLOR_BORDER};")
+        status_bar.setStyleSheet(
+            f"background: {COLOR_SURFACE}; border-top: 1px solid {COLOR_BORDER};"
+        )
         self.setStatusBar(status_bar)
 
         # ── Render timer ──────────────────────────────────────────────────────
-        # ARCHITECTURE CONCEPT — render timer lives in MainWindow:
-        # The timer drives viewport repaints independent of whether the
-        # animation is playing.  This ensures the sphere stays sharp after
-        # a colour or parameter change even when the timeline is paused.
         self._render_timer = QTimer(self)
         self._render_timer.setInterval(RENDER_INTERVAL_MS)
         self._render_timer.timeout.connect(self._viewport.update)
@@ -1441,57 +1399,31 @@ class MainWindow(QMainWindow):
             f"QMenu::item:selected {{ background: {COLOR_BORDER}; }}"
         )
 
-        # File
         file_menu: QMenu = bar.addMenu("File")
         file_menu.addAction("Quit", self.close, QKeySequence("Ctrl+Q"))
 
-        # View
         view_menu: QMenu = bar.addMenu("View")
         view_menu.addAction("Reset Panels", self._reset_panels)
 
-        # Help
         help_menu: QMenu = bar.addMenu("Help")
         help_menu.addAction("About", self._show_about)
 
     # ── Signal wiring ──────────────────────────────────────────────────────────
 
     def _connect_signals(self) -> None:
-        """Wire all inter-panel signals.
-
-        ARCHITECTURE CONCEPT — every connection is documented here.
-        Students can read this method as a complete map of the data flow.
-        In a larger application, this wiring would live in a controller class
-        separate from the window, but for a teaching demo one clear method
-        is cleaner.
-        """
-        # TimelineWidget → all consumers
-        # When the timeline advances (or is scrubbed), tell every panel.
+        """Wire all inter-panel signals."""
         self._timeline.frame_changed.connect(self._on_frame_changed)
-
-        # ParameterPanel → CurveEditor and GLViewport
-        # When bounce height changes the curve shape and sphere peak change.
         self._params.bounce_height_changed.connect(lambda _: self._curve.update())
         self._params.bounce_height_changed.connect(lambda _: self._viewport.update())
-
-        # Radius change affects GLViewport rendering only.
         self._params.sphere_radius_changed.connect(lambda _: self._viewport.update())
-
-        # Colour and wireframe changes affect GLViewport only.
         self._params.color_changed.connect(self._viewport.update)
         self._params.wireframe_changed.connect(lambda _: self._viewport.update())
-
-        # CurveEditor → BounceAnimation + downstream panels
-        # When handles are dragged, update the model and repaint dependents.
         self._curve.easing_changed.connect(self._on_easing_changed)
 
     # ── Slots ──────────────────────────────────────────────────────────────────
 
     def _on_frame_changed(self, frame: int) -> None:
         """Fan out a timeline frame change to all dependent panels.
-
-        ARCHITECTURE CONCEPT — fan-out in the controller:
-        MainWindow routes the single frame_changed signal to every panel that
-        cares about it.  No panel knows about the others.
 
         Args:
             frame: The new current frame.
@@ -1511,8 +1443,6 @@ class MainWindow(QMainWindow):
         """
         self._anim.easing_p1 = (p1x, p1y)
         self._anim.easing_p2 = (p2x, p2y)
-        # Force a viewport update at the current frame so the sphere jumps
-        # immediately to its new position under the new easing.
         self._viewport.set_frame(self._timeline.current_frame)
         self._curve.update()
 
@@ -1530,15 +1460,11 @@ class MainWindow(QMainWindow):
 
     def _build_shortcuts(self) -> None:
         """Register keyboard shortcuts.  Mirrors Maya / Blender / Nuke conventions."""
-        # Space: play/pause
         QShortcut(QKeySequence("Space"), self, activated=self._timeline.toggle_play)
-        # Left / Right: step one frame
         QShortcut(QKeySequence(Qt.Key.Key_Left),  self, activated=self._timeline.step_back)
         QShortcut(QKeySequence(Qt.Key.Key_Right), self, activated=self._timeline.step_forward)
-        # Home / End: first / last frame
         QShortcut(QKeySequence(Qt.Key.Key_Home), self, activated=self._timeline.go_to_first)
         QShortcut(QKeySequence(Qt.Key.Key_End),  self, activated=self._timeline.go_to_last)
-        # Ctrl+R: reset animation to defaults
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self._reset_animation)
 
     # ── View helpers ───────────────────────────────────────────────────────────
@@ -1556,16 +1482,7 @@ class MainWindow(QMainWindow):
     # ── Splitter state persistence ─────────────────────────────────────────────
 
     def _restore_state(self) -> None:
-        """Restore splitter sizes from the previous session using QSettings.
-
-        QT CONCEPT — QSettings for persistent layout:
-        QSettings stores key/value pairs in a platform-appropriate location
-        (registry on Windows, ~/.config on Linux, ~/Library on macOS).
-        splitter.saveState() / restoreState() serialise the panel sizes so
-        the user's preferred layout survives between launches.
-        Professional applications always do this — it is one of the small
-        things that makes a tool feel polished.
-        """
+        """Restore splitter sizes from the previous session using QSettings."""
         settings = QSettings("TUIlmenauAMS", "ComputeranimationSeminar03Demo5")
         state = settings.value("h_splitter_state")
         if state:
@@ -1597,17 +1514,7 @@ class MainWindow(QMainWindow):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
-    """Create QApplication, show the main window, start the event loop.
-
-    QT CONCEPT — QApplication:
-    QApplication must be the first Qt object created.  It initialises the
-    platform plugin and event loop.  _configure_surface_format() was already
-    called at module import time (before this function runs), satisfying the
-    ordering requirement: surface format → QApplication → QWidgets.
-
-    sys.exit(app.exec()) starts the event loop and propagates the exit code
-    back to the OS when the last window closes.
-    """
+    """Create QApplication, show the main window, start the event loop."""
     app = QApplication(sys.argv)
     app.setApplicationName("ComputeranimationSeminar03Demo5")
     app.setOrganizationName("TUIlmenauAMS")
@@ -1618,3 +1525,11 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# =============================================================================
+# End of 03_ca_animation_tool.py
+# Author   : Renato Fera P.
+# LinkedIn : https://www.linkedin.com/in/renato-profeta/
+# Course   : Computeranimation — Chapter 03: PySide6 & Python Animation
+# Institute: Institut für Medientechnik, Technische Universität Ilmenau
+# =============================================================================
