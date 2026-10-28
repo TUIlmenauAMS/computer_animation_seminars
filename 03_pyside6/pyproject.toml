@@ -1,0 +1,40 @@
+[project]
+name = "computeranimation-seminar03"
+version = "0.1.0"
+description = "Computeranimation Seminar 03 — PySide6 & Python Animation"
+authors = [
+    { name = "Renato Fera P.", email = "renato.profeta@tu-ilmenau.de" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.7.0",
+    "PyOpenGL>=3.1.7",
+    "PyOpenGL-accelerate>=3.1.7",
+    "numpy>=1.26.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.4.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+# E/W = pycodestyle errors and warnings
+# F   = Pyflakes (undefined names, unused imports)
+# I   = isort (import ordering)
+# UP  = pyupgrade (modern Python syntax)
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

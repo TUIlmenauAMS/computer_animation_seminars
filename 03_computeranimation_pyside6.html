@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 03: PySide6 &amp; Python Animation — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 24px 0 20px;
+  }
+  .header-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .header-logo img { width: 100px; border-radius: 10px; display: block; }
+  .header-info h1 { font-size: clamp(18px,3vw,26px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
+  .header-info h2 { font-size: 14px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
+  .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 14px 32px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 6px; }
+
+  /* ── main ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+
+  /* ── notebook content ── */
+  .nb-content { display: flex; flex-direction: column; gap: 0; }
+  .nb-cell { padding: 0; }
+
+  /* ── prose styling ── */
+  .nb-cell h1 {
+    font-size: clamp(22px, 3.5vw, 32px);
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.25;
+    margin: 40px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nb-cell h2 {
+    font-size: 20px;
+    font-weight: 500;
+    color: #e8eaf2;
+    margin: 48px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nb-cell h3 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--accent2);
+    margin: 28px 0 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+  }
+  .nb-cell p { margin-bottom: 14px; color: var(--text); }
+  .nb-cell ul, .nb-cell ol { margin: 0 0 14px 22px; }
+  .nb-cell li { margin-bottom: 6px; }
+  .nb-cell strong { color: #eef0f6; font-weight: 500; }
+  .nb-cell em { color: var(--text); }
+  .nb-cell a { color: var(--accent); text-decoration: none; }
+  .nb-cell a:hover { text-decoration: underline; }
+  .nb-cell hr { border: none; border-top: 1px solid var(--border); margin: 8px 0 0; }
+
+  /* tables */
+  .nb-cell table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 20px;
+    font-size: 13.5px;
+  }
+  .nb-cell th {
+    text-align: left;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .nb-cell td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(37,43,56,0.6);
+    vertical-align: top;
+    color: var(--text);
+  }
+  .nb-cell tr:last-child td { border-bottom: none; }
+  .nb-cell tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* inline code */
+  .nb-cell code {
+    background: rgba(79,156,249,0.08);
+    color: #93c5fd;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* code blocks */
+  .nb-cell pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 16px 0 20px;
+  }
+  .nb-cell pre code {
+    background: none;
+    color: #c9d1d9;
+    font-size: 13px;
+    padding: 0;
+    border-radius: 0;
+    line-height: 1.6;
+  }
+
+  /* pill links */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    margin: 4px 6px 4px 0;
+    border: 1px solid rgba(79,156,249,0.4);
+    border-radius: 20px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(79,156,249,0.07);
+    font-family: var(--mono);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .pill:hover {
+    background: rgba(79,156,249,0.14);
+    border-color: rgba(79,156,249,0.7);
+    text-decoration: none;
+  }
+
+  /* info callout boxes */
+  .info-box {
+    border-left: 4px solid var(--accent2);
+    background: rgba(167,139,250,0.06);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  .info-box p { margin: 0 0 6px 0; }
+  .info-box p:last-of-type { margin-bottom: 0; }
+
+  /* demo callout boxes */
+  .demo-box {
+    border-left: 4px solid var(--accent);
+    background: rgba(79,156,249,0.06);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  .demo-box p { margin: 0 0 6px 0; }
+  .demo-box p:last-of-type { margin-bottom: 8px; }
+
+  /* install block — green accent */
+  .install-box {
+    border-left: 4px solid var(--green);
+    background: rgba(52,211,153,0.05);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+  }
+  .install-box p { margin: 0 0 6px 0; color: var(--text); }
+  .install-box p:last-of-type { margin-bottom: 0; }
+  .install-box pre {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(52,211,153,0.2);
+    margin: 10px 0 0;
+  }
+
+  /* footer cell */
+  .nb-footer-cell {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 2px solid var(--border);
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .nb-footer-cell b { color: var(--text); }
+  .nb-footer-cell a { color: var(--accent); text-decoration: none; }
+  .nb-footer-cell a:hover { text-decoration: underline; }
+
+  /* ── page footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 18px 32px 24px;
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="https://raw.githubusercontent.com/TUIlmenauAMS/computer_animation_seminars/main/ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 03: PySide6 &amp; Python Animation</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  Chapter 03: PySide6 &amp; Python Animation
+</nav>
+
+<main>
+<div class="nb-content">
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<h1>Chapter 03: PySide6 &amp; Python Animation</h1>
+<p>So far in this course every interactive demo has run in a browser: a canvas element, WebGL, JavaScript. This chapter switches to the <strong>desktop</strong>. You will build GUI applications with <strong>PySide6</strong> — the same Qt framework that powers Maya, Nuke, Houdini, and Katana — and connect them to a live OpenGL rendering context using <strong>PyOpenGL</strong>. The animation math (interpolation, easing, matrix transforms) is handled by <strong>NumPy</strong>, and the whole project is managed with <strong>uv</strong>, the modern Python package manager.</p>
+<p>The animation concepts do not change. A timeline widget driven by a <code>QTimer</code> is the same idea as <code>requestAnimationFrame</code>. A QPainter Bézier curve is the same cubic polynomial as the CSS <code>cubic-bezier()</code> you visualised in Chapter 01. An OpenGL viewport inside a Qt window uses the same GPU pipeline — VAO, VBO, GLSL shaders, MVP matrix — as Chapter 01's raw WebGL and Chapter 02's Three.js. The language and the API surface are different; the concepts are identical.</p>
+
+<h3>What this chapter covers</h3>
+<table>
+<thead>
+<tr><th>#</th><th>Topic</th><th>What you will learn</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>Why Python for Animation Tooling</td><td>Studio context, PySide6 vs PyQt6, the Qt ecosystem</td></tr>
+<tr><td>2</td><td>Project Setup with uv</td><td>pyproject.toml, uv sync, uv run, lockfiles, system deps</td></tr>
+<tr><td>3</td><td>PySide6 Architecture</td><td>QObject model, QMainWindow, layouts, common widgets</td></tr>
+<tr><td>4</td><td>Signals and Slots</td><td>Observer pattern, custom signals, connection to animation rigs</td></tr>
+<tr><td>5</td><td>The Animation Loop in Qt</td><td>QTimer, QElapsedTimer, delta time, comparison to rAF and Three.js</td></tr>
+<tr><td>6</td><td>Custom Painting with QPainter</td><td>2D drawing API, paths, Bézier curves, transforms</td></tr>
+<tr><td>7</td><td>OpenGL in Python: PyOpenGL + QOpenGLWidget</td><td>Modern OpenGL 3.3 core inside Qt, full mapping to WebGL 2</td></tr>
+<tr><td>8</td><td>Composing a Desktop Animation Tool</td><td>MVC architecture, QSplitter, signal flow, professional DCC structure</td></tr>
+<tr><td>9</td><td>Demo Index</td><td>Overview of the five interactive Python demos</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>1. Why Python for Animation Tooling</h2>
+
+<h3>The two-language world of production animation</h3>
+<p>Every major animation and VFX tool is built on two languages working together. The <strong>engine layer</strong> — the renderer, the physics solver, the simulation core — is written in C++ and GLSL because performance is non-negotiable: a single frame of a Hollywood feature can involve billions of ray intersections, and that work must run at maximum CPU and GPU throughput. But above the engine sits a vast second layer: the <strong>pipeline</strong>. This is where assets flow between departments, where riggers automate character setups, where TDs write export scripts and batch processing tools, and where artists build custom UIs for specialised workflows. That second layer is almost universally Python.</p>
+<ul>
+  <li><strong>Autodesk Maya</strong> — full Python API (<code>maya.cmds</code>, <code>maya.api</code>) for scripting and plugin development. Every production studio has thousands of lines of Maya Python.</li>
+  <li><strong>SideFX Houdini</strong> — Python SOPs, TOPs, PDG networks. Houdini's entire procedural pipeline is scriptable in Python.</li>
+  <li><strong>Foundry Nuke</strong> — Python API for compositing node graphs, custom gizmos, batch rendering pipelines.</li>
+  <li><strong>Blender</strong> — <code>bpy</code>, the Blender Python API. Every Blender add-on is a Python module.</li>
+  <li><strong>Pixar's USD</strong> — the Universal Scene Description format has a full Python API used across the entire pipeline at Pixar, ILM, Disney, and every VFX house that has adopted USD.</li>
+  <li><strong>Custom pipeline tools</strong> — asset management, shot tracking, render farm submission, review tools. At ILM, Pixar, DNEG, Framestore: all Python.</li>
+</ul>
+
+<h3>PySide6 vs PyQt6</h3>
+<p>Both PySide6 and PyQt6 are Python bindings for the same <strong>Qt 6</strong> C++ framework. The code is nearly identical — the difference is licensing and who maintains the binding.</p>
+<table>
+<thead>
+<tr><th>Property</th><th>PySide6</th><th>PyQt6</th></tr>
+</thead>
+<tbody>
+<tr><td>Maintained by</td><td>The Qt Company (official)</td><td>Riverbank Computing (third party)</td></tr>
+<tr><td>License</td><td>LGPL 3 (or commercial)</td><td>GPL 3 (or commercial)</td></tr>
+<tr><td>Commercial use (closed source)</td><td>Free under LGPL</td><td>Requires a paid commercial license</td></tr>
+<tr><td>Module import</td><td><code>from PySide6.QtWidgets import ...</code></td><td><code>from PyQt6.QtWidgets import ...</code></td></tr>
+<tr><td>Signal syntax</td><td><code>Signal(int)</code></td><td><code>pyqtSignal(int)</code></td></tr>
+<tr><td>Used in studios</td><td>Yes — industry standard</td><td>Rarely (licensing risk)</td></tr>
+</tbody>
+</table>
+<p>The LGPL licence means you can link PySide6 into a closed-source commercial application without paying anything, as long as you allow end users to relink against a modified PySide6 (which is satisfied by using the standard PyPI package). GPL would require your entire application to be open-source. This is why every VFX studio uses PySide6.</p>
+
+<h3>Qt: the UI toolkit of the VFX industry</h3>
+<p>Qt is not just a widget library — it is a complete application framework covering windowing, 2D and 3D graphics, networking, databases, multithreading, XML/JSON, and much more. Qt's <code>QWidget</code> system is the UI layer of Maya, Nuke, Houdini, and Katana. When you write a PySide6 widget in this course you are writing in the same framework those applications use for their panels, parameter sliders, timeline scrubbers, and viewport controls.</p>
+
+<div class="info-box">
+  <p><strong>Industry shortcut:</strong> Maya, Nuke, Houdini, and Katana all expose PySide2 or PySide6 as their embedded Python UI toolkit. A PySide6 widget you write for this course will run inside Maya with minimal changes — just swap the import and adjust any Qt 6 API differences to Qt 5. Learning PySide6 now means you can ship custom tools inside real production applications the day you start a studio job.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/" target="_blank" rel="noopener">Qt for Python (PySide6) Docs ↗</a>
+  <a class="pill" href="https://www.qt.io/qt-licensing" target="_blank" rel="noopener">Qt Licensing ↗</a>
+  <a class="pill" href="https://vfxplatform.com/" target="_blank" rel="noopener">VFX Reference Platform ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>2. Project Setup with uv</h2>
+
+<h3>What is uv?</h3>
+<p><strong>uv</strong> is a fast, modern Python package manager and project tool built by <a href="https://astral.sh/" target="_blank" rel="noopener">Astral</a>, the same team behind the Ruff linter. It replaces <code>pip</code>, <code>venv</code>, <code>pip-tools</code>, and partially replaces <code>pyenv</code> with a single, consistent tool. uv resolves and installs packages 10–100× faster than pip because it is written in Rust and uses a parallel resolver.</p>
+<p>In this course we use uv because it is rapidly becoming the industry standard for Python tooling (2024–2025), it produces <strong>lockfiles</strong> that guarantee reproducible environments, and it makes the professional practice of <code>pyproject.toml</code>-based projects accessible to students from day one.</p>
+
+<table>
+<thead>
+<tr><th>Tool replaced</th><th>What uv does instead</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pip install</code></td><td><code>uv add</code> — adds to <code>pyproject.toml</code> and installs</td></tr>
+<tr><td><code>python -m venv .venv</code></td><td><code>uv sync</code> — creates <code>.venv</code> and installs all deps</td></tr>
+<tr><td><code>pip freeze > requirements.txt</code></td><td><code>uv.lock</code> — auto-generated, exact, with hashes</td></tr>
+<tr><td><code>pip install -r requirements.txt</code></td><td><code>uv sync</code> — reproduces from <code>uv.lock</code></td></tr>
+<tr><td><code>source .venv/bin/activate &amp;&amp; python</code></td><td><code>uv run python</code> — activates transparently</td></tr>
+</tbody>
+</table>
+
+<h3>System dependencies (Ubuntu 24.04)</h3>
+<p>Before installing Python packages, you need a few system libraries that PySide6 and PyOpenGL depend on at the OS level. Run this once after a fresh Ubuntu install:</p>
+
+<div class="install-box">
+  <p><strong>Ubuntu 24.04 — required system libraries</strong></p>
+  <pre><code>sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0</code></pre>
+  <p style="margin-top:10px; font-size:13px; color: var(--muted);">
+    <code>libgl1</code> — Mesa OpenGL implementation, required by PyOpenGL<br>
+    <code>libegl1</code> — EGL interface, required by PySide6's Qt platform plugin<br>
+    <code>libxcb-cursor0</code> — XCB cursor library, required by Qt's xcb platform plugin on Ubuntu 22.04+<br>
+    <code>libxcb-xinerama0</code> — multi-monitor support for Qt
+  </p>
+  <p style="margin-top:6px; font-size:13px;"><strong>Windows 11:</strong> No system dependencies needed — PySide6 bundles everything. Skip this block.</p>
+</div>
+
+<h3>Installing uv</h3>
+<pre><code class="language-bash"># Linux / macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+winget install --id=astral-sh.uv -e
+# or via pip as a fallback:
+pip install uv</code></pre>
+
+<h3>The pyproject.toml</h3>
+<p>The <code>pyproject.toml</code> file is the single source of truth for a modern Python project. It replaces <code>setup.py</code>, <code>requirements.txt</code>, and <code>setup.cfg</code> combined. It is standardised by PEP 517, PEP 518, and PEP 621 — this is where the Python ecosystem has converged, and every serious Python project uses it. Here is the complete file for Seminar 03, with every field explained:</p>
+
+<pre><code class="language-toml">[project]
+# The package name as it would appear on PyPI (if published).
+# Convention: lowercase, hyphens instead of underscores.
+name = "computeranimation-seminar03"
+
+# Semantic version. Start at 0.1.0 for work in progress.
+version = "0.1.0"
+
+description = "Computeranimation Seminar 03 — PySide6 &amp; Python Animation"
+
+# Authors list. Used by uv and pip for metadata.
+authors = [
+    { name = "Renato Fera P.", email = "renato.profeta@tu-ilmenau.de" }
+]
+
+# The README that would appear on PyPI. Must exist in the folder.
+readme = "README.md"
+
+# Python version constraint. ">=3.12" means Python 3.12 or newer.
+# We pin 3.12 because it is the LTS target for this course.
+requires-python = ">=3.12"
+
+# Direct runtime dependencies. uv resolves their transitive deps automatically.
+# ">=X.Y.Z" is a minimum version constraint — uv picks the latest compatible version.
+dependencies = [
+    "PySide6>=6.7.0",            # Qt 6 Python bindings — the GUI framework
+    "PyOpenGL>=3.1.7",           # Python bindings for OpenGL
+    "PyOpenGL-accelerate>=3.1.7", # C extension for PyOpenGL — 2-10x faster buffer ops
+    "numpy>=1.26.0",             # Array math for animation curves and vertex data
+]
+
+# ── Dev dependencies ─────────────────────────────────────────────────────────
+# These are installed by uv sync but NOT included when the project is packaged.
+# Students: you need these for linting. CI: they are included automatically.
+[dependency-groups]
+dev = [
+    "ruff>=0.4.0",   # Fast Python linter and formatter (replaces flake8 + black + isort)
+]
+
+# uv-specific dev dependencies (mirrors dependency-groups.dev for older uv versions)
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.4.0",
+]
+
+# ── Ruff configuration ───────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py312"    # Emit warnings relevant to Python 3.12
+line-length = 100           # Max line length before ruff wraps / warns
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+# E/W = pycodestyle errors and warnings (PEP 8 style)
+# F   = Pyflakes (undefined names, unused imports, redefinitions)
+# I   = isort (import ordering — always: stdlib, then third-party, then local)
+# UP  = pyupgrade (enforce modern Python 3.12 syntax over legacy patterns)
+
+[tool.ruff.format]
+quote-style = "double"      # Use double quotes (consistent with Black)
+indent-style = "space"      # Spaces, not tabs</code></pre>
+
+<h3>Getting started: step by step</h3>
+<pre><code class="language-bash"># 1. Clone the repository
+git clone https://github.com/TUIlmenauAMS/computer_animation_seminars
+cd computer_animation_seminars/seminar_03
+
+# 2. Create the virtual environment and install ALL dependencies
+#    uv reads pyproject.toml, resolves everything, writes uv.lock, installs to .venv/
+uv sync
+
+# 3. Run any demo — uv activates .venv transparently before running
+uv run python 03_ca_hello_pyside6.py
+
+# 4. Run the linter (check for errors and style violations)
+uv run ruff check .
+
+# 5. Run the auto-formatter (fixes style issues in-place)
+uv run ruff format .
+
+# 6. Add a new dependency for experimentation (e.g. scipy)
+uv add scipy
+# uv add updates pyproject.toml, re-resolves, updates uv.lock, and installs.
+# Never use pip install directly — it bypasses the lockfile.
+</code></pre>
+
+<h3>What uv creates</h3>
+<p>After running <code>uv sync</code> you will find four new items in the seminar folder:</p>
+<ul>
+  <li><strong><code>uv.lock</code></strong> — the lockfile. Every direct and transitive dependency pinned to an exact version and cryptographic hash. Commit this file. It is what guarantees that <code>uv sync</code> gives every student and every CI machine an identical environment — no "works on my machine" drift. This is analogous to <code>package-lock.json</code> in Node.js or <code>Cargo.lock</code> in Rust.</li>
+  <li><strong><code>.venv/</code></strong> — the virtual environment: a self-contained Python interpreter plus all installed packages. Never commit this. Add <code>.venv</code> to <code>.gitignore</code>. It is fully reproducible from <code>uv.lock</code> in a few seconds with <code>uv sync</code>.</li>
+  <li><strong><code>.python-version</code></strong> — an optional one-line file containing <code>3.12</code>, created by <code>uv init --python 3.12</code>. Tells uv, Ruff, and other tools which Python version to use in this directory.</li>
+  <li><strong><code>pyproject.toml</code></strong> — already exists; uv may update it when you run <code>uv add</code>.</li>
+</ul>
+
+<div class="info-box">
+  <p><strong>Reproducibility:</strong> The <code>uv.lock</code> file is the single source of truth for the environment. Anyone who clones the repo and runs <code>uv sync</code> gets an identical environment — same package versions, same hashes, same result. On a fast network with a warm cache, <code>uv sync</code> takes under 10 seconds. This is how professional Python projects are managed.</p>
+</div>
+
+<h3>Flat project layout</h3>
+<p>The seminar folder uses a <strong>flat layout</strong>: all <code>.py</code> files live directly in <code>seminar_03/</code>, not in a <code>src/</code> subdirectory. This is the correct layout for a collection of runnable scripts (like pipeline tools or standalone demos) as opposed to an installable package. The <code>src/</code> layout is used when you want to <code>pip install</code> your own code into another environment; here, students run the files directly with <code>uv run python</code>.</p>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv Documentation ↗</a>
+  <a class="pill" href="https://peps.python.org/pep-0621/" target="_blank" rel="noopener">PEP 621 – pyproject.toml ↗</a>
+  <a class="pill" href="https://peps.python.org/pep-0517/" target="_blank" rel="noopener">PEP 517 – Build backends ↗</a>
+  <a class="pill" href="https://docs.astral.sh/ruff/" target="_blank" rel="noopener">Ruff Documentation ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Demo 1 — Hello PySide6</strong> &nbsp;<code>03_ca_hello_pyside6.py</code></p>
+  <p>The simplest complete PySide6 application: a <code>QMainWindow</code> with a label, a slider, and a button. Signals and slots wired up so the label updates live as the slider moves. Every line commented. Foundation for all subsequent demos.</p>
+  <p><em>How to run:</em></p>
+  <pre style="margin:6px 0 0;"><code>uv run python 03_ca_hello_pyside6.py</code></pre>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>3. PySide6 Architecture</h2>
+
+<h3>The Qt object model: QObject and parent–child ownership</h3>
+<p>Every PySide6 class that does something meaningful — widgets, timers, layout managers, file dialogs — inherits from <code>QObject</code>. The key property of <code>QObject</code> is <strong>parent–child ownership</strong>: when you create a widget with a parent, the parent takes ownership of the child. When the parent is destroyed, Qt automatically destroys all its children. This means you almost never call <code>del</code> or manage widget lifetimes manually — you just set the parent correctly and Qt handles the rest.</p>
+
+<pre><code class="language-python">from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QLabel
+
+# Parent ownership: label is owned by central_widget.
+# When central_widget is destroyed, label is destroyed too.
+central_widget = QWidget()           # parent: None (will be reparented by setCentralWidget)
+label = QLabel("Hello", central_widget)  # parent: central_widget</code></pre>
+
+<h3>QApplication: the event loop entry point</h3>
+<p><code>QApplication</code> is the heart of every Qt application. It initialises Qt internals, sets up the platform plugin (the layer that talks to the OS window manager), and owns the <strong>event loop</strong> — the main loop that processes user input, timer events, and repaint requests. Every PySide6 program follows the same pattern:</p>
+
+<pre><code class="language-python">import sys
+from PySide6.QtWidgets import QApplication
+
+# QApplication MUST be created before any QWidget.
+# sys.argv is passed so Qt can process its own command-line flags
+# (e.g. -style, -platform) before your code runs.
+app = QApplication(sys.argv)
+
+# ... create widgets here ...
+
+# app.exec() starts the event loop. It blocks here until the last window closes.
+# sys.exit() forwards Qt's exit code to the OS.
+# Omitting sys.exit() works but is technically incorrect — use it always.
+sys.exit(app.exec())</code></pre>
+
+<div class="info-box">
+  <p><strong>Animation concept — the event loop:</strong> <code>app.exec()</code> runs Qt's event loop — the same concept as the browser's event loop that drives <code>requestAnimationFrame</code>. Neither loop runs your code directly; both fire callbacks (slots / rAF callbacks) in response to events: user input, timer expiry, repaint requests. Understanding the event loop is the foundation of every GUI and animation system.</p>
+</div>
+
+<h3>QMainWindow vs QWidget</h3>
+<table>
+<thead>
+<tr><th>Class</th><th>When to use</th><th>What it provides</th></tr>
+</thead>
+<tbody>
+<tr><td><code>QMainWindow</code></td><td>Top-level application windows</td><td>Menu bar, tool bar, status bar, dock widgets, central widget area</td></tr>
+<tr><td><code>QWidget</code></td><td>Everything else: panels, embedded views, custom painting</td><td>Basic painting surface, child widget management, layout support</td></tr>
+</tbody>
+</table>
+<p>A <code>QMainWindow</code> has a fixed structure: a central widget occupies the centre, surrounded by optional dock widgets, a menu bar at the top, and a status bar at the bottom. You always set the central widget with <code>window.setCentralWidget(widget)</code>. For the demos in this chapter the central widget is either a plain <code>QWidget</code> with a layout, or a <code>QSplitter</code> that divides the space between panels.</p>
+
+<h3>Layouts: the right way to arrange widgets</h3>
+<p>Never hardcode pixel positions for widgets. Instead, add widgets to a <strong>layout</strong>, and Qt computes the geometry automatically — including correct behaviour on resize, on different screen DPIs, and on different OS font sizes.</p>
+
+<pre><code class="language-python">from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+)
+
+container = QWidget()
+
+# QVBoxLayout stacks widgets top to bottom.
+vbox = QVBoxLayout(container)   # passing parent sets container's layout directly
+
+title = QLabel("Computeranimation")
+btn   = QPushButton("Click me")
+
+vbox.addWidget(title)
+vbox.addWidget(btn)
+
+# Spacing and margins
+vbox.setSpacing(12)                       # pixels between widgets
+vbox.setContentsMargins(16, 16, 16, 16)   # left, top, right, bottom
+
+# addStretch() inserts an expanding spacer — pushes everything above it up
+# and everything below it down, like CSS flex-grow: 1.
+vbox.addStretch()
+
+# ── Nested layouts ───────────────────────────────────────────────────────────
+# Layouts can be nested. A QHBoxLayout inside a QVBoxLayout is common.
+hbox = QHBoxLayout()
+hbox.addWidget(QPushButton("Left"))
+hbox.addWidget(QPushButton("Right"))
+hbox.addStretch()       # pushes both buttons to the left
+
+vbox.addLayout(hbox)    # nest the row inside the column</code></pre>
+
+<h3>Common widgets</h3>
+<table>
+<thead>
+<tr><th>Widget</th><th>Purpose</th><th>Key signal</th></tr>
+</thead>
+<tbody>
+<tr><td><code>QLabel</code></td><td>Display text or image</td><td>—</td></tr>
+<tr><td><code>QPushButton</code></td><td>Clickable button</td><td><code>clicked</code></td></tr>
+<tr><td><code>QSlider</code></td><td>Range slider (horizontal or vertical)</td><td><code>valueChanged(int)</code></td></tr>
+<tr><td><code>QSpinBox</code></td><td>Integer input with up/down arrows</td><td><code>valueChanged(int)</code></td></tr>
+<tr><td><code>QDoubleSpinBox</code></td><td>Float input with up/down arrows</td><td><code>valueChanged(float)</code></td></tr>
+<tr><td><code>QComboBox</code></td><td>Drop-down selector</td><td><code>currentIndexChanged(int)</code></td></tr>
+<tr><td><code>QCheckBox</code></td><td>Boolean toggle</td><td><code>stateChanged(int)</code></td></tr>
+<tr><td><code>QLineEdit</code></td><td>Single-line text input</td><td><code>textChanged(str)</code></td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+  <p><strong>Qt layouts ≈ CSS flexbox:</strong> <code>QHBoxLayout</code> is like <code>flex-direction: row</code>, <code>QVBoxLayout</code> is like <code>flex-direction: column</code>, <code>addStretch()</code> is like <code>flex-grow: 1</code>. <code>QGridLayout</code> has no direct CSS equivalent but works like a CSS grid. Once you see the analogy, Qt layouts feel immediately familiar. The principle is identical: describe the relationships between elements, let the system compute the geometry.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QMainWindow.html" target="_blank" rel="noopener">QMainWindow ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QVBoxLayout.html" target="_blank" rel="noopener">QVBoxLayout ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/overviews/layout.html" target="_blank" rel="noopener">Qt Layout Management ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>4. Signals and Slots</h2>
+
+<h3>The observer pattern</h3>
+<p>The <strong>observer pattern</strong> is one of the most important patterns in software engineering: an object (the <em>subject</em>) maintains a list of dependents (the <em>observers</em>) and notifies them automatically when its state changes. You do not need the subject to know anything about who is observing it — the coupling is loose and one-directional. This is how professional animation tools connect their components: move a rig control and every downstream element (IK solver, blend shape driver, secondary animation) updates automatically, without the control needing to know what is downstream.</p>
+<p>Qt's implementation of the observer pattern is <strong>signals and slots</strong>. A <em>signal</em> is an event emitted by an object. A <em>slot</em> is a callable that responds to a signal. You connect them with <code>.connect()</code>.</p>
+
+<h3>Connecting built-in signals</h3>
+<pre><code class="language-python">from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel
+from PySide6.QtCore import Qt
+
+app = QApplication([])
+win = QWidget()
+layout = QVBoxLayout(win)
+
+slider = QSlider(Qt.Orientation.Horizontal)
+slider.setRange(0, 100)
+slider.setValue(50)
+
+label = QLabel("Value: 50")
+
+# ── Connect a signal to a slot ────────────────────────────────────────────────
+# QSlider.valueChanged(int) is emitted every time the slider moves.
+# We connect it to a lambda that updates the label text.
+# The int argument from the signal is automatically passed to the lambda.
+slider.valueChanged.connect(lambda v: label.setText(f"Value: {v}"))
+
+layout.addWidget(slider)
+layout.addWidget(label)
+win.show()
+app.exec()</code></pre>
+
+<h3>Custom signals on a QObject subclass</h3>
+<p>You can define your own signals on any class that inherits <code>QObject</code>. Custom signals are declared as class-level <code>Signal</code> instances with the argument type(s) they carry. This is how the timeline widget in Demo 2 notifies the rest of the application when the current frame changes:</p>
+
+<pre><code class="language-python">from PySide6.QtCore import QObject, Signal
+
+class TimelineWidget(QObject):
+    """A reusable animation timeline component.
+
+    Signals:
+        frame_changed: Emitted whenever the current frame advances.
+                       Carries the new frame number as an int.
+    """
+
+    # Declare the signal at class level.
+    # Signal(int) means this signal carries one integer argument.
+    frame_changed = Signal(int)
+
+    def _advance_frame(self) -> None:
+        """Called by QTimer on every tick. Advances the frame counter."""
+        self._current_frame += 1
+        if self._current_frame >= self._total_frames:
+            self._current_frame = 0
+
+        # Emit the signal. All connected slots receive the new frame number.
+        # The timeline does NOT need to know what is connected to it.
+        self.frame_changed.emit(self._current_frame)
+
+# ── Connecting the custom signal ─────────────────────────────────────────────
+timeline = TimelineWidget()
+viewport = GLViewport()
+
+# Connect: whenever the frame changes, tell the viewport to update.
+timeline.frame_changed.connect(viewport.set_frame)
+
+# Connect the same signal to multiple slots — they all fire in connection order.
+timeline.frame_changed.connect(curve_editor.set_playhead)
+timeline.frame_changed.connect(status_bar.update_frame_display)</code></pre>
+
+<h3>Disconnecting and Lambda slots</h3>
+<pre><code class="language-python"># Lambda slots for simple one-liners:
+btn.clicked.connect(lambda: label.setText("Clicked!"))
+
+# Store the lambda if you need to disconnect it later.
+# You cannot disconnect an anonymous lambda — Python creates a new object
+# every time you write lambda, so the identity check fails.
+handler = lambda: label.setText("Clicked!")
+btn.clicked.connect(handler)
+# ... later ...
+btn.clicked.disconnect(handler)   # works because handler is the same object</code></pre>
+
+<div class="info-box">
+  <p><strong>Animation rigs are signal graphs:</strong> In Maya, when you connect an attribute from one node to another (<em>Node A.output → Node B.input</em>), Maya creates an internal dependency graph edge — exactly the same observer pattern. Moving a rig control fires a cascade of updates through the dependency graph: the IK solver slot fires, the skin deformer slot fires, the blend shape driver slot fires. PySide6 signals and slots are a simpler version of the same mechanism. Understanding one helps you understand the other.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/overviews/signalsandslots.html" target="_blank" rel="noopener">Signals &amp; Slots – Qt for Python ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/Signal.html" target="_blank" rel="noopener">Signal class ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Demo 2 — Animation Timeline Widget</strong> &nbsp;<code>03_ca_timeline.py</code></p>
+  <p>A complete reusable timeline: a <code>QSlider</code> scrubber, Play/Pause/Stop buttons, a frame counter, and a <code>QTimer</code> driving playback. A QPainter canvas shows a bouncing ball driven by the current frame. The <code>TimelineWidget</code> class emits a custom <code>Signal(int)</code> so any downstream widget can react to frame changes without being coupled to the timeline's internals.</p>
+  <p><em>How to run:</em></p>
+  <pre style="margin:6px 0 0;"><code>uv run python 03_ca_timeline.py</code></pre>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>5. The Animation Loop in Qt</h2>
+
+<h3>QTimer: the Qt way to drive a repeating callback</h3>
+<p><code>QTimer</code> fires a <code>timeout</code> signal at a fixed interval. It is the Qt equivalent of <code>setInterval()</code> in JavaScript — but because it integrates with Qt's event loop, it is safe to update widgets directly from the connected slot, with no locks or thread marshalling required.</p>
+
+<pre><code class="language-python">from PySide6.QtCore import QTimer
+
+# FPS constant — the target frame rate for the animation loop.
+TARGET_FPS: int = 60
+
+# Interval in milliseconds between timer ticks.
+# Integer division: 1000 // 60 = 16 ms per frame (~62.5 Hz).
+TIMER_INTERVAL_MS: int = 1000 // TARGET_FPS
+
+timer = QTimer()
+timer.setInterval(TIMER_INTERVAL_MS)
+
+# Connect the timeout signal to the update function.
+# This slot runs in the main thread, so it is safe to call widget.update().
+timer.timeout.connect(self._on_tick)
+
+timer.start()   # begin firing
+
+# Stop the loop — safe to call even if the timer is already stopped.
+timer.stop()</code></pre>
+
+<h3>QElapsedTimer: accurate delta time</h3>
+<p><code>QTimer</code> fires approximately on schedule, but Qt's event loop may be busy when the timeout falls due — the callback fires slightly late. For frame-rate-independent animation, always measure the actual elapsed time with <code>QElapsedTimer</code> rather than assuming a fixed delta:</p>
+
+<pre><code class="language-python">from PySide6.QtCore import QElapsedTimer
+
+# ANIMATION CONCEPT: delta time.
+# Never animate by a fixed amount per tick.
+# Always multiply your velocity by the elapsed time in seconds.
+# This gives the same result at 30fps, 60fps, and 120fps.
+
+elapsed_timer = QElapsedTimer()
+elapsed_timer.start()
+
+def _on_tick(self) -> None:
+    """Timer slot — called every frame."""
+    # elapsed() returns milliseconds since start() or restart().
+    elapsed_ms: int = self._elapsed_timer.restart()  # also resets to 0
+
+    # Convert to seconds for animation math.
+    delta: float = elapsed_ms / 1000.0
+
+    # Update animation state using delta time.
+    # rotation_speed is in radians per second.
+    self._angle += self._rotation_speed * delta   # frame-rate independent
+    self.update()   # schedule a repaint (does not paint immediately)</code></pre>
+
+<h3>The update cycle</h3>
+<p>Calling <code>widget.update()</code> does not paint immediately — it schedules a repaint request. Qt coalesces multiple <code>update()</code> calls within one event loop iteration into a single repaint, preventing redundant work. The actual painting happens when Qt processes the repaint event and calls <code>paintEvent()</code> (for <code>QWidget</code>) or <code>paintGL()</code> (for <code>QOpenGLWidget</code>).</p>
+
+<h3>Comparing animation loops across platforms</h3>
+<table>
+<thead>
+<tr><th>Platform</th><th>Loop mechanism</th><th>Callback</th><th>Delta time</th></tr>
+</thead>
+<tbody>
+<tr><td>Browser (JS)</td><td><code>requestAnimationFrame(cb)</code></td><td><code>cb(timestamp)</code> — timestamp in ms</td><td><code>(timestamp - prevTimestamp) / 1000</code></td></tr>
+<tr><td>Three.js</td><td><code>renderer.setAnimationLoop(cb)</code></td><td><code>cb()</code> — wraps rAF</td><td><code>clock.getDelta()</code> in seconds</td></tr>
+<tr><td>PySide6 / Qt</td><td><code>QTimer.timeout</code> signal</td><td>Any connected slot</td><td><code>QElapsedTimer.restart() / 1000.0</code></td></tr>
+<tr><td>OpenGL (GLUT)</td><td><code>glutTimerFunc(ms, cb, 0)</code></td><td><code>cb(int)</code></td><td>Manual: last time subtracted from <code>clock()</code></td></tr>
+</tbody>
+</table>
+
+<div class="info-box">
+  <p><strong>QTimer precision:</strong> QTimer is not a high-precision timer. It fires when Qt's event loop processes the timeout event, which may be several milliseconds later than requested. At 60fps with a 16ms interval this drift is negligible for animation. For accurate timing — music sync, physics simulation — use <code>QElapsedTimer</code> to measure actual elapsed time, never accumulate fixed deltas. This is the same reason Three.js uses <code>THREE.Clock.getDelta()</code> rather than assuming a fixed 16ms per frame.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QTimer.html" target="_blank" rel="noopener">QTimer ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtCore/QElapsedTimer.html" target="_blank" rel="noopener">QElapsedTimer ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>6. Custom Painting with QPainter</h2>
+
+<h3>The QPainter model</h3>
+<p><code>QPainter</code> is Qt's 2D drawing API. You use it inside a <code>paintEvent()</code> override on a <code>QWidget</code> subclass. The coordinate system has its <strong>origin at the top-left</strong> corner, with Y increasing downward — the same as the HTML Canvas 2D API that Chapter 01 used to draw the easing curve display.</p>
+<p>QPainter is a <em>painter</em> in the classic sense: you set a pen (stroke), set a brush (fill), then issue drawing commands. The state machine carries those settings until you change them.</p>
+
+<pre><code class="language-python">from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QPainterPath
+from PySide6.QtCore import Qt
+
+class CurveCanvas(QWidget):
+    """A custom QWidget that draws an animation curve with QPainter."""
+
+    def paintEvent(self, event) -> None:
+        """Qt calls this whenever the widget needs to be redrawn.
+
+        Never call this method directly — call self.update() to schedule
+        a repaint, and Qt will call paintEvent at the right time.
+        """
+        painter = QPainter(self)
+
+        # Antialiasing: smooth diagonal lines and curves.
+        # Same concept as WebGL's MSAA or canvas 2D's imageSmoothingEnabled.
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+
+        # ── Draw background ──────────────────────────────────────────────────
+        painter.fillRect(0, 0, w, h, QColor("#161a22"))
+
+        # ── Set pen: stroke color and width ─────────────────────────────────
+        pen = QPen(QColor("#4f9cf9"), 2.0)   # blue, 2px
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        painter.setPen(pen)
+
+        # ── Draw grid lines ──────────────────────────────────────────────────
+        grid_pen = QPen(QColor("#252b38"), 1.0)
+        grid_pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(grid_pen)
+        for i in range(1, 4):
+            y = int(h * i / 4)
+            painter.drawLine(0, y, w, y)   # horizontal grid lines
+
+        # ── Draw a Bézier curve with QPainterPath ────────────────────────────
+        painter.setPen(QPen(QColor("#4f9cf9"), 2.5))
+        painter.setBrush(Qt.BrushStyle.NoBrush)   # no fill inside the path
+
+        path = QPainterPath()
+        path.moveTo(0, h)                          # start at bottom-left
+        # cubicTo(c1x, c1y, c2x, c2y, endX, endY)
+        # Control points define the tangents at start and end.
+        # This is the same cubic Bézier as CSS cubic-bezier() and Three.js.
+        path.cubicTo(
+            w * self._p1x, h * (1 - self._p1y),  # control point 1
+            w * self._p2x, h * (1 - self._p2y),  # control point 2
+            w, 0                                   # end at top-right
+        )
+        painter.drawPath(path)
+
+        # ── Draw handle dots ─────────────────────────────────────────────────
+        painter.setPen(QPen(QColor("#a78bfa"), 1.5))
+        painter.setBrush(QBrush(QColor("#a78bfa")))
+        r = 5   # handle radius in pixels
+        painter.drawEllipse(int(w * self._p1x) - r, int(h * (1 - self._p1y)) - r, r*2, r*2)
+        painter.drawEllipse(int(w * self._p2x) - r, int(h * (1 - self._p2y)) - r, r*2, r*2)
+
+        painter.end()   # explicitly end the painter — good practice in paintEvent</code></pre>
+
+<h3>Transforms: translate, rotate, scale</h3>
+<pre><code class="language-python"># Transforms in QPainter work like the HTML Canvas 2D API:
+# they affect all subsequent drawing commands.
+
+# save() pushes the current transform and pen/brush state onto a stack.
+# restore() pops it back — same as canvas.save() / canvas.restore().
+painter.save()
+
+painter.translate(cx, cy)           # move the origin to (cx, cy)
+painter.rotate(angle_degrees)       # rotate around the new origin
+painter.scale(sx, sy)               # scale around the new origin
+
+painter.drawRect(-50, -50, 100, 100)  # draws centred on (cx, cy), rotated
+
+painter.restore()   # undo all transforms — back to the saved state</code></pre>
+
+<h3>The cubic Bézier algorithm</h3>
+<p>The Bézier easing curve displayed by Demo 3 uses the same cubic Bézier polynomial that appears in CSS <code>transition-timing-function: cubic-bezier()</code>, in Chapter 01's easing demos, and in Three.js's <code>InterpolateSmooth</code>. The parametric form gives XY position as a function of curve parameter <em>u</em> ∈ [0, 1]:</p>
+<pre><code class="language-python">import numpy as np
+
+def cubic_bezier_point(u: float, p0: float, p1: float, p2: float, p3: float) -> float:
+    """Evaluate a cubic Bézier polynomial at parameter u.
+
+    The standard Bernstein form: sum of basis polynomials weighted by control points.
+    This is the same formula used in CSS cubic-bezier() and Three.js CatmullRom easing.
+
+    Args:
+        u: Curve parameter in [0, 1].
+        p0, p1, p2, p3: Control point ordinates (X or Y, not both at once).
+
+    Returns:
+        The interpolated value at u.
+    """
+    # Precompute 1-u for clarity and efficiency.
+    v = 1.0 - u
+    # Bernstein basis polynomials B_{i,3}(u):
+    # B_{0,3} = (1-u)^3,  B_{1,3} = 3u(1-u)^2,  B_{2,3} = 3u^2(1-u),  B_{3,3} = u^3
+    return (v**3) * p0 + 3 * (v**2) * u * p1 + 3 * v * (u**2) * p2 + (u**3) * p3</code></pre>
+<p>The challenge: the CSS <code>cubic-bezier()</code> function gives time <em>t</em> as input and eased value as output, but the parametric form gives both as functions of <em>u</em>. To find the eased value for a given <em>t</em>, we must invert the X component — find the <em>u</em> where <code>bezier_x(u) = t</code> — using a binary search. This is the same inversion that browsers perform internally for every CSS transition.</p>
+
+<div class="info-box">
+  <p><strong>QPainter ≈ HTML Canvas 2D:</strong> If you used <code>ctx.bezierCurveTo()</code> in Chapter 01's easing display, QPainter's <code>path.cubicTo()</code> is the identical operation. Both APIs share the same painter's model: pen, fill, path, transforms, save/restore. The coordinates are mirrored (Canvas: Y down; same for QPainter), and the curve math is the same cubic Bézier. Code you understand in one context transfers directly to the other.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QPainter.html" target="_blank" rel="noopener">QPainter ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QPainterPath.html" target="_blank" rel="noopener">QPainterPath ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QPen.html" target="_blank" rel="noopener">QPen ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Demo 3 — Curve Editor</strong> &nbsp;<code>03_ca_curves.py</code></p>
+  <p>A QPainter curve editor showing linear, cosine ease-in-out, and cubic Bézier curves. In Bézier mode, the two control point handles are draggable directly on the canvas — the curve updates in real time. A second panel shows a ball moving left-to-right, its position driven by the currently selected easing function. A QTimer drives the animation.</p>
+  <p><em>How to run:</em></p>
+  <pre style="margin:6px 0 0;"><code>uv run python 03_ca_curves.py</code></pre>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>7. OpenGL in Python: PyOpenGL + QOpenGLWidget</h2>
+
+<h3>Why embed OpenGL in Qt?</h3>
+<p>Every professional DCC tool has a real-time 3D viewport: Maya's perspective view, Nuke's viewer, Houdini's scene view. All of these are OpenGL contexts embedded inside Qt windows. <code>QOpenGLWidget</code> is exactly the class they use. Learning to embed OpenGL in Qt is learning the architecture of the viewport in every tool you will use professionally.</p>
+<p>The GPU pipeline inside <code>paintGL()</code> is <em>identical</em> to what you wrote in Chapter 01 with raw WebGL: the same VAO/VBO/EBO model, the same vertex and fragment shaders, the same MVP matrix, the same depth test. The difference is the language (<code>Python</code> instead of <code>JavaScript</code>) and the API prefix (<code>GL.gl*</code> instead of <code>gl.*</code>).</p>
+
+<h3>PyOpenGL and PyOpenGL_accelerate</h3>
+<p><strong>PyOpenGL</strong> provides Python bindings for the full OpenGL API — every function in the C API is available as a Python call in the <code>OpenGL.GL</code> namespace. <strong>PyOpenGL_accelerate</strong> is a companion C extension that replaces Python-level type conversions (buffer pointer checks, array validation) with fast C code, giving a 2–10× speedup on buffer uploads and uniform setting. Always install both:</p>
+<pre><code class="language-bash">uv sync   # installs both, as declared in pyproject.toml</code></pre>
+<p>Always import as <code>from OpenGL import GL</code> and use the <code>GL.</code> prefix. Never use <code>from OpenGL.GL import *</code> — star imports hide where functions come from, break linting, and make it impossible to grep for where a specific GL call is made.</p>
+
+<h3>QSurfaceFormat: requesting the right OpenGL version</h3>
+<p>Before creating a <code>QApplication</code>, you must tell Qt which OpenGL version and profile you need. This is done with <code>QSurfaceFormat</code>. If you skip this, Qt may give you a legacy OpenGL 2.1 context — which lacks VAOs, core shaders, and everything else from Chapter 01.</p>
+
+<pre><code class="language-python">import sys
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QSurfaceFormat
+
+# CRITICAL: set the surface format BEFORE creating QApplication.
+# This tells Qt which OpenGL version to request from the OS.
+fmt = QSurfaceFormat()
+fmt.setVersion(3, 3)          # Request OpenGL 3.3 — same as WebGL 2's feature set
+
+# Core profile: removes all deprecated legacy OpenGL functions.
+# This is the correct professional setting. It mirrors WebGL 2's behaviour.
+fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
+
+fmt.setDepthBufferSize(24)    # 24-bit depth buffer (standard)
+fmt.setSamples(4)             # 4x MSAA antialiasing
+
+# Apply globally — all QOpenGLWidgets created after this use this format.
+QSurfaceFormat.setDefaultFormat(fmt)
+
+app = QApplication(sys.argv)  # QApplication MUST come after setDefaultFormat</code></pre>
+
+<h3>QOpenGLWidget: three methods to override</h3>
+<pre><code class="language-python">from PySide6.QtOpenGLWidgets import QOpenGLWidget
+from OpenGL import GL
+
+class CubeViewport(QOpenGLWidget):
+    """An OpenGL viewport embedded inside a Qt window.
+
+    Override these three methods. Never call OpenGL functions outside them —
+    the OpenGL context is only guaranteed to be current inside these methods.
+    """
+
+    def initializeGL(self) -> None:
+        """Called once when the OpenGL context is first created.
+
+        This is the correct place for ALL one-time GL setup:
+        compile shaders, create VAOs/VBOs, upload static geometry.
+        The context is current here — GL calls are safe.
+        """
+        # Enable depth testing — same as gl.enable(gl.DEPTH_TEST) in WebGL.
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
+        # Enable MSAA if the surface format requested samples > 1.
+        GL.glEnable(GL.GL_MULTISAMPLE)
+
+        self._setup_shaders()   # compile and link GLSL programs
+        self._setup_geometry()  # create VAO, VBO, EBO, upload vertex data
+
+    def resizeGL(self, w: int, h: int) -> None:
+        """Called every time the widget is resized.
+
+        Update the OpenGL viewport and recompute the projection matrix.
+        w, h are the new widget dimensions in physical pixels.
+        """
+        # glViewport: tell OpenGL which part of the window to draw into.
+        # Same as gl.viewport(0, 0, canvas.width, canvas.height) in WebGL.
+        GL.glViewport(0, 0, w, h)
+
+        # Recompute projection with the new aspect ratio.
+        aspect = w / max(h, 1)
+        self._proj_matrix = mat4_perspective(
+            fovy=60.0, aspect=aspect, near=0.1, far=100.0
+        )
+
+    def paintGL(self) -> None:
+        """Called every frame to draw the scene.
+
+        Triggered by self.update() (from QTimer or user interaction).
+        The context is current here — all GL draw calls are safe.
+        """
+        GL.glClearColor(0.05, 0.06, 0.08, 1.0)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
+
+        # Update rotation using delta time — frame-rate independent.
+        delta = self._elapsed_timer.restart() / 1000.0
+        self._angle_y += self._speed_y * delta   # radians per second
+
+        # Build the model matrix (rotation) and upload MVP to the shader.
+        model = mat4_rotate_y(self._angle_y)
+        self._upload_uniforms(model, self._view_matrix, self._proj_matrix)
+
+        GL.glBindVertexArray(self._vao)
+        GL.glDrawElements(GL.GL_TRIANGLES, 36, GL.GL_UNSIGNED_INT, None)
+        GL.glBindVertexArray(0)</code></pre>
+
+<h3>GLSL shaders as Python strings</h3>
+<pre><code class="language-python">VERTEX_SHADER_SRC: str = """
+#version 330 core
+
+/* layout(location=0): the attribute index matches glVertexAttribPointer(0, ...) */
+/* Same as 'layout(location=0) in vec3 aPos;' in Chapter 01's WebGL shaders.     */
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aColor;
+
+/* Uniform matrices — identical to the WebGL uModel, uView, uProjection uniforms */
+uniform mat4 uModel;
+uniform mat4 uView;
+uniform mat4 uProjection;
+
+out vec3 vColor;   /* interpolated across the triangle to the fragment shader */
+
+void main() {
+    vColor = aColor;
+    gl_Position = uProjection * uView * uModel * vec4(aPos, 1.0);
+}
+"""
+
+FRAGMENT_SHADER_SRC: str = """
+#version 330 core
+
+in vec3 vColor;
+out vec4 fragColor;
+
+void main() {
+    fragColor = vec4(vColor, 1.0);
+}
+"""</code></pre>
+
+<h3>WebGL 2 vs PyOpenGL: side-by-side API mapping</h3>
+<p>The GPU pipeline is the same. Only the language and API surface differ:</p>
+<table>
+<thead>
+<tr><th>Operation</th><th>WebGL 2 (JavaScript)</th><th>PyOpenGL (Python)</th></tr>
+</thead>
+<tbody>
+<tr><td>Create VAO</td><td><code>gl.createVertexArray()</code></td><td><code>GL.glGenVertexArrays(1)</code></td></tr>
+<tr><td>Bind VAO</td><td><code>gl.bindVertexArray(vao)</code></td><td><code>GL.glBindVertexArray(vao)</code></td></tr>
+<tr><td>Create buffer</td><td><code>gl.createBuffer()</code></td><td><code>GL.glGenBuffers(1)</code></td></tr>
+<tr><td>Bind buffer</td><td><code>gl.bindBuffer(gl.ARRAY_BUFFER, vbo)</code></td><td><code>GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo)</code></td></tr>
+<tr><td>Upload data</td><td><code>gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)</code></td><td><code>GL.glBufferData(GL.GL_ARRAY_BUFFER, data.nbytes, data, GL.GL_STATIC_DRAW)</code></td></tr>
+<tr><td>Vertex attrib pointer</td><td><code>gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, offset)</code></td><td><code>GL.glVertexAttribPointer(0, 3, GL.GL_FLOAT, GL.GL_FALSE, stride, ctypes.c_void_p(offset))</code></td></tr>
+<tr><td>Enable attrib</td><td><code>gl.enableVertexAttribArray(0)</code></td><td><code>GL.glEnableVertexAttribArray(0)</code></td></tr>
+<tr><td>Upload mat4 uniform</td><td><code>gl.uniformMatrix4fv(loc, false, matrix)</code></td><td><code>GL.glUniformMatrix4fv(loc, 1, GL.GL_TRUE, matrix)</code></td></tr>
+<tr><td>Draw indexed</td><td><code>gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, 0)</code></td><td><code>GL.glDrawElements(GL.GL_TRIANGLES, count, GL.GL_UNSIGNED_INT, None)</code></td></tr>
+<tr><td>Enable depth test</td><td><code>gl.enable(gl.DEPTH_TEST)</code></td><td><code>GL.glEnable(GL.GL_DEPTH_TEST)</code></td></tr>
+<tr><td>Clear</td><td><code>gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)</code></td><td><code>GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)</code></td></tr>
+<tr><td>Compile shader</td><td><code>gl.shaderSource(sh, src); gl.compileShader(sh)</code></td><td><code>GL.glShaderSource(sh, src); GL.glCompileShader(sh)</code></td></tr>
+</tbody>
+</table>
+
+<p><strong>Note on matrix transpose:</strong> WebGL's <code>uniformMatrix4fv(loc, false, matrix)</code> — the <code>false</code> means "do not transpose; the matrix is already column-major." PyOpenGL's <code>glUniformMatrix4fv(loc, 1, GL_TRUE, matrix)</code> — the <code>GL_TRUE</code> means "transpose before uploading." This difference arises because NumPy arrays are row-major by default, but OpenGL expects column-major matrices. By passing <code>GL_TRUE</code>, we tell OpenGL to transpose on upload, which corrects for NumPy's layout.</p>
+
+<h3>NumPy for vertex data and matrix math</h3>
+<pre><code class="language-python">import numpy as np
+
+# ALWAYS use dtype=np.float32 for vertex data.
+# OpenGL expects 32-bit IEEE 754 floats; Python floats are 64-bit.
+# Passing a 64-bit array will silently upload garbage or crash.
+vertices = np.array([
+    # x      y      z      r     g     b
+    -0.5,  -0.5,   0.5,   1.0,  0.0,  0.0,   # front-bottom-left (red)
+     0.5,  -0.5,   0.5,   0.0,  1.0,  0.0,   # front-bottom-right (green)
+     0.5,   0.5,   0.5,   0.0,  0.0,  1.0,   # front-top-right (blue)
+    # ... 5 more faces ...
+], dtype=np.float32)
+
+# ALWAYS use dtype=np.uint32 for index data.
+indices = np.array([0, 1, 2, 2, 3, 0, ...], dtype=np.uint32)
+
+# Upload: data.nbytes is the size in bytes, not the number of elements.
+GL.glBufferData(GL.GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL.GL_STATIC_DRAW)
+
+# ── Matrix math with NumPy ────────────────────────────────────────────────────
+# Note: in production, use glm (PyGLM) or pyrr for convenience.
+# Here we build matrices manually so you see the math.
+
+def mat4_perspective(fovy: float, aspect: float, near: float, far: float) -> np.ndarray:
+    """Build an OpenGL perspective projection matrix.
+
+    Equivalent to THREE.PerspectiveCamera(fovy, aspect, near, far) and
+    mat4.perspective() from gl-matrix in Chapter 01.
+    """
+    f = 1.0 / np.tan(np.radians(fovy) / 2.0)
+    return np.array([
+        [f / aspect, 0,  0,                              0],
+        [0,          f,  0,                              0],
+        [0,          0,  (far + near) / (near - far),   -1],
+        [0,          0,  (2 * far * near) / (near - far), 0],
+    ], dtype=np.float32)</code></pre>
+
+<div class="info-box">
+  <p><strong>QOpenGLWidget in production:</strong> Maya's viewport 2.0, Nuke's viewer, Houdini's scene view, and Katana's viewer are all <code>QOpenGLWidget</code> subclasses (or the equivalent in Qt 5, <code>QGLWidget</code>). The <code>initializeGL</code> / <code>resizeGL</code> / <code>paintGL</code> lifecycle you are learning here is the same lifecycle those viewports use. The shaders inside <code>paintGL()</code> are executing on the same GPU pipeline as Chapter 01's WebGL demos — the language changed, the hardware did not.</p>
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtOpenGLWidgets/QOpenGLWidget.html" target="_blank" rel="noopener">QOpenGLWidget ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QSurfaceFormat.html" target="_blank" rel="noopener">QSurfaceFormat ↗</a>
+  <a class="pill" href="https://pyopengl.sourceforge.net/documentation/manual-3.0/" target="_blank" rel="noopener">PyOpenGL Docs ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Demo 4 — QOpenGLWidget</strong> &nbsp;<code>03_ca_opengl_widget.py</code></p>
+  <p>A <code>QMainWindow</code> with a <code>QOpenGLWidget</code> rendering a rotating coloured cube using modern OpenGL 3.3 core profile. Full VAO/VBO/EBO pipeline, GLSL vertex and fragment shaders, MVP matrix computed with NumPy. A control panel on the right provides rotation speed sliders, a wireframe toggle, and a live FPS counter. Every OpenGL call has an inline comment mapping it to its Chapter 01 WebGL equivalent.</p>
+  <p><em>How to run:</em></p>
+  <pre style="margin:6px 0 0;"><code>uv run python 03_ca_opengl_widget.py</code></pre>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>8. Composing a Desktop Animation Tool</h2>
+
+<h3>MVC architecture for animation applications</h3>
+<p>A professional animation application separates its concerns into three layers — the classic <strong>Model-View-Controller (MVC)</strong> pattern:</p>
+<ul>
+  <li><strong>Model</strong> — pure animation data and math. No Qt imports. A Python dataclass or plain object that holds the current frame, keyframe values, easing parameters, and an <code>evaluate(frame)</code> method. Because the model has no Qt dependency, it can be unit-tested, serialised to disk, and reused in a non-GUI context (e.g. a render farm script that uses the same curve math).</li>
+  <li><strong>View</strong> — Qt widgets. The OpenGL viewport, the timeline scrubber, the curve editor, the parameter panel. Views read from the model but never modify it directly — they emit signals when the user changes something.</li>
+  <li><strong>Controller</strong> — the <code>MainWindow</code> or a separate controller object. Connects View signals to Model updates and triggers View refreshes. It is the glue: "when the timeline emits <code>frame_changed(42)</code>, call <code>model.current_frame = 42</code>, then call <code>viewport.update()</code>."</li>
+</ul>
+
+<div class="info-box">
+  <p><strong>Why separate the model from Qt?</strong> Blender, Maya, and Nuke all follow this principle. The animation curve data in Maya's Graph Editor is a pure C++ data structure (the <code>MFnAnimCurve</code>) — no UI code touches it. The UI (the Graph Editor widget) reads from it, and the controller (Maya's undo/redo system) modifies it. Keeping the model Qt-free means it can run on a render farm, be serialised to USD, or be called from a unit test — the same data layer works everywhere.</p>
+</div>
+
+<h3>QSplitter: resizable panel layouts</h3>
+<p><code>QSplitter</code> divides a space between two or more widgets with a draggable handle. It is how every DCC tool implements its multi-panel layout.</p>
+
+<pre><code class="language-python">from PySide6.QtWidgets import QSplitter
+from PySide6.QtCore import Qt
+
+# Horizontal splitter: left panel | right panel
+h_splitter = QSplitter(Qt.Orientation.Horizontal)
+h_splitter.addWidget(gl_viewport)     # takes as much space as possible
+h_splitter.addWidget(right_panel)     # right panel at fixed or proportional width
+
+# Set initial sizes: viewport gets 70%, right panel gets 30%.
+total = self.width()
+h_splitter.setSizes([int(total * 0.7), int(total * 0.3)])
+
+# Nested splitter: top (viewport) | bottom (timeline)
+v_splitter = QSplitter(Qt.Orientation.Vertical)
+v_splitter.addWidget(h_splitter)      # the top area is itself a horizontal split
+v_splitter.addWidget(timeline_widget)
+
+# Save and restore panel layout with QSettings (professional applications always do this):
+# settings = QSettings("TUIlmenau", "ComputeranimationSeminar03")
+# h_splitter.restoreState(settings.value("mainSplitter"))
+# ... on close: settings.setValue("mainSplitter", h_splitter.saveState())
+</code></pre>
+
+<h3>Keyboard shortcuts</h3>
+<pre><code class="language-python">from PySide6.QtGui import QShortcut, QKeySequence
+
+# Space: play/pause — the universal shortcut in every animation tool.
+QShortcut(QKeySequence("Space"), self, activated=self._toggle_play)
+
+# Left/Right arrows: step one frame — identical shortcut in Maya, Blender, Nuke.
+QShortcut(QKeySequence(Qt.Key.Key_Left),  self, activated=self._step_back)
+QShortcut(QKeySequence(Qt.Key.Key_Right), self, activated=self._step_forward)
+
+# Home/End: go to first/last frame.
+QShortcut(QKeySequence(Qt.Key.Key_Home), self, activated=self._go_to_start)
+QShortcut(QKeySequence(Qt.Key.Key_End),  self, activated=self._go_to_end)</code></pre>
+
+<h3>Signal flow in Demo 5</h3>
+<p>The mini animation tool (Demo 5) connects four panels exclusively through signals — no panel calls methods on another panel directly. This is the correct professional architecture:</p>
+<pre><code class="language-text">TimelineWidget.frame_changed(int)
+    → MainWindow._on_frame_changed(frame)
+        → BounceAnimation.current_frame = frame      # update model
+        → GLViewport.set_frame(frame)                # update 3D view
+        → CurveEditor.set_playhead(frame)            # update curve playhead
+        → statusBar().showMessage(...)               # update status text
+
+ParameterPanel.bounce_height_changed(float)
+    → BounceAnimation.bounce_height = value          # update model
+    → CurveEditor.update()                           # redraw curve
+    → GLViewport.update()                            # re-render
+
+CurveEditor.easing_changed(float, float)             # emitted when handles dragged
+    → BounceAnimation.easing_p1 = value              # update model
+    → BounceAnimation.easing_p2 = value
+    → GLViewport.update()                            # re-render with new easing</code></pre>
+
+<p>Each panel owns its own display logic. No panel imports another panel's class. The <code>MainWindow</code> is the only place that knows about all four panels — it creates them and connects their signals. This is clean, testable, and scalable: adding a fifth panel only requires wiring it up in <code>MainWindow</code>.</p>
+
+<h3>Menu bar and status bar</h3>
+<pre><code class="language-python"># Menu bar (QMainWindow has one built in)
+menu_bar = self.menuBar()
+
+file_menu = menu_bar.addMenu("&amp;File")
+quit_action = file_menu.addAction("&amp;Quit")
+quit_action.setShortcut(QKeySequence.StandardKey.Quit)   # Ctrl+Q / Cmd+Q
+quit_action.triggered.connect(self.close)
+
+view_menu = menu_bar.addMenu("&amp;View")
+reset_action = view_menu.addAction("Reset Panels")
+reset_action.triggered.connect(self._reset_panel_sizes)
+
+# Status bar (QMainWindow has one built in)
+# showMessage() displays temporary text; clearMessage() removes it.
+# Permanent widgets can be added with statusBar().addPermanentWidget(label).
+self.statusBar().showMessage("Frame 1 / 120  |  0.00 s  |  60 FPS")</code></pre>
+
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QSplitter.html" target="_blank" rel="noopener">QSplitter ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtGui/QShortcut.html" target="_blank" rel="noopener">QShortcut ↗</a>
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QMainWindow.html" target="_blank" rel="noopener">QMainWindow ↗</a>
+</p>
+
+<div class="demo-box">
+  <p><strong>Demo 5 — Mini Animation Tool</strong> &nbsp;<code>03_ca_animation_tool.py</code></p>
+  <p>A complete multi-panel desktop animation application: an OpenGL viewport (sphere with Phong shading), a timeline scrubber, a live Bézier curve editor with draggable handles, and a parameter panel — all connected by signals. Space bar plays/pauses; arrow keys step frames. The <code>BounceAnimation</code> model is a pure Python dataclass with no Qt imports. This is the same architecture — at a smaller scale — as Blender, Maya, and Nuke.</p>
+  <p><em>How to run:</em></p>
+  <pre style="margin:6px 0 0;"><code>uv run python 03_ca_animation_tool.py</code></pre>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>9. Demo Index</h2>
+<p>All five demos are Python scripts located in the <code>seminar_03/</code> folder of the course repository. Run them with <code>uv run python &lt;filename&gt;</code> after completing <code>uv sync</code>.</p>
+<table>
+<thead>
+<tr><th>#</th><th>File</th><th>Concept</th><th>Key chapter sections</th><th>How to run</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td><code>03_ca_hello_pyside6.py</code></td>
+  <td>QMainWindow, QVBoxLayout, QSlider, QPushButton, signals and slots</td>
+  <td>Sections 2 – 4</td>
+  <td><code>uv run python 03_ca_hello_pyside6.py</code></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>03_ca_timeline.py</code></td>
+  <td>QTimer-driven animation loop, custom Signal(int), QPainter bouncing ball, reusable timeline component</td>
+  <td>Sections 4 – 6</td>
+  <td><code>uv run python 03_ca_timeline.py</code></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>03_ca_curves.py</code></td>
+  <td>QPainter cubic Bézier, NumPy easing functions, mouse drag interaction, QComboBox mode selector</td>
+  <td>Sections 5 – 6</td>
+  <td><code>uv run python 03_ca_curves.py</code></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>03_ca_opengl_widget.py</code></td>
+  <td>QOpenGLWidget, modern OpenGL 3.3 core, VAO/VBO/EBO, GLSL shaders, NumPy matrix math, PyOpenGL↔WebGL mapping</td>
+  <td>Sections 2, 7</td>
+  <td><code>uv run python 03_ca_opengl_widget.py</code></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>03_ca_animation_tool.py</code></td>
+  <td>MVC architecture, QSplitter multi-panel layout, cross-panel signal flow, menu bar, keyboard shortcuts, sphere Phong shading</td>
+  <td>Sections 4 – 8</td>
+  <td><code>uv run python 03_ca_animation_tool.py</code></td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Requirements:</strong> Python 3.12, Ubuntu 24.04 or Windows 11. On Ubuntu, install system libraries first:</p>
+<pre><code class="language-bash">sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
+uv sync
+uv run python 03_ca_hello_pyside6.py</code></pre>
+<p>On Windows no extra system libraries are needed — <code>uv sync</code> followed by <code>uv run python</code> is sufficient.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr />
+<h2>10. Further Resources</h2>
+<p>This chapter covered PySide6, uv, QPainter, and PyOpenGL — the Python desktop animation stack. The resources below are the best next steps.</p>
+<table>
+<thead>
+<tr><th>Resource</th><th>What it covers</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Qt for Python official documentation</strong></td><td>Complete PySide6 API reference. Mirrors the Qt C++ docs — every class page has Python examples.</td></tr>
+<tr><td><strong>Qt documentation (C++)</strong></td><td>The C++ Qt docs are more detailed and often have more examples. PySide6 and Qt C++ are a 1-to-1 mapping.</td></tr>
+<tr><td><strong>uv documentation</strong></td><td>Full reference for uv commands, pyproject.toml configuration, and workspace management.</td></tr>
+<tr><td><strong>Ruff documentation</strong></td><td>All lint rules, configuration options, and auto-fix behaviour. Use it as a learning tool: when ruff flags something, read why.</td></tr>
+<tr><td><strong>PyOpenGL documentation</strong></td><td>API reference and tutorials. The Python API mirrors the C API exactly — any OpenGL tutorial in C applies directly.</td></tr>
+<tr><td><strong>LearnOpenGL (learnopengl.com)</strong></td><td>The best OpenGL tutorial series available. Written in C++, but every concept and shader translates directly to PyOpenGL. Covers lighting, shadow maps, normal mapping, HDR, and much more beyond this chapter.</td></tr>
+<tr><td><strong>Qt Examples and Tutorials</strong></td><td>Dozens of complete PySide6 example applications in the Qt documentation. Particularly useful: the openglwindow and hellogl2 examples.</td></tr>
+</tbody>
+</table>
+<p style="margin:12px 0 0 0;">
+  <a class="pill" href="https://doc.qt.io/qtforpython-6/" target="_blank" rel="noopener">Qt for Python Docs ↗</a>
+  <a class="pill" href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv Docs ↗</a>
+  <a class="pill" href="https://docs.astral.sh/ruff/" target="_blank" rel="noopener">Ruff Docs ↗</a>
+  <a class="pill" href="https://pyopengl.sourceforge.net/" target="_blank" rel="noopener">PyOpenGL ↗</a>
+  <a class="pill" href="https://learnopengl.com/" target="_blank" rel="noopener">LearnOpenGL ↗</a>
+  <a class="pill" href="https://doc.qt.io/qt-6/qtwidgets-opengl-hellogl2-example.html" target="_blank" rel="noopener">Qt OpenGL Example ↗</a>
+</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="nb-footer-cell">
+  <p><b>Computeranimation</b> &middot; Chapter 03: PySide6 &amp; Python Animation<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>Notebook created by <b>Renato Fera P.</b> &middot;
+  <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a></p>
+</div>
+
+</div>
+</main>
+
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Chapter 03: PySide6 &amp; Python Animation &middot; Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Page maintained by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+</body>
+</html>

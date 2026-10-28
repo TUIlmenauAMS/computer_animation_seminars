@@ -1,22 +1,27 @@
 [project]
-name = "seminars"
+name = "computeranimation-seminars"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "Computeranimation — Course Materials, TU Ilmenau AMS Group"
 authors = [
-    { name = "Guitars.AI", email = "guitars.ai@rptecnologias.com" }
+    { name = "Renato Fera P.", email = "renato.profeta@tu-ilmenau.de" }
 ]
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
-
-[project.scripts]
-seminars = "seminars:main"
-
-[build-system]
-requires = ["uv_build>=0.13.0,<0.14.0"]
-build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
     "ipykernel>=7.4.0",
+    "ruff>=0.4.0",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
