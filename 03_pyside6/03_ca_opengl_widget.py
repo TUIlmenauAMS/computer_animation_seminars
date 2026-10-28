@@ -787,7 +787,7 @@ class ControlPanel(QWidget):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if LOGO_PATH.exists():
             pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
-                CONTROL_PANEL_WIDTH - 24,
+                80,
                 Qt.TransformationMode.SmoothTransformation,
             )
             logo_label.setPixmap(pixmap)
