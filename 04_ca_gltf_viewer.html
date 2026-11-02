@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo 1: glTF Viewer — Computeranimation Seminar 04</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  /* ── STEP 0: Design system — exact match to the course CSS variables ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --red:     #f87171;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 24px 0 20px;
+    flex-shrink: 0;
+  }
+  .header-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .header-logo img { width: 100px; border-radius: 10px; display: block; }
+  .header-info h1 { font-size: clamp(16px,2.5vw,22px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
+  .header-info h2 { font-size: 13px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
+  .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+  .header-author {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .header-author span { color: var(--text); font-weight: 500; }
+  .header-author .linkedin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(79,156,249,0.1);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    border: 1px solid rgba(79,156,249,0.25);
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .header-author .linkedin-badge:hover { background: rgba(79,156,249,0.2); }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 14px 32px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 6px; }
+
+  /* ── main layout ── */
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    flex: 1;
+    width: 100%;
+  }
+
+  /* ── demo intro ── */
+  .demo-intro {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .demo-intro h1 {
+    font-size: clamp(17px, 2.2vw, 24px);
+    font-weight: 500;
+    color: #f0f2f7;
+    margin-bottom: 8px;
+  }
+  .demo-badge {
+    display: inline-block;
+    background: rgba(79,156,249,0.12);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(79,156,249,0.3);
+    margin-bottom: 10px;
+  }
+  .demo-intro p { color: var(--text); margin-bottom: 6px; font-size: 14px; }
+  .demo-intro p:last-child { margin-bottom: 0; }
+
+  /* ── two-column layout: canvas left, panel right ── */
+  .demo-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .demo-layout { grid-template-columns: 1fr; }
+  }
+
+  /* ── canvas wrapper ── */
+  .canvas-wrap {
+    position: relative;
+    background: #0a0c11;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 16 / 10;
+    min-height: 360px;
+  }
+  #threeCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ── loading overlay ── */
+  #loadingOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(13,15,20,0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 10;
+    transition: opacity 0.4s;
+  }
+  #loadingOverlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .loading-title {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+  }
+  .loading-sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  progress {
+    width: 200px;
+    height: 4px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    border-radius: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  progress::-webkit-progress-bar { background: var(--border); border-radius: 2px; }
+  progress::-webkit-progress-value { background: var(--accent); border-radius: 2px; transition: width 0.2s; }
+  progress::-moz-progress-bar { background: var(--accent); border-radius: 2px; }
+  #loadingPct {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    min-width: 40px;
+    text-align: center;
+  }
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── error overlay ── */
+  #errorOverlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(13,15,20,0.92);
+    align-items: center;
+    justify-content: center;
+    z-index: 11;
+    padding: 24px;
+    text-align: center;
+  }
+  #errorOverlay.visible { display: flex; }
+  .error-inner {
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.3);
+    border-left: 4px solid var(--red);
+    border-radius: 8px;
+    padding: 20px 24px;
+    max-width: 420px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--red);
+    text-align: left;
+    line-height: 1.7;
+  }
+  .error-inner strong { display: block; margin-bottom: 8px; font-size: 14px; }
+
+  /* ── side panels ── */
+  .side-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .dot.green  { background: var(--green); }
+  .dot.blue   { background: var(--accent); }
+  .dot.orange { background: var(--orange); }
+  .dot.purple { background: var(--accent2); }
+  .panel-body { padding: 14px 16px; }
+
+  /* ── asset report ── */
+  #assetReport {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .report-key   { color: var(--muted); }
+  .report-val   { color: var(--text); }
+  .report-name  { color: var(--accent); }
+  .report-label { color: var(--accent2); font-weight: 500; margin-top: 6px; display: block; }
+  .report-placeholder { color: var(--muted); font-style: italic; }
+
+  /* ── controls panel ── */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ctrl-row:last-child { margin-bottom: 0; }
+  .ctrl-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 90px;
+  }
+
+  /* toggle */
+  .toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-btn.active { background: rgba(79,156,249,0.1); border-color: var(--accent); color: var(--accent); }
+
+  /* ── info box ── */
+  .info-box {
+    border-left: 4px solid var(--accent);
+    background: rgba(79,156,249,0.06);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .info-box strong { color: var(--accent); }
+
+  .concept-box {
+    border-left: 4px solid var(--accent2);
+    background: rgba(167,139,250,0.06);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .concept-box strong { color: var(--accent2); }
+
+  /* ── footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 18px 32px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+    width: 100%;
+  }
+  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 700px) {
+    .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ── Header — matches course design system exactly ── -->
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation — Seminar 04: glTF &amp; Character Animation</h1>
+      <h2>Demo 1 — glTF Viewer</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+      </p>
+      <div class="header-author">
+        <span>Demo created by Renato Fera P.</span>
+        <a class="linkedin-badge"
+           href="https://www.linkedin.com/in/renato-profeta/"
+           target="_blank" rel="noopener">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+          </svg>
+          LinkedIn
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  <a href="04_computeranimation_gltf.html">Chapter 04: glTF &amp; Character Animation</a>
+  <span>›</span>
+  Demo 1: glTF Viewer
+</nav>
+
+<main>
+
+  <!-- ── Demo intro ── -->
+  <div class="demo-intro">
+    <div class="demo-badge">🦊 Three.js · GLTFLoader · OrbitControls</div>
+    <h1>Demo 1: glTF Viewer</h1>
+    <p>
+      The entry point for Seminar 04. This demo loads <strong>Fox.glb</strong> — a fully rigged, animated
+      character from the Khronos glTF Sample Assets — using <strong>GLTFLoader</strong> and displays it
+      in a Three.js scene with hemisphere lighting and <strong>OrbitControls</strong>.
+    </p>
+    <p>
+      After the model loads, open <strong>DevTools → Console</strong> and inspect the <code>gltf</code>
+      object that is logged there. You will find <code>gltf.scene</code> (the Three.js scene graph),
+      <code>gltf.animations</code> (three named AnimationClips: Survey, Walk, Run), and
+      <code>gltf.asset</code> (version metadata). The asset report panel on the right is built from
+      the same data — it shows exactly what the loader hands you.
+    </p>
+  </div>
+
+  <!-- ── Demo layout: canvas + sidebar ── -->
+  <div class="demo-layout">
+
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <canvas id="threeCanvas"></canvas>
+
+      <!-- Loading overlay — shown by default, hidden by onLoad callback -->
+      <div id="loadingOverlay">
+        <div class="loading-title">Loading Fox.glb…</div>
+        <div class="progress-row">
+          <progress id="loadProgress" value="0" max="100"></progress>
+          <span id="loadingPct">0%</span>
+        </div>
+        <div class="loading-sub">Model: Khronos glTF Sample Assets · CC-BY 4.0</div>
+      </div>
+
+      <!-- Error overlay — hidden by default, shown by onError callback -->
+      <div id="errorOverlay">
+        <div class="error-inner">
+          <strong>⚠ Could not load Fox.glb</strong>
+          Check that the file exists at <code>seminar_04/Fox.glb</code> relative to this HTML
+          file.<br><br>
+          Download it from:<br>
+          <code style="font-size:11px;word-break:break-all;">
+            https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb
+          </code>
+          <br><br>
+          Place it at <code>seminar_04/Fox.glb</code> in the repo root and refresh this page.
+        </div>
+      </div>
+    </div>
+
+    <!-- Side panels -->
+    <div class="side-col">
+
+      <!-- Controls -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="dot blue"></div>
+          Controls
+        </div>
+        <div class="panel-body">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Rotate</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--muted);">Left-drag</span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Zoom</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--muted);">Scroll wheel</span>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Pan</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--muted);">Right-drag</span>
+          </div>
+          <div class="ctrl-row" style="margin-top:12px;">
+            <span class="ctrl-label">Wireframe</span>
+            <button id="wireframeBtn" class="toggle-btn">Off</button>
+          </div>
+          <div class="ctrl-row">
+            <span class="ctrl-label">Grid</span>
+            <button id="gridBtn" class="toggle-btn active">On</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Asset report -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="dot green"></div>
+          Asset Report
+        </div>
+        <div class="panel-body">
+          <div id="assetReport">
+            <span class="report-placeholder">Waiting for Fox.glb…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Concept note -->
+      <div class="concept-box">
+        <strong>THREE.JS CONCEPT — importmap</strong><br>
+        This demo uses a <code>&lt;script type="importmap"&gt;</code> block to tell the browser how
+        to resolve bare module specifiers like <code>'three'</code> without a bundler.
+        This is how modern Three.js is used with plain HTML — no Webpack or Vite needed.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Concept callouts below the viewport -->
+  <div class="info-box" style="margin-top:20px;">
+    <strong>GLTF CONCEPT — <code>gltf.scene</code></strong><br>
+    <code>gltf.scene</code> is a <code>THREE.Group</code> containing the entire glTF scene hierarchy.
+    Every mesh, bone node, and camera from the <code>.glb</code> file is a descendant of this group.
+    Calling <code>scene.add(gltf.scene)</code> integrates the whole asset into the Three.js world in a single call.
+  </div>
+
+  <div class="info-box" style="margin-top:12px;">
+    <strong>ANIMATION CONCEPT — <code>renderer.outputColorSpace = THREE.SRGBColorSpace</code></strong><br>
+    glTF 2.0 mandates that all colour textures are stored in <strong>sRGB colour space</strong>.
+    Three.js must apply an sRGB-to-linear conversion when displaying them, or colours appear washed out and flat.
+    Setting <code>outputColorSpace</code> enables this — it is the same gamma correction problem as in offline rendering,
+    solved here automatically by the renderer.
+  </div>
+
+</main>
+
+<footer>
+  <p>
+    <strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau
+  </p>
+  <p>
+    Demo created by
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a>
+    · Model: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener">Khronos glTF Sample Assets</a>
+    (Fox, CC-BY 4.0)
+  </p>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STEP 0: Module imports via importmap
+     An importmap tells the browser how to resolve bare module
+     specifiers ("three", "three/examples/jsm/...") without a
+     bundler. All CDN URLs are pinned to three@0.165.0 — never
+     use @latest in teaching demos (versions can break silently).
+     ═══════════════════════════════════════════════════════════ -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/examples/jsm/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js",
+    "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+  }
+}
+</script>
+
+<script type="module">
+// ─────────────────────────────────────────────────────────────
+// STEP 0: Import Three.js core and the two extras we need.
+//   - THREE          : the core library (scene, renderer, camera…)
+//   - GLTFLoader     : parser for .glb / .gltf files
+//   - OrbitControls  : mouse/touch camera orbiting
+//
+// Because we declared the importmap above, we can use bare
+// specifiers here exactly as if we were running inside a bundler.
+// ─────────────────────────────────────────────────────────────
+import * as THREE from 'three';
+import { GLTFLoader }    from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+// ─────────────────────────────────────────────────────────────
+// STEP 1: Scene + Renderer + Camera
+//   The renderer is the bridge between Three.js and the browser's
+//   WebGL context. antialias:true smooths jagged edges.
+// ─────────────────────────────────────────────────────────────
+
+const canvas   = document.getElementById('threeCanvas');
+const overlay  = document.getElementById('loadingOverlay');
+const errorEl  = document.getElementById('errorOverlay');
+const progress = document.getElementById('loadProgress');
+const pctLabel = document.getElementById('loadingPct');
+const reportEl = document.getElementById('assetReport');
+
+// Scene — the root container for all 3D objects, lights, and cameras.
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0c11);  // matches .canvas-wrap background
+
+// Renderer — creates and manages the WebGL context on <canvas>.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;  // soft shadow edges
+
+// ANIMATION CONCEPT: outputColorSpace = SRGBColorSpace
+// glTF 2.0 stores colour textures in sRGB. Three.js must be told
+// to apply sRGB→linear conversion when displaying them; without
+// this, textures appear washed-out (gamma not applied).
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+// Size the renderer to fill its CSS container.
+// We'll update this on resize (STEP 6).
+function setRendererSize() {
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+// PerspectiveCamera(fov, aspect, near, far)
+// fov=45 is a natural focal length for character viewing.
+// near/far define the frustum — nothing outside is rendered.
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+camera.position.set(0, 1.5, 3.5);  // positioned in front of the Fox
+
+// ─────────────────────────────────────────────────────────────
+// STEP 2: Lighting
+//   HemisphereLight simulates sky + ground ambient light —
+//   better than plain AmbientLight for characters because it
+//   adds a subtle sky/ground colour gradient that reads as
+//   "outdoor environment" to the eye.
+//   DirectionalLight provides the dominant sun direction with shadows.
+// ─────────────────────────────────────────────────────────────
+
+// HemisphereLight(skyColor, groundColor, intensity)
+// Sky colour = cool blue-white; ground colour = warm brown.
+// This gives the Fox a natural outdoor look without any HDR environment map.
+const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x442200, 1.2);
+scene.add(hemiLight);
+
+// DirectionalLight — the "sun". Cast shadows for depth cues.
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+dirLight.position.set(3, 8, 5);
+dirLight.castShadow = true;
+dirLight.shadow.camera.near = 0.1;
+dirLight.shadow.camera.far  = 30;
+dirLight.shadow.camera.left   = -3;
+dirLight.shadow.camera.right  =  3;
+dirLight.shadow.camera.top    =  4;
+dirLight.shadow.camera.bottom = -1;
+dirLight.shadow.mapSize.set(1024, 1024);
+scene.add(dirLight);
+
+// Fill light from the opposite side, softer, no shadows.
+const fillLight = new THREE.DirectionalLight(0x88aaff, 0.4);
+fillLight.position.set(-3, 3, -3);
+scene.add(fillLight);
+
+// Ground plane — receives shadows so the Fox appears grounded.
+const groundGeo  = new THREE.PlaneGeometry(8, 8);
+const groundMat  = new THREE.MeshStandardMaterial({
+  color: 0x1a1f2b,
+  roughness: 0.9,
+  metalness: 0.0,
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid helper — visual reference for scale.
+const grid = new THREE.GridHelper(6, 20, 0x252b38, 0x252b38);
+grid.position.y = 0.001;  // just above the ground to avoid z-fighting
+scene.add(grid);
+
+// ─────────────────────────────────────────────────────────────
+// STEP 3: OrbitControls
+//   OrbitControls lets the user rotate, zoom, and pan the camera
+//   with mouse or touch gestures. We attach it to the renderer's
+//   DOM element so it receives pointer events from the canvas.
+// ─────────────────────────────────────────────────────────────
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;        // smooth inertia on mouse release
+controls.dampingFactor = 0.08;
+controls.minDistance   = 0.5;
+controls.maxDistance   = 12;
+controls.target.set(0, 0.8, 0);      // orbit around the Fox's approximate centre
+controls.update();
+
+// ─────────────────────────────────────────────────────────────
+// STEP 4: GLTFLoader — load Fox.glb
+//   GLTFLoader is asynchronous. It takes four callbacks:
+//     onLoad    — called once when the entire file is parsed
+//     onProgress — called repeatedly with XHR progress events
+//     onError   — called if the file cannot be loaded
+//
+// GLTF CONCEPT: gltf.scene is a THREE.Group containing the whole
+// glTF scene hierarchy. Adding it to the Three.js scene integrates
+// all meshes, bones, and cameras in one call.
+// ─────────────────────────────────────────────────────────────
+
+/** @type {THREE.AnimationMixer|null} Declared here — used in the render loop (STEP 5). */
+let mixer = null;
+
+const loader = new GLTFLoader();
+loader.load(
+  // Asset path — relative to this HTML file.
+  // seminar_04/Fox.glb must be committed to the repo alongside this demo.
+  'seminar_04/Fox.glb',
+
+  // ── onLoad ───────────────────────────────────────────────
+  function onLoad(gltf) {
+
+    // GLTF CONCEPT: gltf.scene is a THREE.Group — the root of
+    // the glTF scene node tree. All meshes and bone nodes live
+    // inside it. scene.add() integrates the whole character.
+    scene.add(gltf.scene);
+
+    // Fox.glb is exported at a very small scale (~0.01 units = 1 cm).
+    // Scale up so the Fox stands about 1.5 units tall in Three.js world space.
+    gltf.scene.scale.setScalar(0.01);
+
+    // Make all Fox meshes cast and receive shadows.
+    gltf.scene.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow    = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    // STEP 4a: Log the full gltf object so students can inspect it in DevTools.
+    // Open the browser console (F12) and expand "gltf" to explore:
+    //   gltf.scene         — the THREE.Group scene root
+    //   gltf.animations    — Array<AnimationClip> — Survey, Walk, Run
+    //   gltf.asset         — { version: "2.0", generator: "...", copyright: "..." }
+    //   gltf.cameras       — Array<Camera>  (empty for Fox — no cameras in the file)
+    // THREE.JS CONCEPT: AnimationMixer is declared here but not started in Demo 1.
+    // The pattern is planted so Demos 3–4 can extend it naturally.
+    console.log('── glTF asset loaded ─────────────────────────');
+    console.log('gltf:', gltf);
+    console.log('gltf.scene (THREE.Group):', gltf.scene);
+    console.log('gltf.animations (Array<AnimationClip>):', gltf.animations);
+    console.log('gltf.asset (metadata):', gltf.asset);
+    console.log('─────────────────────────────────────────────');
+
+    // Create the mixer now so the render loop pattern is already correct.
+    // In Demo 1 no clips are played — Fox stands in the bind (rest) pose.
+    mixer = new THREE.AnimationMixer(gltf.scene);
+
+    // Reposition the camera target to the Fox's bounding sphere centre.
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const centre = box.getCenter(new THREE.Vector3());
+    const size   = box.getSize(new THREE.Vector3()).length();
+    controls.target.copy(centre);
+    camera.position.set(centre.x, centre.y + size * 0.3, centre.z + size * 0.9);
+    controls.update();
+
+    // Build the asset report panel.
+    buildReport(gltf);
+
+    // Hide the loading overlay.
+    overlay.classList.add('hidden');
+  },
+
+  // ── onProgress ───────────────────────────────────────────
+  function onProgress(xhr) {
+    if (xhr.lengthComputable) {
+      const pct = Math.round((xhr.loaded / xhr.total) * 100);
+      progress.value = pct;
+      pctLabel.textContent = pct + '%';
+    }
+  },
+
+  // ── onError ──────────────────────────────────────────────
+  function onError(err) {
+    console.error('GLTFLoader error:', err);
+    errorEl.classList.add('visible');
+    overlay.classList.add('hidden');
+  }
+);
+
+// ─────────────────────────────────────────────────────────────
+// STEP 4b: buildReport — construct the human-readable asset
+//   summary shown in the side panel. The data comes directly
+//   from the gltf object — no additional parsing needed.
+//
+// @param {object} gltf — The object returned by GLTFLoader.load onLoad.
+// ─────────────────────────────────────────────────────────────
+/**
+ * Builds the HTML asset report from a loaded glTF object and
+ * injects it into the #assetReport element.
+ *
+ * @param {object} gltf - The object passed to the GLTFLoader onLoad callback.
+ */
+function buildReport(gltf) {
+  // Count node types in the scene graph.
+  let meshCount     = 0;
+  let skinnedCount  = 0;
+  let boneCount     = 0;
+
+  gltf.scene.traverse((obj) => {
+    if (obj.isMesh)        meshCount++;
+    if (obj.isSkinnedMesh) skinnedCount++;
+    if (obj.isBone)        boneCount++;
+  });
+
+  const animNames = gltf.animations.map((a) => '  · ' + a.name).join('\n');
+
+  // Build styled HTML — colours match the course design system.
+  const html = [
+    row('generator',   gltf.asset.generator || '—'),
+    row('version',     gltf.asset.glTF || gltf.asset.version || '2.0'),
+    row('copyright',   gltf.asset.copyright || '—'),
+    '',
+    label('Scene graph'),
+    row('total nodes', '' + countNodes(gltf.scene)),
+    row('meshes',      '' + meshCount),
+    row('skinned',     '' + skinnedCount),
+    row('bones',       '' + boneCount),
+    '',
+    label('Animations (' + gltf.animations.length + ')'),
+    animNames || '  (none)',
+  ].join('\n');
+
+  reportEl.innerHTML = html;
+
+  /** Build one key/value line of the report. */
+  function row(key, val) {
+    return `<span class="report-key">${key.padEnd(14)}</span><span class="report-val">${val}</span>`;
+  }
+
+  /** Build a section label. */
+  function label(text) {
+    return `<span class="report-label">${text}</span>`;
+  }
+
+  /** Count all Object3D descendants (including root). */
+  function countNodes(root) {
+    let n = 0;
+    root.traverse(() => n++);
+    return n;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// STEP 5: Render loop
+//   requestAnimationFrame drives the loop at the display refresh
+//   rate (typically 60 Hz). THREE.Clock.getDelta() returns the
+//   elapsed seconds since the last frame — frame-rate independent.
+//
+//   mixer.update(delta) — advances all active AnimationActions.
+//   In Demo 1 no clips are playing, so this call has no visible
+//   effect — but the pattern is identical in Demos 3 and 4.
+//
+//   controls.update() — applies damping each frame.
+//   renderer.render(scene, camera) — draws the frame.
+// ─────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Delta-time: seconds since last frame. Used by mixer (Demos 3–4).
+  const delta = clock.getDelta();
+
+  // Advance the animation mixer if a model is loaded.
+  // (No-op in Demo 1 since no actions are playing yet.)
+  if (mixer) mixer.update(delta);
+
+  // Apply damping to OrbitControls each frame.
+  controls.update();
+
+  // Draw the scene.
+  renderer.render(scene, camera);
+}
+
+// Initialise renderer size before starting the loop.
+setRendererSize();
+animate();
+
+// ─────────────────────────────────────────────────────────────
+// STEP 6: Resize handler
+//   Window resize events require updating both the renderer
+//   resolution and the camera's aspect ratio. Without this,
+//   the scene distorts when the browser window changes size.
+// ─────────────────────────────────────────────────────────────
+window.addEventListener('resize', setRendererSize);
+
+// ─────────────────────────────────────────────────────────────
+// UI: Wireframe toggle — cycles all mesh materials between
+//     solid and wireframe rendering modes.
+// ─────────────────────────────────────────────────────────────
+let wireframeOn = false;
+
+/**
+ * Toggle wireframe mode on all meshes in the scene.
+ *
+ * @param {boolean} enabled - Whether wireframe should be on.
+ */
+function setWireframe(enabled) {
+  scene.traverse((obj) => {
+    if (obj.isMesh && obj.material) {
+      // material may be an array (multi-material mesh)
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach((m) => { m.wireframe = enabled; });
+    }
+  });
+}
+
+document.getElementById('wireframeBtn').addEventListener('click', function () {
+  wireframeOn = !wireframeOn;
+  setWireframe(wireframeOn);
+  this.textContent  = wireframeOn ? 'On' : 'Off';
+  this.classList.toggle('active', wireframeOn);
+});
+
+// ─────────────────────────────────────────────────────────────
+// UI: Grid toggle — show / hide the GridHelper.
+// ─────────────────────────────────────────────────────────────
+let gridOn = true;
+
+document.getElementById('gridBtn').addEventListener('click', function () {
+  gridOn = !gridOn;
+  grid.visible = gridOn;
+  this.textContent = gridOn ? 'On' : 'Off';
+  this.classList.toggle('active', gridOn);
+});
+
+</script>
+</body>
+</html>
