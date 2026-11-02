@@ -373,12 +373,9 @@
       change live as the mixer drives it, exactly as you would see in Blender's Graph Editor.
     </p>
     <p>
-      CesiumMan ships four clips: the original Walk from the Khronos file plus Idle, Run, and Wave
-      loaded from separate Mixamo GLBs — demonstrating <strong>clip portability</strong>: any
-      AnimationClip whose tracks target the same bone names can be played on a given skeleton,
-      regardless of which file it came from. Drop any GLB from Mixamo or Quaternius into the
-      sidebar to load it live. Open <strong>DevTools → Console</strong> to see raw clip names vs
-      display names, and to inspect <code>mixer</code> and <code>currentAction</code>.
+      Open <strong>DevTools → Console</strong> to see raw clip names vs display names, and to
+      inspect <code>mixer</code> and <code>currentAction</code>. Drop any GLB into the sidebar
+      or onto the canvas to load it live.
     </p>
   </div>
 
@@ -449,7 +446,7 @@
             <div class="model-select-label">Active character</div>
             <select id="modelSelect">
               <option value="fox">Fox — 3 clips (Survey, Walk, Run)</option>
-              <option value="cesium">CesiumMan — 4 clips (Walk, Idle, Run, Wave)</option>
+              <option value="cesium">CesiumMan — 1 clip (Walk)</option>
               <option value="_sep" disabled style="color:var(--muted);">── or drop any GLB ──────────</option>
               <option value="_hint" disabled style="color:var(--muted);font-style:italic;">Use the drop zone below ↓</option>
             </select>
@@ -571,25 +568,21 @@
   </div>
 
   <div class="concept-box" style="margin-top:12px;">
-    <strong>ANIMATION CONCEPT — Clip portability and clip name remapping</strong><br>
-    CesiumMan's original Khronos GLB contains one clip named <code>"animation_0"</code> — a
-    machine name from the old COLLADA2GLTF pipeline. The demo remaps it to <code>"Walk"</code>
-    by writing to <code>clip.name</code> after load; the raw name is still logged to the console.
-    The extra clips (Idle, Run, Wave) are separate GLBs from Mixamo, loaded in parallel after the
-    main model. Because <code>THREE.AnimationClip</code> addresses bones by name string
-    (e.g. <code>"Skeleton_spine_joint_1.quaternion"</code>), any clip exported for the
-    CesiumMan skeleton plays on it regardless of source file.
+    <strong>ANIMATION CONCEPT — Clip name remapping</strong><br>
+    CesiumMan's GLB contains one clip named <code>"animation_0"</code> — a machine name from
+    the old COLLADA2GLTF pipeline. The demo remaps it to <code>"Walk"</code> by writing to
+    <code>clip.name</code> after load. The raw name is preserved in <code>clip._rawName</code>
+    and logged to the console, so you can see exactly what is stored in the file versus what
+    is displayed in the UI. Fox's clips (Survey, Walk, Run) were already human-readable and
+    are passed through unchanged.
   </div>
 
   <div class="info-box">
-    <strong>Getting Mixamo clips for CesiumMan</strong><br>
-    Go to <a href="https://www.mixamo.com" target="_blank" rel="noopener">mixamo.com</a> (free Adobe
-    account). Upload <code>CesiumMan.glb</code> as your character, pick an animation, set
-    <em>Skin: Without Skin</em>, and download as GLB. Name the file
-    <code>CesiumMan_Idle.glb</code>, <code>CesiumMan_Run.glb</code>, or
-    <code>CesiumMan_Waving.glb</code> and place it in <code>04_gltf/</code> — the demo picks it
-    up automatically. Alternatively drop any GLB directly into the sidebar drop zone to load
-    an arbitrary character with all its embedded clips.
+    <strong>Fox vs CesiumMan — animation data</strong><br>
+    Fox ships three clips with 24 bones — a compact quadruped rig. CesiumMan ships one walk
+    cycle with 67 bones, including finger and facial bones, demonstrating the density of a full
+    humanoid rig. Switching models live shows that the <code>AnimationMixer</code> is discarded
+    and rebuilt per character — each model owns its own mixer instance.
   </div>
 
 </main>
@@ -745,20 +738,13 @@ const MODEL_REGISTRY = {
     path:  '04_gltf/CesiumMan.glb',
     label: 'CesiumMan.glb',
     scale: 1.0,
-    // The COLLADA2GLTF exporter named the clip "animation_0".
-    // We remap it here; all other clips keep their Mixamo names.
+    // The COLLADA2GLTF exporter named the single clip "animation_0".
+    // We remap it to a human-readable name here; the raw name is
+    // preserved in clip._rawName and logged to the console.
     clipNames: {
       'animation_0': 'Walk',
     },
-    // Extra single-clip GLBs exported from Mixamo for this skeleton.
-    // Each file contains one AnimationClip; we extract it and rename.
-    // Download from mixamo.com → select CesiumMan → pick animation →
-    // set Skin: "Without Skin" → Download as GLB. Place in 04_gltf/.
-    extraClips: [
-      { path: '04_gltf/CesiumMan_Idle.glb',       displayName: 'Idle'       },
-      { path: '04_gltf/CesiumMan_Run.glb',         displayName: 'Run'        },
-      { path: '04_gltf/CesiumMan_Waving.glb',      displayName: 'Wave'       },
-    ],
+    extraClips: [],
   },
   // "drop" is a virtual key used when the user drops any arbitrary GLB.
   // loadFromFile() sets activeModelKey to 'drop' and fills in a synthetic
