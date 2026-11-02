@@ -1778,38 +1778,71 @@
           }
         }
 
-        // DEBUG: revert to simplest possible approach — original code
+        // THREE.SkeletonHelper explanation and fix:
+        //
+        // SkeletonHelper sets:
+        //   this.matrix = root.matrixWorld        (live reference, not a copy)
+        //   this.matrixAutoUpdate = false
+        //
+        // In updateMatrixWorld(), it stores bone positions as:
+        //   geometry[i] = root.matrixWorld⁻¹ × bone.matrixWorld   (root-local space)
+        //
+        // Then super.updateMatrixWorld() computes:
+        //   this.matrixWorld = parent.matrixWorld × this.matrix
+        //                    = scene.matrixWorld  × root.matrixWorld
+        //                    = identity           × root.matrixWorld
+        //                    = root.matrixWorld
+        //
+        // So final rendered position = root.matrixWorld × (root.matrixWorld⁻¹ × bone.matrixWorld)
+        //                            = bone.matrixWorld   ← CORRECT in theory
+        //
+        // BUT: the debug output showed bone world positions at (-3, 3, -3) and
+        // helper geometry world positions at (-6, 6, -6) — exactly 2× the bones.
+        //
+        // The real issue: OrbitControls moves the camera, not the scene. But
+        // characterRoot was placed at world origin. The bones show (-3,3,-3)
+        // because controls.target was set to (0,0.8,0) initially but then
+        // fitCameraToModel reset it to the bounding box center. With scale 0.01,
+        // the bounding box is tiny (~1m) so the camera moves close in, but
+        // something shifts characterRoot's matrixWorld to (-3,3,-3).
+        //
+        // Actually the debug shows helper.matrix === characterRoot.matrixWorld (true),
+        // meaning the live reference is intact. The double at (-6,6,-6) means
+        // matrixWorld of the helper = characterRoot.matrixWorld applied twice.
+        // This happens because `characterRoot` has been moved to (-3,3,-3)
+        // (perhaps by fitCameraToModel or controls), so:
+        //   geometry stores bone positions in root-local (cm), e.g. (0,41,-24)
+        //   matrixWorld = root.matrixWorld = translate(-3,3,-3)×scale(0.01)
+        //   rendered pos = translate(-3,3,-3)×scale(0.01) × (0,41,-24)
+        //                = (-3 + 0*0.01, 3 + 41*0.01, -3 + -24*0.01) = (-3, 3.41, -3.24) ← correct!
+        // But the debug says (-6,6,-6) for a zero-position vertex...
+        // A zero-position vertex: translate(-3,3,-3)×scale(0.01) × (0,0,0) = (-3,3,-3) ← should be (-3,3,-3)
+        // But the debug shows (-6,6,-6)! That means matrixWorld is translating by (-6,6,-6), not (-3,3,-3).
+        //
+        // CONCLUSION: characterRoot.matrixWorld IS being applied twice to the helper.
+        // This is a Three.js quirk: when the helper is added to the scene AND
+        // scene.updateMatrixWorld() is called, it computes:
+        //   helper.matrixWorld = scene.matrixWorld × helper.matrix
+        //                      = identity × characterRoot.matrixWorld
+        // But then the renderer ALSO multiplies geometry by matrixWorld when drawing.
+        // For regular objects, geometry is in LOCAL space and matrixWorld brings it to world.
+        // The helper geometry is ALREADY in world space (bone world positions),
+        // so the matrixWorld transform is one too many.
+        //
+        // THE FIX: after constructing the helper, replace its matrix with the
+        // identity matrix so matrixWorld stays identity and the geometry positions
+        // (which are already correct world-space positions) render without any
+        // additional transform applied.
         skeletonHelper = new THREE.SkeletonHelper(characterRoot);
+        // Override the matrix that SkeletonHelper set to characterRoot.matrixWorld.
+        // The helper's geometry updateMatrixWorld() writes bone positions in
+        // root-local space, which after multiplication by root.matrixWorld gives
+        // world positions — but those are the geometry values we want rendered
+        // with NO additional transform. Setting matrix to identity achieves this.
+        skeletonHelper.matrix = new THREE.Matrix4(); // identity — don't re-apply any transform
+        skeletonHelper.matrixWorld = new THREE.Matrix4(); // identity in world too
         skeletonHelper.visible = skeletonVisible;
         scene.add(skeletonHelper);
-
-        // DEBUG: after 3 frames, log actual world positions so we can
-        // see where bones actually end up vs where the helper renders them.
-        let debugFrames = 0;
-        const debugFn = () => {
-          if (++debugFrames < 3) { requestAnimationFrame(debugFn); return; }
-          console.log("=== DEBUG BONE WORLD POSITIONS (frame 3) ===");
-          characterRoot.traverse(o => {
-            if (o.isBone) {
-              const wp = new THREE.Vector3();
-              o.getWorldPosition(wp);
-              console.log(`  BONE "${o.name}" world=(${wp.x.toFixed(4)}, ${wp.y.toFixed(4)}, ${wp.z.toFixed(4)})`);
-            }
-          });
-          const helperPos = skeletonHelper.geometry.getAttribute('position');
-          console.log("=== SKELETON HELPER geometry (local space, first 6 verts) ===");
-          for (let i = 0; i < Math.min(6, helperPos.count); i++) {
-            const lv = new THREE.Vector3(helperPos.getX(i), helperPos.getY(i), helperPos.getZ(i));
-            const wv = lv.clone().applyMatrix4(skeletonHelper.matrixWorld);
-            console.log(`  vert[${i}] local=(${lv.x.toFixed(3)},${lv.y.toFixed(3)},${lv.z.toFixed(3)}) world=(${wv.x.toFixed(4)},${wv.y.toFixed(4)},${wv.z.toFixed(4)})`);
-          }
-          console.log("=== HELPER matrixWorld ===");
-          console.log(skeletonHelper.matrixWorld.elements.map(v=>v.toFixed(4)));
-          console.log("=== characterRoot matrixWorld ===");
-          console.log(characterRoot.matrixWorld.elements.map(v=>v.toFixed(4)));
-          console.log("=== helper.matrix === characterRoot.matrixWorld?", skeletonHelper.matrix === characterRoot.matrixWorld);
-        };
-        requestAnimationFrame(debugFn);
 
         fitCameraToModel(characterRoot);
         applyWireframe(wireframeOn);
