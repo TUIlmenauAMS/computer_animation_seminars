@@ -1,1300 +1,2238 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo 3: Locomotion State Machine — Computeranimation Seminar 04</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Demo 3: Locomotion State Machine — Computeranimation Seminar 04
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-  :root {
-    --bg:      #0d0f14;
-    --surface: #161a22;
-    --border:  #252b38;
-    --text:    #d8dce6;
-    --muted:   #5a6175;
-    --accent:  #4f9cf9;
-    --accent2: #a78bfa;
-    --green:   #34d399;
-    --orange:  #fb923c;
-    --red:     #f87171;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-  }
+      :root {
+        --bg: #0d0f14;
+        --surface: #161a22;
+        --border: #252b38;
+        --text: #d8dce6;
+        --muted: #5a6175;
+        --accent: #4f9cf9;
+        --accent2: #a78bfa;
+        --green: #34d399;
+        --orange: #fb923c;
+        --red: #f87171;
+        --mono: "IBM Plex Mono", monospace;
+        --sans: "IBM Plex Sans", sans-serif;
+      }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.7;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.7;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
 
-  /* ── header ── */
-  header { border-bottom: 2px solid var(--border); padding: 24px 0 20px; flex-shrink: 0; }
-  .header-inner {
-    max-width: 1200px; margin: 0 auto; padding: 0 32px;
-    display: flex; align-items: center; gap: 24px;
-  }
-  .header-logo img { width: 100px; border-radius: 10px; display: block; }
-  .header-info h1 { font-size: clamp(16px,2.5vw,22px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
-  .header-info h2 { font-size: 13px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
-  .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
-  .header-meta a { color: var(--accent); text-decoration: none; }
-  .header-meta a:hover { text-decoration: underline; }
-  .header-author {
-    display: flex; align-items: center; gap: 10px;
-    margin-top: 8px; padding-top: 8px;
-    border-top: 1px solid var(--border);
-    font-size: 13px; color: var(--muted);
-  }
-  .header-author span { color: var(--text); font-weight: 500; }
-  .header-author .linkedin-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(79,156,249,0.1); color: var(--accent);
-    font-family: var(--mono); font-size: 11px;
-    padding: 2px 9px; border-radius: 20px;
-    border: 1px solid rgba(79,156,249,0.25);
-    text-decoration: none; transition: background 0.15s;
-  }
-  .header-author .linkedin-badge:hover { background: rgba(79,156,249,0.2); }
+      /* ── header ── */
+      header {
+        border-bottom: 2px solid var(--border);
+        padding: 24px 0 20px;
+        flex-shrink: 0;
+      }
+      .header-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 32px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+      }
+      .header-logo img {
+        width: 100px;
+        border-radius: 10px;
+        display: block;
+      }
+      .header-info h1 {
+        font-size: clamp(16px, 2.5vw, 22px);
+        font-weight: 500;
+        color: #f0f2f7;
+        line-height: 1.2;
+        margin-bottom: 4px;
+      }
+      .header-info h2 {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--muted);
+        font-family: var(--mono);
+        margin-bottom: 8px;
+      }
+      .header-meta {
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .header-meta a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .header-meta a:hover {
+        text-decoration: underline;
+      }
+      .header-author {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .header-author span {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .header-author .linkedin-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(79, 156, 249, 0.1);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 2px 9px;
+        border-radius: 20px;
+        border: 1px solid rgba(79, 156, 249, 0.25);
+        text-decoration: none;
+        transition: background 0.15s;
+      }
+      .header-author .linkedin-badge:hover {
+        background: rgba(79, 156, 249, 0.2);
+      }
 
-  /* ── breadcrumb ── */
-  .breadcrumb {
-    max-width: 1200px; margin: 0 auto; padding: 14px 32px 0;
-    font-family: var(--mono); font-size: 12px; color: var(--muted); flex-shrink: 0;
-  }
-  .breadcrumb a { color: var(--accent); text-decoration: none; }
-  .breadcrumb a:hover { text-decoration: underline; }
-  .breadcrumb span { margin: 0 6px; }
+      /* ── breadcrumb ── */
+      .breadcrumb {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 14px 32px 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .breadcrumb a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .breadcrumb a:hover {
+        text-decoration: underline;
+      }
+      .breadcrumb span {
+        margin: 0 6px;
+      }
 
-  /* ── main ── */
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 32px 48px; flex: 1; width: 100%; }
+      /* ── main ── */
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px 32px 48px;
+        flex: 1;
+        width: 100%;
+      }
 
-  /* ── demo intro ── */
-  .demo-intro {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
-  }
-  .demo-intro h1 { font-size: clamp(17px,2.2vw,24px); font-weight: 500; color: #f0f2f7; margin-bottom: 8px; }
-  .demo-badge {
-    display: inline-block;
-    background: rgba(251,146,60,0.10); color: var(--orange);
-    font-family: var(--mono); font-size: 11px;
-    padding: 2px 10px; border-radius: 20px;
-    border: 1px solid rgba(251,146,60,0.28); margin-bottom: 10px;
-  }
-  .demo-intro p { color: var(--text); margin-bottom: 6px; font-size: 14px; }
-  .demo-intro p:last-child { margin-bottom: 0; }
+      /* ── demo intro ── */
+      .demo-intro {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+      }
+      .demo-intro h1 {
+        font-size: clamp(17px, 2.2vw, 24px);
+        font-weight: 500;
+        color: #f0f2f7;
+        margin-bottom: 8px;
+      }
+      .demo-badge {
+        display: inline-block;
+        background: rgba(251, 146, 60, 0.1);
+        color: var(--orange);
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 2px 10px;
+        border-radius: 20px;
+        border: 1px solid rgba(251, 146, 60, 0.28);
+        margin-bottom: 10px;
+      }
+      .demo-intro p {
+        color: var(--text);
+        margin-bottom: 6px;
+        font-size: 14px;
+      }
+      .demo-intro p:last-child {
+        margin-bottom: 0;
+      }
 
-  /* ── layout ── */
-  .demo-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
-  @media (max-width: 900px) { .demo-layout { grid-template-columns: 1fr; } }
+      /* ── layout ── */
+      .demo-layout {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 16px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .demo-layout {
+          grid-template-columns: 1fr;
+        }
+      }
 
-  /* ── canvas ── */
-  .canvas-wrap {
-    position: relative; background: #0a0c11;
-    border: 1px solid var(--border); border-radius: 10px;
-    overflow: hidden; aspect-ratio: 16/10; min-height: 360px;
-  }
-  #threeCanvas { width: 100%; height: 100%; display: block; }
+      /* ── canvas ── */
+      .canvas-wrap {
+        position: relative;
+        background: #0a0c11;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        aspect-ratio: 16/10;
+        min-height: 360px;
+      }
+      #threeCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
 
-  /* ── loading overlay ── */
-  #loadingOverlay {
-    position: absolute; inset: 0;
-    background: rgba(13,15,20,0.93);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 16px; z-index: 10; transition: opacity 0.4s;
-  }
-  #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
-  .loading-title { font-family: var(--mono); font-size: 14px; color: var(--text); }
-  .loading-sub   { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  progress {
-    width: 200px; height: 4px;
-    appearance: none; -webkit-appearance: none;
-    border: none; border-radius: 2px;
-    background: var(--border); overflow: hidden;
-  }
-  progress::-webkit-progress-bar   { background: var(--border); border-radius: 2px; }
-  progress::-webkit-progress-value { background: var(--orange); border-radius: 2px; transition: width 0.2s; }
-  progress::-moz-progress-bar      { background: var(--orange); border-radius: 2px; }
-  #loadingPct { font-family: var(--mono); font-size: 13px; color: var(--orange); min-width: 40px; text-align: center; }
-  .progress-row { display: flex; align-items: center; gap: 10px; }
+      /* ── loading overlay ── */
+      #loadingOverlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(13, 15, 20, 0.93);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        z-index: 10;
+        transition: opacity 0.4s;
+      }
+      #loadingOverlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loading-title {
+        font-family: var(--mono);
+        font-size: 14px;
+        color: var(--text);
+      }
+      .loading-sub {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      progress {
+        width: 200px;
+        height: 4px;
+        appearance: none;
+        -webkit-appearance: none;
+        border: none;
+        border-radius: 2px;
+        background: var(--border);
+        overflow: hidden;
+      }
+      progress::-webkit-progress-bar {
+        background: var(--border);
+        border-radius: 2px;
+      }
+      progress::-webkit-progress-value {
+        background: var(--orange);
+        border-radius: 2px;
+        transition: width 0.2s;
+      }
+      progress::-moz-progress-bar {
+        background: var(--orange);
+        border-radius: 2px;
+      }
+      #loadingPct {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--orange);
+        min-width: 40px;
+        text-align: center;
+      }
+      .progress-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
 
-  /* ── error overlay ── */
-  #errorOverlay {
-    display: none; position: absolute; inset: 0;
-    background: rgba(13,15,20,0.93);
-    align-items: center; justify-content: center;
-    z-index: 11; padding: 24px; text-align: center;
-  }
-  #errorOverlay.visible { display: flex; }
-  .error-inner {
-    background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3);
-    border-left: 4px solid var(--red); border-radius: 8px;
-    padding: 20px 24px; max-width: 460px;
-    font-family: var(--mono); font-size: 13px; color: var(--red);
-    text-align: left; line-height: 1.7;
-  }
-  .error-inner strong { display: block; margin-bottom: 8px; font-size: 14px; }
-  #dropZone {
-    display: block; border: 2px dashed rgba(251,146,60,0.4);
-    border-radius: 8px; padding: 18px 12px; text-align: center;
-    cursor: pointer; background: rgba(251,146,60,0.05);
-    color: var(--orange); font-size: 12px; line-height: 1.8;
-    transition: background 0.15s, border-color 0.15s; margin-top: 12px;
-  }
-  #dropZone:hover, #dropZone.dragover { background: rgba(251,146,60,0.12); border-color: var(--orange); }
+      /* ── error overlay ── */
+      #errorOverlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(13, 15, 20, 0.93);
+        align-items: center;
+        justify-content: center;
+        z-index: 11;
+        padding: 24px;
+        text-align: center;
+      }
+      #errorOverlay.visible {
+        display: flex;
+      }
+      .error-inner {
+        background: rgba(248, 113, 113, 0.08);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        border-left: 4px solid var(--red);
+        border-radius: 8px;
+        padding: 20px 24px;
+        max-width: 460px;
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--red);
+        text-align: left;
+        line-height: 1.7;
+      }
+      .error-inner strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+      #dropZone {
+        display: block;
+        border: 2px dashed rgba(251, 146, 60, 0.4);
+        border-radius: 8px;
+        padding: 18px 12px;
+        text-align: center;
+        cursor: pointer;
+        background: rgba(251, 146, 60, 0.05);
+        color: var(--orange);
+        font-size: 12px;
+        line-height: 1.8;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+        margin-top: 12px;
+      }
+      #dropZone:hover,
+      #dropZone.dragover {
+        background: rgba(251, 146, 60, 0.12);
+        border-color: var(--orange);
+      }
 
-  /* ── speed bar overlay (at bottom of canvas) ── */
-  .speed-bar {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    height: 52px; background: rgba(13,15,20,0.82);
-    backdrop-filter: blur(6px);
-    border-top: 1px solid var(--border);
-    display: flex; align-items: center; gap: 12px; padding: 0 16px;
-    z-index: 5;
-  }
-  .speed-bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; }
-  #speedSlider {
-    flex: 1; -webkit-appearance: none; appearance: none;
-    height: 4px; border-radius: 2px; cursor: pointer;
-    background: var(--border);
-    accent-color: var(--orange);
-  }
-  #speedSlider::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 16px; height: 16px;
-    border-radius: 50%; background: var(--orange); cursor: pointer;
-    border: 2px solid var(--bg); box-shadow: 0 0 0 3px rgba(251,146,60,0.2);
-  }
-  .speed-val { font-family: var(--mono); font-size: 12px; color: var(--orange); flex-shrink: 0; min-width: 52px; text-align: right; }
+      /* ── speed bar overlay (at bottom of canvas) ── */
+      .speed-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 52px;
+        background: rgba(13, 15, 20, 0.82);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+        z-index: 5;
+      }
+      .speed-bar-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      #speedSlider {
+        flex: 1;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 4px;
+        border-radius: 2px;
+        cursor: pointer;
+        background: var(--border);
+        accent-color: var(--orange);
+      }
+      #speedSlider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--orange);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+        box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.2);
+      }
+      .speed-val {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--orange);
+        flex-shrink: 0;
+        min-width: 52px;
+        text-align: right;
+      }
 
-  /* ── state indicator (inside canvas, top-left) ── */
-  #stateHud {
-    position: absolute; top: 12px; left: 12px; z-index: 6;
-    display: flex; flex-direction: column; gap: 6px;
-  }
-  .state-bubble {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(13,15,20,0.78); backdrop-filter: blur(4px);
-    border: 1px solid var(--border); border-radius: 20px;
-    padding: 4px 12px 4px 8px;
-    font-family: var(--mono); font-size: 11px; color: var(--muted);
-    transition: border-color 0.25s, color 0.25s, background 0.25s;
-  }
-  .state-bubble.active {
-    border-color: var(--orange);
-    color: var(--orange);
-    background: rgba(251,146,60,0.1);
-  }
-  .state-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--muted); flex-shrink: 0;
-    transition: background 0.25s;
-  }
-  .state-bubble.active .state-dot { background: var(--orange); }
-  .state-bubble.transitioning { border-color: var(--accent); color: var(--accent); background: rgba(79,156,249,0.08); }
-  .state-bubble.transitioning .state-dot { background: var(--accent); }
+      /* ── state indicator (inside canvas, top-left) ── */
+      #stateHud {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 6;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .state-bubble {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(13, 15, 20, 0.78);
+        backdrop-filter: blur(4px);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 4px 12px 4px 8px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        transition:
+          border-color 0.25s,
+          color 0.25s,
+          background 0.25s;
+      }
+      .state-bubble.active {
+        border-color: var(--orange);
+        color: var(--orange);
+        background: rgba(251, 146, 60, 0.1);
+      }
+      .state-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex-shrink: 0;
+        transition: background 0.25s;
+      }
+      .state-bubble.active .state-dot {
+        background: var(--orange);
+      }
+      .state-bubble.transitioning {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(79, 156, 249, 0.08);
+      }
+      .state-bubble.transitioning .state-dot {
+        background: var(--accent);
+      }
 
-  /* ── side panels ── */
-  .side-col { display: flex; flex-direction: column; gap: 12px; }
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  .panel-header {
-    padding: 10px 16px; border-bottom: 1px solid var(--border);
-    font-family: var(--mono); font-size: 11px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.07em;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-  .dot.green  { background: var(--green); }
-  .dot.blue   { background: var(--accent); }
-  .dot.orange { background: var(--orange); }
-  .dot.purple { background: var(--accent2); }
-  .panel-body { padding: 14px 16px; }
+      /* ── side panels ── */
+      .side-col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .panel-header {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex-shrink: 0;
+      }
+      .dot.green {
+        background: var(--green);
+      }
+      .dot.blue {
+        background: var(--accent);
+      }
+      .dot.orange {
+        background: var(--orange);
+      }
+      .dot.purple {
+        background: var(--accent2);
+      }
+      .panel-body {
+        padding: 14px 16px;
+      }
 
-  /* model select */
-  .model-select-label { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-  select {
-    width: 100%; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text);
-    font-family: var(--mono); font-size: 12px; padding: 6px 28px 6px 10px;
-    cursor: pointer; appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a6175' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 10px center;
-    transition: border-color 0.15s;
-  }
-  select:focus { outline: none; border-color: var(--orange); }
-  select:hover { border-color: var(--orange); }
+      /* model select */
+      .model-select-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      select {
+        width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 6px 28px 6px 10px;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a6175' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        transition: border-color 0.15s;
+      }
+      select:focus {
+        outline: none;
+        border-color: var(--orange);
+      }
+      select:hover {
+        border-color: var(--orange);
+      }
 
-  /* state thresholds table */
-  .threshold-table { width: 100%; font-family: var(--mono); font-size: 11px; border-collapse: collapse; }
-  .threshold-table th {
-    color: var(--muted); font-weight: 400; text-align: left;
-    padding: 3px 6px 6px 0; border-bottom: 1px solid var(--border);
-  }
-  .threshold-table td { padding: 5px 6px 5px 0; color: var(--text); vertical-align: middle; }
-  .threshold-table tr.active-row td { color: var(--orange); }
-  .state-swatch {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; margin-right: 5px; vertical-align: middle;
-    background: var(--muted);
-  }
-  .swatch-idle   { background: var(--muted); }
-  .swatch-walk   { background: var(--green); }
-  .swatch-run    { background: var(--orange); }
-  .state-name    { color: var(--text); }
+      /* state thresholds table */
+      .threshold-table {
+        width: 100%;
+        font-family: var(--mono);
+        font-size: 11px;
+        border-collapse: collapse;
+      }
+      .threshold-table th {
+        color: var(--muted);
+        font-weight: 400;
+        text-align: left;
+        padding: 3px 6px 6px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .threshold-table td {
+        padding: 5px 6px 5px 0;
+        color: var(--text);
+        vertical-align: middle;
+      }
+      .threshold-table tr.active-row td {
+        color: var(--orange);
+      }
+      .state-swatch {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+        vertical-align: middle;
+        background: var(--muted);
+      }
+      .swatch-idle {
+        background: var(--muted);
+      }
+      .swatch-walk {
+        background: var(--green);
+      }
+      .swatch-run {
+        background: var(--orange);
+      }
+      .state-name {
+        color: var(--text);
+      }
 
-  /* action weights panel */
-  .weight-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .weight-row:last-child { margin-bottom: 0; }
-  .weight-label { font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 52px; flex-shrink: 0; }
-  .weight-bar-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .weight-bar-fill  { height: 100%; border-radius: 2px; background: var(--orange); transition: width 0.05s linear; }
-  .weight-num { font-family: var(--mono); font-size: 10px; color: var(--muted); min-width: 28px; text-align: right; }
+      /* action weights panel */
+      .weight-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .weight-row:last-child {
+        margin-bottom: 0;
+      }
+      .weight-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        min-width: 52px;
+        flex-shrink: 0;
+      }
+      .weight-bar-track {
+        flex: 1;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .weight-bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        background: var(--orange);
+        transition: width 0.05s linear;
+      }
+      .weight-num {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--muted);
+        min-width: 28px;
+        text-align: right;
+      }
 
-  /* viewport toggles */
-  .ctrl-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .ctrl-row:last-child { margin-bottom: 0; }
-  .ctrl-label { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 84px; }
-  .toggle-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 12px; border-radius: 6px;
-    border: 1px solid var(--border); background: var(--bg);
-    color: var(--text); font-family: var(--mono); font-size: 12px;
-    cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
-  }
-  .toggle-btn:hover { border-color: var(--orange); color: var(--orange); }
-  .toggle-btn.active { background: rgba(251,146,60,0.1); border-color: var(--orange); color: var(--orange); }
+      /* viewport toggles */
+      .ctrl-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .ctrl-row:last-child {
+        margin-bottom: 0;
+      }
+      .ctrl-label {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        min-width: 84px;
+      }
+      .toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          color 0.15s,
+          background 0.15s;
+      }
+      .toggle-btn:hover {
+        border-color: var(--orange);
+        color: var(--orange);
+      }
+      .toggle-btn.active {
+        background: rgba(251, 146, 60, 0.1);
+        border-color: var(--orange);
+        color: var(--orange);
+      }
 
-  /* fade duration slider */
-  .fade-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-  .fade-row label { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; min-width: 60px; }
-  #fadeDuration {
-    flex: 1; -webkit-appearance: none; appearance: none;
-    height: 3px; border-radius: 2px; cursor: pointer;
-    background: var(--border); accent-color: var(--orange);
-  }
-  #fadeDuration::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px;
-    border-radius: 50%; background: var(--orange); cursor: pointer;
-    border: 2px solid var(--bg);
-  }
-  #fadeLabel { font-family: var(--mono); font-size: 11px; color: var(--orange); min-width: 34px; text-align: right; }
+      /* fade duration slider */
+      .fade-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .fade-row label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        flex-shrink: 0;
+        min-width: 60px;
+      }
+      #fadeDuration {
+        flex: 1;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        cursor: pointer;
+        background: var(--border);
+        accent-color: var(--orange);
+      }
+      #fadeDuration::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--orange);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+      }
+      #fadeLabel {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--orange);
+        min-width: 34px;
+        text-align: right;
+      }
 
-  /* concept boxes */
-  .concept-box {
-    border-left: 4px solid var(--orange); background: rgba(251,146,60,0.05);
-    border-radius: 6px; padding: 12px 16px; margin-top: 12px;
-    font-size: 13px; line-height: 1.65;
-  }
-  .concept-box strong { color: var(--orange); }
-  .concept-box.blue { border-left-color: var(--accent); background: rgba(79,156,249,0.05); }
-  .concept-box.blue strong { color: var(--accent); }
-  .concept-box.purple { border-left-color: var(--accent2); background: rgba(167,139,250,0.05); }
-  .concept-box.purple strong { color: var(--accent2); }
-  .concept-box code { font-family: var(--mono); font-size: 12px; background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; }
+      /* threshold sliders */
+      .threshold-slider-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .threshold-slider-row label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        flex-shrink: 0;
+        min-width: 60px;
+      }
+      .threshold-slider {
+        flex: 1;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        cursor: pointer;
+        background: var(--border);
+        accent-color: var(--green);
+      }
+      .threshold-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--green);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+      }
+      .threshold-slider.run-slider {
+        accent-color: var(--orange);
+      }
+      .threshold-slider.run-slider::-webkit-slider-thumb {
+        background: var(--orange);
+      }
+      .threshold-val {
+        font-family: var(--mono);
+        font-size: 11px;
+        min-width: 44px;
+        text-align: right;
+      }
+      .threshold-val.walk-val {
+        color: var(--green);
+      }
+      .threshold-val.run-val {
+        color: var(--orange);
+      }
 
-  /* footer */
-  footer {
-    border-top: 2px solid var(--border); padding: 18px 32px 24px;
-    max-width: 1200px; margin: 0 auto;
-    text-align: center; font-size: 13px; color: var(--text); line-height: 1.7; width: 100%;
-  }
-  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
-  footer a { color: var(--accent); text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
+      /* play button in speed bar */
+      #playBtn {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          border-color 0.15s,
+          color 0.15s,
+          background 0.15s;
+        font-size: 12px;
+        line-height: 1;
+      }
+      #playBtn:hover {
+        border-color: var(--orange);
+        color: var(--orange);
+      }
+      #playBtn.playing {
+        background: rgba(251, 146, 60, 0.12);
+        border-color: var(--orange);
+        color: var(--orange);
+      }
 
-  @media (max-width: 700px) {
-    .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
-    .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
-  }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-</style>
-</head>
-<body>
+      /* threshold markers on speed bar */
+      .speed-bar-track-wrap {
+        flex: 1;
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      #speedSlider {
+        flex: 1;
+        position: relative;
+        z-index: 2;
+      }
+      .threshold-marker {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2px;
+        height: 14px;
+        border-radius: 1px;
+        pointer-events: none;
+        z-index: 1;
+        transition: left 0.15s;
+      }
+      .marker-walk {
+        background: var(--green);
+        opacity: 0.7;
+      }
+      .marker-run {
+        background: var(--orange);
+        opacity: 0.7;
+      }
 
-<header>
-  <div class="header-inner">
-    <div class="header-logo">
-      <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau">
-    </div>
-    <div class="header-info">
-      <h1>Computeranimation — Seminar 04: glTF &amp; Character Animation</h1>
-      <h2>Demo 3 — Locomotion State Machine</h2>
-      <p class="header-meta">
-        <strong>Institut für Medientechnik –
-          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
-             target="_blank" rel="noopener">AMS Group</a>
-        </strong> · Technische Universität Ilmenau
+      /* concept boxes */
+      .concept-box {
+        border-left: 4px solid var(--orange);
+        background: rgba(251, 146, 60, 0.05);
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin-top: 12px;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      .concept-box strong {
+        color: var(--orange);
+      }
+      .concept-box.blue {
+        border-left-color: var(--accent);
+        background: rgba(79, 156, 249, 0.05);
+      }
+      .concept-box.blue strong {
+        color: var(--accent);
+      }
+      .concept-box.purple {
+        border-left-color: var(--accent2);
+        background: rgba(167, 139, 250, 0.05);
+      }
+      .concept-box.purple strong {
+        color: var(--accent2);
+      }
+      .concept-box code {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 5px;
+        border-radius: 3px;
+      }
+
+      /* footer */
+      footer {
+        border-top: 2px solid var(--border);
+        padding: 18px 32px 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+        text-align: center;
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.7;
+        width: 100%;
+      }
+      footer p + p {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 700px) {
+        .header-inner,
+        main,
+        footer,
+        .breadcrumb {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+        .header-inner {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-inner">
+        <div class="header-logo">
+          <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" />
+        </div>
+        <div class="header-info">
+          <h1>
+            Computeranimation — Seminar 04: glTF &amp; Character Animation
+          </h1>
+          <h2>Demo 3 — Locomotion State Machine</h2>
+          <p class="header-meta">
+            <strong
+              >Institut für Medientechnik –
+              <a
+                href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+                target="_blank"
+                rel="noopener"
+                >AMS Group</a
+              >
+            </strong>
+            · Technische Universität Ilmenau
+          </p>
+          <div class="header-author">
+            Seminar materials by
+            <span>Renato Fera P.</span>
+            <a
+              class="linkedin-badge"
+              href="https://www.linkedin.com/in/renato-profeta/"
+              target="_blank"
+              rel="noopener"
+              >LinkedIn</a
+            >
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="breadcrumb">
+      <a href="index.html">Seminar Materials</a>
+      <span>›</span>
+      <a href="04_computeranimation_gltf.html"
+        >Chapter 04: glTF &amp; Character Animation</a
+      >
+      <span>›</span>
+      Demo 3: Locomotion State Machine
+    </nav>
+
+    <main>
+      <div class="demo-intro">
+        <div class="demo-badge">
+          ▶ AnimationMixer · crossFadeTo · state machine · transition thresholds
+          · clip portability
+        </div>
+        <h1>Demo 3: Locomotion State Machine</h1>
+        <p>
+          A <strong>locomotion state machine</strong> drives animation
+          transitions automatically from a single parameter: the character's
+          speed. Drag the speed slider and watch the state machine decide which
+          clip to play — <em>Idle</em>, <em>Walk</em>, or <em>Run</em> — and
+          <strong>crossfade</strong> between them at the configured thresholds,
+          with no manual clip buttons needed.
+        </p>
+        <p>
+          This is exactly what Unity's <em>Animator Controller</em> and Unreal's
+          <em>Animation Blueprint</em> do automatically. Here you build the
+          logic by hand so you can see every piece. Switch between three
+          characters to verify the same state machine code drives any rigged
+          glTF. Open <strong>DevTools → Console</strong> to see every state
+          transition logged.
+        </p>
+      </div>
+
+      <div class="demo-layout">
+        <!-- Canvas -->
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="threeCanvas"></canvas>
+
+          <!-- State HUD — top-left of canvas -->
+          <div id="stateHud">
+            <div class="state-bubble" id="bubbleIdle">
+              <div class="state-dot"></div>
+              Idle
+            </div>
+            <div class="state-bubble" id="bubbleWalk">
+              <div class="state-dot"></div>
+              Walk
+            </div>
+            <div class="state-bubble" id="bubbleRun">
+              <div class="state-dot"></div>
+              Run
+            </div>
+          </div>
+
+          <!-- Loading overlay -->
+          <div id="loadingOverlay">
+            <div class="loading-title" id="loadingTitle">Loading model…</div>
+            <div class="progress-row">
+              <progress id="loadProgress" value="0" max="100"></progress>
+              <span id="loadingPct">0%</span>
+            </div>
+            <div class="loading-sub" id="loadingSub">
+              Fetching from 04_gltf/
+            </div>
+          </div>
+
+          <!-- Error / drop-zone overlay -->
+          <div id="errorOverlay">
+            <div class="error-inner">
+              <strong>⚠ Could not load model</strong>
+              Opening via <code>file://</code> blocks network requests (CORS).
+              Drop the <strong>.glb file</strong> for the selected model below,
+              or serve with <code>python3 -m http.server</code>.<br /><br />
+              <label id="dropZone">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="display: block; margin: 0 auto 6px"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Drop <strong id="dropLabel">model.glb</strong> here, or click to
+                browse
+                <input
+                  type="file"
+                  id="glbFilePicker"
+                  accept=".glb,.gltf"
+                  style="display: none"
+                />
+              </label>
+              <div
+                style="margin-top: 10px; color: var(--muted); font-size: 11px"
+              >
+                The file stays in your browser — nothing is uploaded.
+              </div>
+            </div>
+          </div>
+
+          <!-- Speed bar — bottom of canvas -->
+          <div class="speed-bar">
+            <button id="playBtn" title="Auto-play speed cycle">▶</button>
+            <span class="speed-bar-label">Speed</span>
+            <div class="speed-bar-track-wrap">
+              <input
+                type="range"
+                id="speedSlider"
+                min="0"
+                max="10"
+                step="0.01"
+                value="0"
+              />
+              <div class="threshold-marker marker-walk" id="markerWalk"></div>
+              <div class="threshold-marker marker-run" id="markerRun"></div>
+            </div>
+            <span class="speed-val" id="speedVal">0.0 m/s</span>
+          </div>
+        </div>
+
+        <!-- Side panels -->
+        <div class="side-col">
+          <!-- Model -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot blue"></div>
+              Character
+            </div>
+            <div class="panel-body">
+              <div class="model-select-label">Active model</div>
+              <select id="modelSelect">
+                <option value="fox">Fox — quadruped · 24 bones</option>
+                <option value="knight">
+                  Knight (KayKit) — humanoid · 41 bones
+                </option>
+                <option value="barbarian">
+                  Barbarian (KayKit) — humanoid · 41 bones
+                </option>
+              </select>
+              <div
+                style="
+                  margin-top: 8px;
+                  font-family: var(--mono);
+                  font-size: 10px;
+                  color: var(--muted);
+                  line-height: 1.6;
+                "
+              >
+                Same state machine code · different rigs<br />
+                Demonstrates <em>clip portability</em>
+              </div>
+            </div>
+          </div>
+
+          <!-- State machine -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot orange"></div>
+              State Machine
+            </div>
+            <div class="panel-body">
+              <table class="threshold-table">
+                <thead>
+                  <tr>
+                    <th>State</th>
+                    <th>Clip</th>
+                  </tr>
+                </thead>
+                <tbody id="stateTable">
+                  <tr id="rowIdle">
+                    <td>
+                      <span class="state-swatch swatch-idle"></span
+                      ><span class="state-name">Idle</span>
+                    </td>
+                    <td
+                      id="clipNameIdle"
+                      style="
+                        font-family: var(--mono);
+                        font-size: 10px;
+                        color: var(--muted);
+                      "
+                    >
+                      —
+                    </td>
+                  </tr>
+                  <tr id="rowWalk">
+                    <td>
+                      <span class="state-swatch swatch-walk"></span
+                      ><span class="state-name">Walk</span>
+                    </td>
+                    <td
+                      id="clipNameWalk"
+                      style="
+                        font-family: var(--mono);
+                        font-size: 10px;
+                        color: var(--muted);
+                      "
+                    >
+                      —
+                    </td>
+                  </tr>
+                  <tr id="rowRun">
+                    <td>
+                      <span class="state-swatch swatch-run"></span
+                      ><span class="state-name">Run</span>
+                    </td>
+                    <td
+                      id="clipNameRun"
+                      style="
+                        font-family: var(--mono);
+                        font-size: 10px;
+                        color: var(--muted);
+                      "
+                    >
+                      —
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div
+                style="
+                  margin-top: 12px;
+                  font-family: var(--mono);
+                  font-size: 10px;
+                  color: var(--muted);
+                  text-transform: uppercase;
+                  letter-spacing: 0.06em;
+                  margin-bottom: 4px;
+                "
+              >
+                Thresholds
+              </div>
+
+              <div class="threshold-slider-row">
+                <label>Walk ≥</label>
+                <input
+                  type="range"
+                  class="threshold-slider"
+                  id="threshWalk"
+                  min="0.1"
+                  max="4.9"
+                  step="0.1"
+                  value="0.5"
+                />
+                <span class="threshold-val walk-val" id="threshWalkVal"
+                  >0.5 m/s</span
+                >
+              </div>
+              <div class="threshold-slider-row">
+                <label>Run ≥</label>
+                <input
+                  type="range"
+                  class="threshold-slider run-slider"
+                  id="threshRun"
+                  min="1.0"
+                  max="9.9"
+                  step="0.1"
+                  value="5.0"
+                />
+                <span class="threshold-val run-val" id="threshRunVal"
+                  >5.0 m/s</span
+                >
+              </div>
+
+              <div class="fade-row">
+                <label for="fadeDuration">Fade</label>
+                <input
+                  type="range"
+                  id="fadeDuration"
+                  min="0.05"
+                  max="1.0"
+                  step="0.05"
+                  value="0.35"
+                />
+                <span id="fadeLabel">0.35 s</span>
+              </div>
+              <div
+                style="
+                  margin-top: 8px;
+                  font-family: var(--mono);
+                  font-size: 10px;
+                  color: var(--muted);
+                  line-height: 1.6;
+                "
+              >
+                Thresholds update live · Fade = crossFadeTo duration
+              </div>
+            </div>
+          </div>
+
+          <!-- Action weights live -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot orange"></div>
+              Action Weights (live)
+            </div>
+            <div class="panel-body" id="weightPanel">
+              <div
+                style="
+                  font-family: var(--mono);
+                  font-size: 11px;
+                  color: var(--muted);
+                  font-style: italic;
+                "
+              >
+                Waiting for model…
+              </div>
+            </div>
+          </div>
+
+          <!-- Viewport -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot blue"></div>
+              Viewport
+            </div>
+            <div class="panel-body">
+              <div class="ctrl-row">
+                <span class="ctrl-label">Skeleton</span>
+                <button id="skelBtn" class="toggle-btn active">On</button>
+              </div>
+              <div class="ctrl-row">
+                <span class="ctrl-label">Wireframe</span>
+                <button id="wireBtn" class="toggle-btn">Off</button>
+              </div>
+              <div class="ctrl-row">
+                <span class="ctrl-label">Grid</span>
+                <button id="gridBtn" class="toggle-btn active">On</button>
+              </div>
+              <div
+                style="
+                  margin-top: 10px;
+                  font-family: var(--mono);
+                  font-size: 11px;
+                  color: var(--muted);
+                "
+              >
+                Rotate: drag &nbsp;·&nbsp; Zoom: scroll
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Concept callouts -->
+      <div class="concept-box" style="margin-top: 20px">
+        <strong>ANIMATION CONCEPT — What is a locomotion state machine?</strong
+        ><br />
+        A locomotion state machine maps a continuous parameter (here: speed in
+        m/s) to a discrete set of animation states (Idle, Walk, Run) and
+        automatically fires <code>crossFadeTo()</code> when the parameter
+        crosses a threshold. Unity's <em>Animator Controller</em>, Unreal's
+        <em>Animation Blueprint</em>, and Godot's <em>AnimationTree</em> all
+        implement this same pattern visually — what you are building here by
+        hand is exactly the logic those tools generate from the graph editor.
+        The parameter-driven state machine is the foundation of every locomotion
+        system in every game engine.
+      </div>
+
+      <div class="concept-box blue" style="margin-top: 12px">
+        <strong
+          >THREE.JS CONCEPT — crossFadeTo(nextAction, duration, warp)</strong
+        ><br />
+        <code>currentAction.crossFadeTo(nextAction, fadeDuration, true)</code>
+        simultaneously fades <em>out</em> the current action and fades
+        <em>in</em> the next one over <code>fadeDuration</code> seconds. The
+        <code>warp: true</code> argument additionally scales the time of each
+        action so that clips of different durations stay aligned during the fade
+        — without it, a short idle clip and a long run clip would fall out of
+        sync mid-transition. The live <em>Action Weights</em> panel shows both
+        weights summing through 1.0 during a crossfade, then settling as one
+        action reaches weight 0 and is stopped automatically by the mixer.
+      </div>
+
+      <div class="concept-box purple" style="margin-top: 12px">
+        <strong>ANIMATION CONCEPT — Clip portability</strong><br />
+        An <code>AnimationClip</code> is a list of <code>KeyframeTracks</code>,
+        each identified by a string like <code>"Spine.quaternion"</code>. The
+        mixer matches track names to <code>Object3D.name</code> values in the
+        scene graph. This means any clip exported for a skeleton can play on any
+        other character that has bones with the same names. Fox, Knight, and
+        Barbarian each have differently named bones — but the
+        <em>same state machine code</em> drives all three. Switch models and
+        verify: the thresholds, the transition logic, and the
+        <code>crossFadeTo</code> call are identical. Only the clip names in the
+        registry differ.
+      </div>
+    </main>
+
+    <footer>
+      <p>
+        <strong>Computeranimation</strong> · Institut für Medientechnik · AMS
+        Group · Technische Universität Ilmenau
       </p>
-      <div class="header-author">
-        Seminar materials by
-        <span>Renato Fera P.</span>
-        <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
-      </div>
-    </div>
-  </div>
-</header>
+      <p>
+        Demo created by
+        <a
+          href="https://www.linkedin.com/in/renato-profeta/"
+          target="_blank"
+          rel="noopener"
+          >Renato Fera P.</a
+        >
+        · Fox:
+        <a
+          href="https://github.com/KhronosGroup/glTF-Sample-Assets"
+          target="_blank"
+          rel="noopener"
+          >Khronos glTF Sample Assets</a
+        >
+        (CC-BY 4.0) · Knight &amp; Barbarian:
+        <a
+          href="https://kaylousberg.itch.io/kaykit-adventurers"
+          target="_blank"
+          rel="noopener"
+          >KayKit Adventurers</a
+        >
+        (CC0)
+      </p>
+    </footer>
 
-<nav class="breadcrumb">
-  <a href="index.html">Seminar Materials</a>
-  <span>›</span>
-  <a href="04_computeranimation_gltf.html">Chapter 04: glTF &amp; Character Animation</a>
-  <span>›</span>
-  Demo 3: Locomotion State Machine
-</nav>
-
-<main>
-
-  <div class="demo-intro">
-    <div class="demo-badge">▶ AnimationMixer · crossFadeTo · state machine · transition thresholds · clip portability</div>
-    <h1>Demo 3: Locomotion State Machine</h1>
-    <p>
-      A <strong>locomotion state machine</strong> drives animation transitions automatically from a single parameter:
-      the character's speed. Drag the speed slider and watch the state machine decide which clip to play
-      — <em>Idle</em>, <em>Walk</em>, or <em>Run</em> — and <strong>crossfade</strong> between them at
-      the configured thresholds, with no manual clip buttons needed.
-    </p>
-    <p>
-      This is exactly what Unity's <em>Animator Controller</em> and Unreal's <em>Animation Blueprint</em>
-      do automatically. Here you build the logic by hand so you can see every piece.
-      Switch between four characters to verify the same state machine code drives any rigged glTF.
-      Open <strong>DevTools → Console</strong> to see every state transition logged.
-    </p>
-  </div>
-
-  <div class="demo-layout">
-
-    <!-- Canvas -->
-    <div class="canvas-wrap" id="canvasWrap">
-      <canvas id="threeCanvas"></canvas>
-
-      <!-- State HUD — top-left of canvas -->
-      <div id="stateHud">
-        <div class="state-bubble" id="bubbleIdle">
-          <div class="state-dot"></div>Idle
-        </div>
-        <div class="state-bubble" id="bubbleWalk">
-          <div class="state-dot"></div>Walk
-        </div>
-        <div class="state-bubble" id="bubbleRun">
-          <div class="state-dot"></div>Run
-        </div>
-      </div>
-
-      <!-- Loading overlay -->
-      <div id="loadingOverlay">
-        <div class="loading-title" id="loadingTitle">Loading model…</div>
-        <div class="progress-row">
-          <progress id="loadProgress" value="0" max="100"></progress>
-          <span id="loadingPct">0%</span>
-        </div>
-        <div class="loading-sub" id="loadingSub">Fetching from seminar_04/</div>
-      </div>
-
-      <!-- Error / drop-zone overlay -->
-      <div id="errorOverlay">
-        <div class="error-inner">
-          <strong>⚠ Could not load model</strong>
-          Opening via <code>file://</code> blocks network requests (CORS).
-          Drop the <strong>.glb file</strong> for the selected model below,
-          or serve with <code>python3 -m http.server</code>.<br><br>
-          <label id="dropZone">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-                 style="display:block;margin:0 auto 6px;">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Drop <strong id="dropLabel">model.glb</strong> here, or click to browse
-            <input type="file" id="glbFilePicker" accept=".glb,.gltf" style="display:none;">
-          </label>
-          <div style="margin-top:10px;color:var(--muted);font-size:11px;">
-            The file stays in your browser — nothing is uploaded.
-          </div>
-        </div>
-      </div>
-
-      <!-- Speed bar — bottom of canvas -->
-      <div class="speed-bar">
-        <span class="speed-bar-label">Speed</span>
-        <input type="range" id="speedSlider" min="0" max="10" step="0.01" value="0">
-        <span class="speed-val" id="speedVal">0.0 m/s</span>
-      </div>
-    </div>
-
-    <!-- Side panels -->
-    <div class="side-col">
-
-      <!-- Model -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot blue"></div>Character</div>
-        <div class="panel-body">
-          <div class="model-select-label">Active model</div>
-          <select id="modelSelect">
-            <option value="fox">Fox — quadruped · 24 bones</option>
-            <option value="cesium">CesiumMan — humanoid · 67 bones</option>
-            <option value="knight">Knight (KayKit) — humanoid · 41 bones</option>
-            <option value="barbarian">Barbarian (KayKit) — humanoid · 41 bones</option>
-          </select>
-          <div style="margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6;">
-            Same state machine code · different rigs<br>
-            Demonstrates <em>clip portability</em>
-          </div>
-        </div>
-      </div>
-
-      <!-- State machine -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot orange"></div>State Machine</div>
-        <div class="panel-body">
-          <table class="threshold-table">
-            <thead>
-              <tr>
-                <th>State</th>
-                <th>Threshold</th>
-                <th>Clip</th>
-              </tr>
-            </thead>
-            <tbody id="stateTable">
-              <tr id="rowIdle">
-                <td><span class="state-swatch swatch-idle"></span><span class="state-name">Idle</span></td>
-                <td>0.0 m/s</td>
-                <td id="clipNameIdle" style="font-family:var(--mono);font-size:10px;color:var(--muted);">—</td>
-              </tr>
-              <tr id="rowWalk">
-                <td><span class="state-swatch swatch-walk"></span><span class="state-name">Walk</span></td>
-                <td>&gt; 0.5 m/s</td>
-                <td id="clipNameWalk" style="font-family:var(--mono);font-size:10px;color:var(--muted);">—</td>
-              </tr>
-              <tr id="rowRun">
-                <td><span class="state-swatch swatch-run"></span><span class="state-name">Run</span></td>
-                <td>&gt; 5.0 m/s</td>
-                <td id="clipNameRun" style="font-family:var(--mono);font-size:10px;color:var(--muted);">—</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="fade-row">
-            <label for="fadeDuration">Fade</label>
-            <input type="range" id="fadeDuration" min="0.05" max="1.0" step="0.05" value="0.35">
-            <span id="fadeLabel">0.35 s</span>
-          </div>
-          <div style="margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6;">
-            Fade = crossFadeTo duration
-          </div>
-        </div>
-      </div>
-
-      <!-- Action weights live -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot orange"></div>Action Weights (live)</div>
-        <div class="panel-body" id="weightPanel">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);font-style:italic;">
-            Waiting for model…
-          </div>
-        </div>
-      </div>
-
-      <!-- Viewport -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot blue"></div>Viewport</div>
-        <div class="panel-body">
-          <div class="ctrl-row">
-            <span class="ctrl-label">Skeleton</span>
-            <button id="skelBtn" class="toggle-btn active">On</button>
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Wireframe</span>
-            <button id="wireBtn" class="toggle-btn">Off</button>
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Grid</span>
-            <button id="gridBtn" class="toggle-btn active">On</button>
-          </div>
-          <div style="margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);">
-            Rotate: drag &nbsp;·&nbsp; Zoom: scroll
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Concept callouts -->
-  <div class="concept-box" style="margin-top:20px;">
-    <strong>ANIMATION CONCEPT — What is a locomotion state machine?</strong><br>
-    A locomotion state machine maps a continuous parameter (here: speed in m/s) to a discrete set of
-    animation states (Idle, Walk, Run) and automatically fires <code>crossFadeTo()</code> when the
-    parameter crosses a threshold. Unity's <em>Animator Controller</em>, Unreal's <em>Animation
-    Blueprint</em>, and Godot's <em>AnimationTree</em> all implement this same pattern visually —
-    what you are building here by hand is exactly the logic those tools generate from the graph editor.
-    The parameter-driven state machine is the foundation of every locomotion system in every game engine.
-  </div>
-
-  <div class="concept-box blue" style="margin-top:12px;">
-    <strong>THREE.JS CONCEPT — crossFadeTo(nextAction, duration, warp)</strong><br>
-    <code>currentAction.crossFadeTo(nextAction, fadeDuration, true)</code> simultaneously fades
-    <em>out</em> the current action and fades <em>in</em> the next one over <code>fadeDuration</code>
-    seconds. The <code>warp: true</code> argument additionally scales the time of each action so that
-    clips of different durations stay aligned during the fade — without it, a short idle clip and a
-    long run clip would fall out of sync mid-transition. The live <em>Action Weights</em> panel shows
-    both weights summing through 1.0 during a crossfade, then settling as one action reaches weight 0
-    and is stopped automatically by the mixer.
-  </div>
-
-  <div class="concept-box purple" style="margin-top:12px;">
-    <strong>ANIMATION CONCEPT — Clip portability</strong><br>
-    An <code>AnimationClip</code> is a list of <code>KeyframeTracks</code>, each identified by a
-    string like <code>"Spine.quaternion"</code>. The mixer matches track names to
-    <code>Object3D.name</code> values in the scene graph. This means any clip exported for a skeleton
-    can play on any other character that has bones with the same names. Fox, CesiumMan, Knight, and
-    Barbarian each have differently named bones — but the <em>same state machine code</em> drives
-    all four. Switch models and verify: the thresholds, the transition logic, and the
-    <code>crossFadeTo</code> call are identical. Only the clip names in the registry differ.
-  </div>
-
-</main>
-
-<footer>
-  <p><strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau</p>
-  <p>
-    Demo created by
-    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a>
-    · Fox &amp; CesiumMan: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener">Khronos glTF Sample Assets</a> (CC-BY 4.0)
-    · Knight &amp; Barbarian: <a href="https://kaylousberg.itch.io/kaykit-adventurers" target="_blank" rel="noopener">KayKit Adventurers</a> (CC0)
-  </p>
-</footer>
-
-<!-- ═══════════════════════════════════════════════════════════
+    <!-- ═══════════════════════════════════════════════════════════
      STEP 0: Module imports — pinned to three@0.165.0
      All imports use the importmap pattern so no bundler is
      needed. The browser resolves bare specifiers like 'three'
      and 'three/examples/jsm/...' to the CDN URLs below.
      ═══════════════════════════════════════════════════════════ -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-    "three/examples/jsm/loaders/GLTFLoader.js":    "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js",
-    "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
-  }
-}
-</script>
-
-<script type="module">
-import * as THREE from 'three';
-import { GLTFLoader }    from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-
-// ─────────────────────────────────────────────────────────────
-// STEP 1: DOM references
-// ─────────────────────────────────────────────────────────────
-const canvas       = document.getElementById('threeCanvas');
-const canvasWrap   = document.getElementById('canvasWrap');
-const overlay      = document.getElementById('loadingOverlay');
-const loadingTitle = document.getElementById('loadingTitle');
-const loadingSub   = document.getElementById('loadingSub');
-const errorEl      = document.getElementById('errorOverlay');
-const progressEl   = document.getElementById('loadProgress');
-const pctLabel     = document.getElementById('loadingPct');
-const dropLabel    = document.getElementById('dropLabel');
-const speedSlider  = document.getElementById('speedSlider');
-const speedVal     = document.getElementById('speedVal');
-const weightPanel  = document.getElementById('weightPanel');
-const fadeDuration = document.getElementById('fadeDuration');
-const fadeLabel    = document.getElementById('fadeLabel');
-
-// State HUD bubbles
-const bubbleIdle = document.getElementById('bubbleIdle');
-const bubbleWalk = document.getElementById('bubbleWalk');
-const bubbleRun  = document.getElementById('bubbleRun');
-
-// State table clip-name cells
-const clipNameIdle = document.getElementById('clipNameIdle');
-const clipNameWalk = document.getElementById('clipNameWalk');
-const clipNameRun  = document.getElementById('clipNameRun');
-
-// State table rows (for active-row highlight)
-const rowIdle = document.getElementById('rowIdle');
-const rowWalk = document.getElementById('rowWalk');
-const rowRun  = document.getElementById('rowRun');
-
-// ─────────────────────────────────────────────────────────────
-// STEP 2: Scene, Renderer, Camera
-//
-// THREE.JS CONCEPT: renderer.outputColorSpace
-//   glTF 2.0 mandates that all colour textures are sRGB-encoded.
-//   Setting outputColorSpace = SRGBColorSpace tells the renderer
-//   to convert sRGB → linear before compositing, and linear →
-//   sRGB before writing to the screen. Without this, colours
-//   appear washed out (the GPU double-applies gamma).
-// ─────────────────────────────────────────────────────────────
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0c11);
-
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-renderer.outputColorSpace   = THREE.SRGBColorSpace;
-
-const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
-camera.position.set(0, 1.5, 3.5);
-
-/**
- * Resize the renderer and camera to match the canvas wrapper dimensions.
- * Called on startup and on every window resize event.
- */
-function setRendererSize() {
-  const w = canvas.parentElement.clientWidth;
-  const h = canvas.parentElement.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-
-// ─────────────────────────────────────────────────────────────
-// STEP 3: Lighting
-//   HemisphereLight — sky colour from above, ground colour
-//   from below. Cheaper than a full environment map and gives
-//   characters a natural sense of outdoor lighting.
-//   DirectionalLight — the key light, casts shadows.
-//   fillLight — a soft blue counter-light from behind to
-//   prevent the back of the character going fully black.
-// ─────────────────────────────────────────────────────────────
-scene.add(new THREE.HemisphereLight(0xddeeff, 0x442200, 1.2));
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-dirLight.position.set(3, 8, 5);
-dirLight.castShadow = true;
-dirLight.shadow.camera.near   = 0.1;
-dirLight.shadow.camera.far    = 50;
-dirLight.shadow.camera.left   = -4;
-dirLight.shadow.camera.right  =  4;
-dirLight.shadow.camera.top    =  5;
-dirLight.shadow.camera.bottom = -1;
-dirLight.shadow.mapSize.set(1024, 1024);
-scene.add(dirLight);
-
-scene.add(new THREE.DirectionalLight(0x88aaff, 0.4)).position.set(-3, 3, -3);
-
-const groundMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(12, 12),
-  new THREE.MeshStandardMaterial({ color: 0x1a1f2b, roughness: 0.9, metalness: 0 })
-);
-groundMesh.rotation.x = -Math.PI / 2;
-groundMesh.receiveShadow = true;
-scene.add(groundMesh);
-
-const grid = new THREE.GridHelper(8, 24, 0x252b38, 0x252b38);
-grid.position.y = 0.001;
-scene.add(grid);
-
-// ─────────────────────────────────────────────────────────────
-// STEP 4: OrbitControls
-// ─────────────────────────────────────────────────────────────
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.minDistance   = 0.3;
-controls.maxDistance   = 20;
-controls.target.set(0, 0.8, 0);
-controls.update();
-
-// ─────────────────────────────────────────────────────────────
-// STEP 5: Model registry
-//
-// ANIMATION CONCEPT: clip name mapping
-//   Each model stores animation clips under different names —
-//   Fox uses 'Survey', 'Walk', 'Run'; CesiumMan's exporter
-//   produced 'animation_0'; KayKit characters use Unity-style
-//   names like 'Idle', 'Walking_A', 'Running_A'.
-//   The registry maps each model to canonical state names
-//   (idle / walk / run), so the state machine code never
-//   needs to know the raw clip names in the GLB.
-//
-//   This is exactly what game engines do: an animation controller
-//   maps engine-internal state names to artist-defined clip names.
-//   The locomotion logic talks to the controller, never to the
-//   raw clip names — decoupling the animation system from the
-//   asset pipeline.
-//
-// GLTF CONCEPT: clip portability
-//   AnimationClip.tracks are arrays of KeyframeTracks, each
-//   identified by a string like 'Spine.quaternion'. The mixer
-//   matches these strings to Object3D.name values at runtime.
-//   As long as bone names match, any clip plays on any skeleton.
-//   Fox, CesiumMan, Knight, and Barbarian all have different bone
-//   names, so their clips are NOT interchangeable — but the same
-//   state machine interface drives all four identically.
-// ─────────────────────────────────────────────────────────────
-const MODEL_REGISTRY = {
-  fox: {
-    path:  'seminar_04/Fox.glb',
-    label: 'Fox.glb',
-    scale: 0.01,
-    // Fox clip names are human-readable in the GLB.
-    clipMap: {
-      idle: 'Survey',
-      walk: 'Walk',
-      run:  'Run',
-    },
-    // Walk/run thresholds in the speed slider's units (m/s).
-    // These are tuned per-model so the transitions feel natural.
-    thresholdWalk: 0.5,
-    thresholdRun:  5.0,
-  },
-  cesium: {
-    path:  'seminar_04/CesiumMan.glb',
-    label: 'CesiumMan.glb',
-    scale: 1.0,
-    // CesiumMan has only one clip in the GLB ('animation_0').
-    // We map all three states to it so the state machine still
-    // works — students see the same code driving a single-clip
-    // model. The console will log a warning.
-    clipMap: {
-      idle: 'animation_0',
-      walk: 'animation_0',
-      run:  'animation_0',
-    },
-    thresholdWalk: 0.5,
-    thresholdRun:  5.0,
-  },
-  knight: {
-    path:  'seminar_04/Knight.glb',
-    label: 'Knight.glb (KayKit)',
-    scale: 1.0,
-    // KayKit characters use Unity-style clip names.
-    // 'Idle' is the stand animation; 'Walking_A' and 'Running_A'
-    // are locomotion cycles. The exact names depend on the GLB
-    // version — check the console log if clips are missing.
-    clipMap: {
-      idle: 'Idle',
-      walk: 'Walking_A',
-      run:  'Running_A',
-    },
-    thresholdWalk: 0.5,
-    thresholdRun:  5.0,
-  },
-  barbarian: {
-    path:  'seminar_04/Barbarian.glb',
-    label: 'Barbarian.glb (KayKit)',
-    scale: 1.0,
-    // Barbarian shares the same 41-joint KayKit rig as Knight
-    // and therefore has the same clip names.
-    clipMap: {
-      idle: 'Idle',
-      walk: 'Walking_A',
-      run:  'Running_A',
-    },
-    thresholdWalk: 0.5,
-    thresholdRun:  5.0,
-  },
-};
-
-let activeModelKey = 'fox';
-
-// ─────────────────────────────────────────────────────────────
-// STEP 6: Per-model mutable state
-//
-// ANIMATION CONCEPT: one mixer per character
-//   THREE.AnimationMixer owns all animation state for one root
-//   object. When we switch models we must stop the old mixer,
-//   remove the old character, and create a fresh mixer for the
-//   new one. There is no way to reuse a mixer across models
-//   because it is bound to the root object at construction time.
-// ─────────────────────────────────────────────────────────────
-let characterRoot  = null;   // THREE.Group — the loaded gltf.scene
-let skeletonHelper = null;   // THREE.SkeletonHelper
-let mixer          = null;   // THREE.AnimationMixer
-let wireframeOn    = false;
-let skeletonVisible = true;
-let gridOn         = true;
-
-// ── State machine state ──────────────────────────────────────
-// ANIMATION CONCEPT: state machine variables
-//   currentState  — the state we are CURRENTLY in ('idle'|'walk'|'run')
-//   activeAction  — the AnimationAction for currentState (full weight)
-//   actions       — map from state name to AnimationAction
-//   fadeDur       — crossfade duration in seconds (user-controlled)
-//   isTransitioning — true during a crossfade; prevents re-triggering
-let currentState    = 'idle';
-let activeAction    = null;
-let actions         = {};    // { idle: AnimationAction, walk: AnimationAction, run: AnimationAction }
-let fadeDur         = 0.35;
-let isTransitioning = false;
-let transitionTimer = 0;     // counts down the remaining fade duration
-
-// ─────────────────────────────────────────────────────────────
-// STEP 7: clearScene
-//   Dispose the previous model's geometry, materials, and mixer
-//   before loading a new one. Three.js does NOT garbage-collect
-//   GPU resources automatically — always call .dispose().
-// ─────────────────────────────────────────────────────────────
-/**
- * Remove and dispose the current character, skeleton helper, and mixer.
- * Resets all per-model animation state.
- */
-function clearScene() {
-  if (mixer) {
-    mixer.stopAllAction();
-    mixer = null;
-  }
-  activeAction = null;
-  actions      = {};
-  currentState = 'idle';
-
-  if (skeletonHelper) {
-    scene.remove(skeletonHelper);
-    skeletonHelper.dispose();
-    skeletonHelper = null;
-  }
-
-  if (characterRoot) {
-    characterRoot.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.geometry.dispose();
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach((m) => m.dispose());
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/examples/jsm/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js",
+          "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+        }
       }
-    });
-    scene.remove(characterRoot);
-    characterRoot = null;
-  }
+    </script>
 
-  weightPanel.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);font-style:italic;">Waiting for model…</div>';
-  clipNameIdle.textContent = '—';
-  clipNameWalk.textContent = '—';
-  clipNameRun.textContent  = '—';
-  setHudState('idle', false);
-}
+    <script type="module">
+      import * as THREE from "three";
+      import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-// ─────────────────────────────────────────────────────────────
-// STEP 8: loadModel
-//   Kicks off a GLTFLoader.load() call for the given registry key.
-//   Shows the loading overlay with a progress bar.
-// ─────────────────────────────────────────────────────────────
-/**
- * Load a model by its registry key ('fox' | 'cesium' | 'knight' | 'barbarian').
- *
- * @param {string} key - Key into MODEL_REGISTRY.
- */
-function loadModel(key) {
-  const config = MODEL_REGISTRY[key];
-  activeModelKey = key;
-  dropLabel.textContent = config.label;
+      // ─────────────────────────────────────────────────────────────
+      // STEP 1: DOM references
+      // ─────────────────────────────────────────────────────────────
+      const canvas = document.getElementById("threeCanvas");
+      const canvasWrap = document.getElementById("canvasWrap");
+      const overlay = document.getElementById("loadingOverlay");
+      const loadingTitle = document.getElementById("loadingTitle");
+      const loadingSub = document.getElementById("loadingSub");
+      const errorEl = document.getElementById("errorOverlay");
+      const progressEl = document.getElementById("loadProgress");
+      const pctLabel = document.getElementById("loadingPct");
+      const dropLabel = document.getElementById("dropLabel");
+      const speedSlider = document.getElementById("speedSlider");
+      const speedVal = document.getElementById("speedVal");
+      const weightPanel = document.getElementById("weightPanel");
+      const fadeDuration = document.getElementById("fadeDuration");
+      const fadeLabel = document.getElementById("fadeLabel");
 
-  clearScene();
-  errorEl.classList.remove('visible');
-  overlay.classList.remove('hidden');
-  progressEl.value = 0;
-  pctLabel.textContent = '0%';
-  loadingTitle.textContent = `Loading ${config.label}…`;
-  loadingSub.textContent   = key === 'fox' || key === 'cesium'
-    ? 'Khronos glTF Sample Assets · CC-BY 4.0'
-    : 'KayKit Adventurers · CC0 · Kay Lousberg';
+      // Threshold sliders
+      const threshWalkSlider = document.getElementById("threshWalk");
+      const threshRunSlider = document.getElementById("threshRun");
+      const threshWalkVal = document.getElementById("threshWalkVal");
+      const threshRunVal = document.getElementById("threshRunVal");
 
-  const loader = new GLTFLoader();
-  loader.load(
-    config.path,
-    (gltf) => onModelLoad(gltf, config),
-    (xhr)  => onProgress(xhr),
-    (err)  => onLoadError(err, config)
-  );
-}
+      // Play button + markers
+      const playBtn = document.getElementById("playBtn");
+      const markerWalk = document.getElementById("markerWalk");
+      const markerRun = document.getElementById("markerRun");
 
-// ─────────────────────────────────────────────────────────────
-// STEP 9: onModelLoad
-//
-// This is where the AnimationMixer and state machine are set up.
-//
-// ANIMATION CONCEPT: mixer.clipAction(clip)
-//   clipAction() is idempotent — calling it multiple times with
-//   the same clip returns the same AnimationAction object.
-//   We call it once here for each state (idle/walk/run) and
-//   cache the result in the `actions` map. The state machine
-//   then calls methods on those cached actions — never creating
-//   new ones at runtime. This is the correct pattern: create
-//   all actions on load, then reuse them.
-// ─────────────────────────────────────────────────────────────
-/**
- * Called by GLTFLoader when a model finishes loading.
- * Sets up the scene, mixer, and the three locomotion actions.
- *
- * @param {import('three').GLTF} gltf   - The loaded glTF object.
- * @param {object}               config - The registry config for this model.
- */
-function onModelLoad(gltf, config) {
-  characterRoot = gltf.scene;
-  characterRoot.scale.setScalar(config.scale);
-  characterRoot.traverse((child) => {
-    if (child.isMesh) {
-      child.castShadow    = true;
-      child.receiveShadow = true;
-    }
-  });
+      // State HUD bubbles
+      const bubbleIdle = document.getElementById("bubbleIdle");
+      const bubbleWalk = document.getElementById("bubbleWalk");
+      const bubbleRun = document.getElementById("bubbleRun");
 
-  // Add the character to the scene FIRST, then force a full
-  // matrix world update before creating SkeletonHelper.
-  //
-  // THREE.JS CONCEPT: why order matters for SkeletonHelper
-  //   SkeletonHelper reads the world-space positions of every bone
-  //   at construction time to build its line geometry. If the
-  //   character is not yet part of the scene graph, or if
-  //   updateMatrixWorld() has not been called since it was added,
-  //   bone world matrices are stale (identity or from a previous
-  //   frame). The helper will then draw all lines at the origin
-  //   or in the wrong place. Calling updateMatrixWorld(true) with
-  //   force=true propagates transforms down the full hierarchy
-  //   immediately, so the helper gets correct positions.
-  scene.add(characterRoot);
-  characterRoot.updateMatrixWorld(true);
+      // State table clip-name cells
+      const clipNameIdle = document.getElementById("clipNameIdle");
+      const clipNameWalk = document.getElementById("clipNameWalk");
+      const clipNameRun = document.getElementById("clipNameRun");
 
-  skeletonHelper = new THREE.SkeletonHelper(characterRoot);
-  skeletonHelper.visible = skeletonVisible;
-  scene.add(skeletonHelper);
+      // State table rows (for active-row highlight)
+      const rowIdle = document.getElementById("rowIdle");
+      const rowWalk = document.getElementById("rowWalk");
+      const rowRun = document.getElementById("rowRun");
 
-  fitCameraToModel(characterRoot);
-  applyWireframe(wireframeOn);
+      // ─────────────────────────────────────────────────────────────
+      // STEP 2: Scene, Renderer, Camera
+      //
+      // THREE.JS CONCEPT: renderer.outputColorSpace
+      //   glTF 2.0 mandates that all colour textures are sRGB-encoded.
+      //   Setting outputColorSpace = SRGBColorSpace tells the renderer
+      //   to convert sRGB → linear before compositing, and linear →
+      //   sRGB before writing to the screen. Without this, colours
+      //   appear washed out (the GPU double-applies gamma).
+      // ─────────────────────────────────────────────────────────────
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c11);
 
-  // ── Create the AnimationMixer ────────────────────────────
-  mixer = new THREE.AnimationMixer(characterRoot);
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  // Expose to DevTools so students can inspect at runtime.
-  window.mixer = mixer;
-  window.gltf  = gltf;
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+      camera.position.set(0, 1.5, 3.5);
 
-  // ── Build a name → clip lookup from the loaded animations ──
-  const clipByName = {};
-  for (const clip of gltf.animations) {
-    clipByName[clip.name] = clip;
-  }
+      /**
+       * Resize the renderer and camera to match the canvas wrapper dimensions.
+       * Called on startup and on every window resize event.
+       */
+      function setRendererSize() {
+        const w = canvas.parentElement.clientWidth;
+        const h = canvas.parentElement.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
 
-  console.log('── Model loaded ─────────────────────────────────');
-  console.log(`Model:      ${config.label}`);
-  console.log(`Scale:      ${config.scale}`);
-  console.log(`Clips (${gltf.animations.length}):`, gltf.animations.map((c) => c.name));
-  console.log(`ClipMap:`, config.clipMap);
-  console.log('AnimationMixer:', mixer);
-  console.log('─────────────────────────────────────────────────');
+      // ─────────────────────────────────────────────────────────────
+      // STEP 3: Lighting
+      //   HemisphereLight — sky colour from above, ground colour
+      //   from below. Cheaper than a full environment map and gives
+      //   characters a natural sense of outdoor lighting.
+      //   DirectionalLight — the key light, casts shadows.
+      //   fillLight — a soft blue counter-light from behind to
+      //   prevent the back of the character going fully black.
+      // ─────────────────────────────────────────────────────────────
+      scene.add(new THREE.HemisphereLight(0xddeeff, 0x442200, 1.2));
 
-  // ── Resolve each state's AnimationAction ─────────────────
-  // ANIMATION CONCEPT: actions map and duplicate clip handling
-  //   mixer.clipAction(clip) is idempotent — calling it with the
-  //   same clip always returns the SAME AnimationAction object.
-  //   CesiumMan maps all three states to 'animation_0', so
-  //   resolved.idle === resolved.walk === resolved.run.
-  //
-  //   The key rule: we must NOT call .play() on the same action
-  //   multiple times before it has started, and we must NOT set
-  //   weight to 0 on an action we are about to make active.
-  //   Strategy: collect unique actions, set them all to weight 0
-  //   and play them (so the mixer tracks them), then set the idle
-  //   action's weight to 1 as the starting pose. When all states
-  //   share the same action, setting weight to 1 for idle is
-  //   correct — the single action plays at full weight.
-  const resolved = { idle: null, walk: null, run: null };
-  const seenActions = new Set();
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+      dirLight.position.set(3, 8, 5);
+      dirLight.castShadow = true;
+      dirLight.shadow.camera.near = 0.1;
+      dirLight.shadow.camera.far = 50;
+      dirLight.shadow.camera.left = -4;
+      dirLight.shadow.camera.right = 4;
+      dirLight.shadow.camera.top = 5;
+      dirLight.shadow.camera.bottom = -1;
+      dirLight.shadow.mapSize.set(1024, 1024);
+      scene.add(dirLight);
 
-  for (const [state, clipName] of Object.entries(config.clipMap)) {
-    const clip = clipByName[clipName];
-    if (!clip) {
-      console.warn(`State '${state}': clip '${clipName}' not found in ${config.label}. Available: ${Object.keys(clipByName).join(', ')}`);
-      continue;
-    }
-    const action = mixer.clipAction(clip);
-    action.loop = THREE.LoopRepeat;
-    resolved[state] = action;
+      scene
+        .add(new THREE.DirectionalLight(0x88aaff, 0.4))
+        .position.set(-3, 3, -3);
 
-    // Only configure each unique action object once.
-    // If walk and run share the same action as idle (CesiumMan),
-    // we skip the duplicate set — the idle pass below handles it.
-    if (!seenActions.has(action)) {
-      seenActions.add(action);
-      // Start at weight 0 so all non-active actions contribute
-      // nothing to the pose until the state machine activates them.
-      action.setEffectiveWeight(0);
-      action.play();
-    }
-  }
-  actions = resolved;
+      const groundMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(12, 12),
+        new THREE.MeshStandardMaterial({
+          color: 0x1a1f2b,
+          roughness: 0.9,
+          metalness: 0,
+        }),
+      );
+      groundMesh.rotation.x = -Math.PI / 2;
+      groundMesh.receiveShadow = true;
+      scene.add(groundMesh);
 
-  // ── Update the state table clip-name cells ─────────────────
-  clipNameIdle.textContent = config.clipMap.idle || '—';
-  clipNameWalk.textContent = config.clipMap.walk || '—';
-  clipNameRun.textContent  = config.clipMap.run  || '—';
+      const grid = new THREE.GridHelper(8, 24, 0x252b38, 0x252b38);
+      grid.position.y = 0.001;
+      scene.add(grid);
 
-  // ── Build live weight panel ─────────────────────────────────
-  buildWeightPanel(config.clipMap);
+      // ─────────────────────────────────────────────────────────────
+      // STEP 4: OrbitControls
+      // ─────────────────────────────────────────────────────────────
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 0.3;
+      controls.maxDistance = 20;
+      controls.target.set(0, 0.8, 0);
+      controls.update();
 
-  // ── Start in idle state ──────────────────────────────────────
-  // Set the idle action to full weight immediately. No crossfade
-  // on the first load — the character just starts in idle.
-  if (actions.idle) {
-    actions.idle.setEffectiveWeight(1);
-    activeAction = actions.idle;
-    currentState = 'idle';
-  }
-  setHudState('idle', false);
+      // ─────────────────────────────────────────────────────────────
+      // STEP 5: Model registry
+      //
+      // ANIMATION CONCEPT: clip name mapping
+      //   Each model stores animation clips under different names —
+      //   Fox uses 'Survey', 'Walk', 'Run'; KayKit characters use Unity-style
+      //   names like 'Idle', 'Walking_A', 'Running_A'.
+      //   The registry maps each model to canonical state names
+      //   (idle / walk / run), so the state machine code never
+      //   needs to know the raw clip names in the GLB.
+      //
+      //   This is exactly what game engines do: an animation controller
+      //   maps engine-internal state names to artist-defined clip names.
+      //   The locomotion logic talks to the controller, never to the
+      //   raw clip names — decoupling the animation system from the
+      //   asset pipeline.
+      //
+      // GLTF CONCEPT: clip portability
+      //   AnimationClip.tracks are arrays of KeyframeTracks, each
+      //   identified by a string like 'Spine.quaternion'. The mixer
+      //   matches these strings to Object3D.name values at runtime.
+      //   As long as bone names match, any clip plays on any skeleton.
+      //   Fox, Knight, and Barbarian all have different bone
+      //   names, so their clips are NOT interchangeable — but the same
+      //   state machine interface drives all three identically.
+      // ─────────────────────────────────────────────────────────────
+      const MODEL_REGISTRY = {
+        fox: {
+          path: "04_gltf/Fox.glb",
+          label: "Fox.glb",
+          scale: 0.01,
+          // Fox clip names are human-readable in the GLB.
+          clipMap: {
+            idle: "Survey",
+            walk: "Walk",
+            run: "Run",
+          },
+          // Walk/run thresholds in the speed slider's units (m/s).
+          // These are tuned per-model so the transitions feel natural.
+          thresholdWalk: 0.5,
+          thresholdRun: 5.0,
+        },
+        knight: {
+          path: "04_gltf/Knight.glb",
+          label: "Knight.glb (KayKit)",
+          scale: 1.0,
+          // KayKit characters use Unity-style clip names.
+          // 'Idle' is the stand animation; 'Walking_A' and 'Running_A'
+          // are locomotion cycles. The exact names depend on the GLB
+          // version — check the console log if clips are missing.
+          clipMap: {
+            idle: "Idle",
+            walk: "Walking_A",
+            run: "Running_A",
+          },
+          thresholdWalk: 0.5,
+          thresholdRun: 5.0,
+        },
+        barbarian: {
+          path: "04_gltf/Barbarian.glb",
+          label: "Barbarian.glb (KayKit)",
+          scale: 1.0,
+          // Barbarian shares the same 41-joint KayKit rig as Knight
+          // and therefore has the same clip names.
+          clipMap: {
+            idle: "Idle",
+            walk: "Walking_A",
+            run: "Running_A",
+          },
+          thresholdWalk: 0.5,
+          thresholdRun: 5.0,
+        },
+      };
 
-  overlay.classList.add('hidden');
-  isTransitioning = false;
-  transitionTimer  = 0;
+      let activeModelKey = "fox";
 
-  // Reset the speed slider to 0 on model switch.
-  speedSlider.value = 0;
-  speedVal.textContent = '0.0 m/s';
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 6: Per-model mutable state
+      //
+      // ANIMATION CONCEPT: one mixer per character
+      //   THREE.AnimationMixer owns all animation state for one root
+      //   object. When we switch models we must stop the old mixer,
+      //   remove the old character, and create a fresh mixer for the
+      //   new one. There is no way to reuse a mixer across models
+      //   because it is bound to the root object at construction time.
+      // ─────────────────────────────────────────────────────────────
+      let characterRoot = null; // THREE.Group — the loaded gltf.scene
+      let skeletonHelper = null; // THREE.SkeletonHelper
+      let mixer = null; // THREE.AnimationMixer
+      let wireframeOn = false;
+      let skeletonVisible = true;
+      let gridOn = true;
 
-/**
- * Progress callback for GLTFLoader.load().
- * Updates the progress bar and percentage label.
- *
- * @param {ProgressEvent} xhr
- */
-function onProgress(xhr) {
-  if (xhr.lengthComputable) {
-    const pct = Math.round((xhr.loaded / xhr.total) * 100);
-    progressEl.value = pct;
-    pctLabel.textContent = pct + '%';
-  }
-}
+      // ── State machine state ──────────────────────────────────────
+      // ANIMATION CONCEPT: state machine variables
+      //   currentState  — the state we are CURRENTLY in ('idle'|'walk'|'run')
+      //   activeAction  — the AnimationAction for currentState (full weight)
+      //   actions       — map from state name to AnimationAction
+      //   fadeDur       — crossfade duration in seconds (user-controlled)
+      //   isTransitioning — true during a crossfade; prevents re-triggering
+      let currentState = "idle";
+      let activeAction = null;
+      let actions = {}; // { idle: AnimationAction, walk: AnimationAction, run: AnimationAction }
+      let fadeDur = 0.35;
+      let isTransitioning = false;
+      let transitionTimer = 0; // counts down the remaining fade duration
 
-/**
- * Error callback for GLTFLoader.load().
- * Shows the error overlay with a drop zone so the user can
- * supply the file manually (required when opened via file://).
- *
- * @param {ErrorEvent} err
- * @param {object}     config - The registry config, used to name the file.
- */
-function onLoadError(err, config) {
-  console.error('GLTFLoader error:', err);
-  console.error(`Expected path: ${config.path}`);
-  console.error('If opened via file://, drop the .glb file into the error overlay.');
-  errorEl.classList.add('visible');
-  overlay.classList.add('hidden');
-}
+      // ── Auto-play state ───────────────────────────────────────────
+      // isPlaying: whether the auto-speed-cycle is running
+      // playDir:   +1 (speeding up) or -1 (slowing down)
+      // PLAY_RATE: how fast the speed sweeps in m/s per second
+      let isPlaying = false;
+      let playDir = 1;
+      const PLAY_RATE = 3.5; // m/s per second — full sweep in ~3 s
 
-// ─────────────────────────────────────────────────────────────
-// STEP 10: fitCameraToModel
-//   Computes the bounding box of the loaded model and positions
-//   the camera to frame it. Works for models of any scale
-//   (Fox at 0.01 or CesiumMan at 1.0).
-// ─────────────────────────────────────────────────────────────
-/**
- * Reframe the camera and orbit target around a loaded model.
- *
- * @param {THREE.Object3D} root - The root scene node of the model.
- */
-function fitCameraToModel(root) {
-  const box    = new THREE.Box3().setFromObject(root);
-  const centre = box.getCenter(new THREE.Vector3());
-  const size   = box.getSize(new THREE.Vector3()).length();
-  controls.target.copy(centre);
-  camera.position.set(centre.x, centre.y + size * 0.3, centre.z + size * 0.9);
-  controls.update();
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 7: clearScene
+      //   Dispose the previous model's geometry, materials, and mixer
+      //   before loading a new one. Three.js does NOT garbage-collect
+      //   GPU resources automatically — always call .dispose().
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Remove and dispose the current character, skeleton helper, and mixer.
+       * Resets all per-model animation state.
+       */
+      function clearScene() {
+        if (mixer) {
+          mixer.stopAllAction();
+          mixer = null;
+        }
+        activeAction = null;
+        actions = {};
+        currentState = "idle";
 
-// ─────────────────────────────────────────────────────────────
-// STEP 11: The state machine — enterState
-//
-// ANIMATION CONCEPT: the crossFadeTo pattern
-//   This function is the entire locomotion state machine.
-//   It receives the name of the target state ('idle'|'walk'|'run')
-//   and fires a crossFadeTo if the target differs from the current
-//   state. Breaking it down line by line:
-//
-//   nextAction.reset()
-//     Resets the action's time to 0 and clears any residual
-//     fades. Needed because the action may have been fading out
-//     when we switch back to it.
-//
-//   .setEffectiveWeight(1)
-//     setEffectiveWeight overrides any active fade schedule.
-//     Do NOT set .weight directly while a fade is in progress —
-//     it causes weight glitches. setEffectiveWeight is the safe API.
-//
-//   .play()
-//     Activates the action. An action must be playing for
-//     crossFadeTo to affect it.
-//
-//   activeAction.crossFadeTo(nextAction, fadeDur, true)
-//     Schedules the crossfade:
-//       - Fades activeAction's weight from 1 → 0 over fadeDur seconds
-//       - Fades nextAction's weight from 0 → 1 over fadeDur seconds
-//     The third argument (warp: true) adjusts each action's timeScale
-//     so that clips of different durations stay aligned during the fade.
-//     Without warp, a 1-second idle and a 2-second run clip would be
-//     at different cycle points mid-transition, producing a stutter.
-//
-//   isTransitioning / transitionTimer
-//     Guard flags that prevent the state machine from firing a new
-//     crossFadeTo before the previous one completes. Without them,
-//     rapid slider movement would fire dozens of fades per second,
-//     causing the mixer's weight scheduler to produce chaotic output.
-// ─────────────────────────────────────────────────────────────
-/**
- * Transition the state machine to a new locomotion state.
- * Fires crossFadeTo() and sets isTransitioning for the fade duration.
- *
- * @param {'idle'|'walk'|'run'} nextState - The state to transition into.
- */
-function enterState(nextState) {
-  if (!mixer) return;
-  if (nextState === currentState) return;
+        if (skeletonHelper) {
+          scene.remove(skeletonHelper);
+          skeletonHelper.dispose();
+          skeletonHelper = null;
+        }
 
-  const nextAction = actions[nextState];
-  if (!nextAction) {
-    // This model doesn't have a clip for the target state.
-    console.warn(`No action for state '${nextState}' on model '${activeModelKey}'.`);
-    return;
-  }
+        if (characterRoot) {
+          characterRoot.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.geometry.dispose();
+              const mats = Array.isArray(obj.material)
+                ? obj.material
+                : [obj.material];
+              mats.forEach((m) => m.dispose());
+            }
+          });
+          scene.remove(characterRoot);
+          characterRoot = null;
+        }
 
-  console.log(`── State transition: ${currentState} → ${nextState} (fade: ${fadeDur.toFixed(2)} s) ──`);
-  console.log(`  from: ${actions[currentState]?.getClip().name || 'none'}`);
-  console.log(`  to:   ${nextAction.getClip().name}`);
+        weightPanel.innerHTML =
+          '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);font-style:italic;">Waiting for model…</div>';
+        clipNameIdle.textContent = "—";
+        clipNameWalk.textContent = "—";
+        clipNameRun.textContent = "—";
+        setHudState("idle", false);
+      }
 
-  // THREE.JS CONCEPT: the canonical crossFadeTo pattern
-  //   When activeAction and nextAction are the SAME object (e.g.
-  //   CesiumMan maps all states to one clip), crossFadeTo(self)
-  //   would fight itself and corrupt the weight schedule. We guard
-  //   against this: if they are the same action, just ensure it is
-  //   playing at full weight and skip the crossfade entirely.
-  if (activeAction && activeAction !== nextAction) {
-    nextAction.reset().setEffectiveWeight(1).play();
-    activeAction.crossFadeTo(nextAction, fadeDur, true);
-  } else if (!activeAction) {
-    nextAction.reset().setEffectiveWeight(1).play();
-  }
-  // If activeAction === nextAction, it is already playing at the
-  // correct weight — nothing to do.
+      // ─────────────────────────────────────────────────────────────
+      // STEP 8: loadModel
+      //   Kicks off a GLTFLoader.load() call for the given registry key.
+      //   Shows the loading overlay with a progress bar.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Load a model by its registry key ('fox' | 'knight' | 'barbarian').
+       *
+       * @param {string} key - Key into MODEL_REGISTRY.
+       */
+      function loadModel(key) {
+        const config = MODEL_REGISTRY[key];
+        activeModelKey = key;
+        dropLabel.textContent = config.label;
 
-  activeAction  = nextAction;
-  currentState  = nextState;
+        clearScene();
+        errorEl.classList.remove("visible");
+        overlay.classList.remove("hidden");
+        progressEl.value = 0;
+        pctLabel.textContent = "0%";
+        loadingTitle.textContent = `Loading ${config.label}…`;
+        loadingSub.textContent =
+          key === "fox"
+            ? "Khronos glTF Sample Assets · CC-BY 4.0"
+            : "KayKit Adventurers · CC0 · Kay Lousberg";
 
-  // Mark as transitioning for fadeDur seconds to prevent
-  // immediate re-triggering from the speed slider.
-  isTransitioning = true;
-  transitionTimer  = fadeDur;
+        const loader = new GLTFLoader();
+        loader.load(
+          config.path,
+          (gltf) => onModelLoad(gltf, config),
+          (xhr) => onProgress(xhr),
+          (err) => onLoadError(err, config),
+        );
+      }
 
-  setHudState(nextState, true);
-  // After the fade completes, clear the transitioning flag and
-  // update the HUD to show the settled state (no longer in flux).
-  setTimeout(() => {
-    isTransitioning = false;
-    setHudState(nextState, false);
-  }, fadeDur * 1000);
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 9: onModelLoad
+      //
+      // This is where the AnimationMixer and state machine are set up.
+      //
+      // ANIMATION CONCEPT: mixer.clipAction(clip)
+      //   clipAction() is idempotent — calling it multiple times with
+      //   the same clip returns the same AnimationAction object.
+      //   We call it once here for each state (idle/walk/run) and
+      //   cache the result in the `actions` map. The state machine
+      //   then calls methods on those cached actions — never creating
+      //   new ones at runtime. This is the correct pattern: create
+      //   all actions on load, then reuse them.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Called by GLTFLoader when a model finishes loading.
+       * Sets up the scene, mixer, and the three locomotion actions.
+       *
+       * @param {import('three').GLTF} gltf   - The loaded glTF object.
+       * @param {object}               config - The registry config for this model.
+       */
+      function onModelLoad(gltf, config) {
+        characterRoot = gltf.scene;
+        characterRoot.scale.setScalar(config.scale);
+        characterRoot.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
 
-// ─────────────────────────────────────────────────────────────
-// STEP 12: evaluateStateMachine
-//
-// ANIMATION CONCEPT: the parameter-to-state mapping
-//   This function is called every frame with the current speed
-//   value from the slider. It maps the continuous speed parameter
-//   to a discrete state name and calls enterState() if the state
-//   should change.
-//
-//   Thresholds are stored in the model's registry config so each
-//   character can have different transition points (a large dinosaur
-//   might walk above 1.0 m/s and run above 8.0 m/s; a small fox
-//   might use tighter ranges).
-//
-//   In a real game engine, the speed parameter would come from the
-//   physics/movement system (rigidbody velocity magnitude), not from
-//   a slider. The state machine doesn't care — it just reads a float.
-// ─────────────────────────────────────────────────────────────
-/**
- * Evaluate the locomotion state machine for the current speed.
- * Determines the target state from speed thresholds and calls
- * enterState() if a transition is needed.
- *
- * @param {number} speed - Current speed in m/s (0–10).
- */
-function evaluateStateMachine(speed) {
-  if (!mixer || isTransitioning) return;
+        // Add the character to the scene FIRST, then force a full matrix
+        // world update so every bone's matrixWorld is valid before we
+        // measure the model and read bone positions.
+        scene.add(characterRoot);
+        characterRoot.updateMatrixWorld(true);
 
-  const config = MODEL_REGISTRY[activeModelKey];
-  let targetState;
+        // ── Build the skeleton overlay ────────────────────────────────
+        // The skeleton overlay reads bone world positions directly, so it is
+        // always inside the body regardless of scale or armature nesting.
+        skeletonHelper = buildSkeletonOverlay(characterRoot);
+        skeletonHelper.visible = skeletonVisible;
+        scene.add(skeletonHelper);
+        logBoundsComparison(characterRoot, skeletonHelper);
 
-  if (speed >= config.thresholdRun) {
-    targetState = 'run';
-  } else if (speed >= config.thresholdWalk) {
-    targetState = 'walk';
-  } else {
-    targetState = 'idle';
-  }
+        fitCameraToModel(characterRoot);
+        applyWireframe(wireframeOn);
 
-  if (targetState !== currentState) {
-    enterState(targetState);
-  }
-}
+        // ── Create the AnimationMixer ────────────────────────────
+        mixer = new THREE.AnimationMixer(characterRoot);
 
-// ─────────────────────────────────────────────────────────────
-// STEP 13: HUD state update
-//   Updates the three state bubbles in the canvas overlay to
-//   reflect the current state. The 'transitioning' flag gives
-//   the active bubble a blue colour during the crossfade, then
-//   returns to orange once settled.
-// ─────────────────────────────────────────────────────────────
-/**
- * Update the three state HUD bubbles to show the current state.
- *
- * @param {'idle'|'walk'|'run'} state        - The settled or target state.
- * @param {boolean}             transitioning - Whether a crossfade is in progress.
- */
-function setHudState(state, transitioning) {
-  const bubbles = { idle: bubbleIdle, walk: bubbleWalk, run: bubbleRun };
-  const rows    = { idle: rowIdle,    walk: rowWalk,    run: rowRun    };
+        // Expose to DevTools so students can inspect at runtime.
+        window.mixer = mixer;
+        window.gltf = gltf;
 
-  for (const [s, el] of Object.entries(bubbles)) {
-    el.classList.remove('active', 'transitioning');
-    rows[s].classList.remove('active-row');
-  }
+        // ── Build a name → clip lookup from the loaded animations ──
+        const clipByName = {};
+        for (const clip of gltf.animations) {
+          clipByName[clip.name] = clip;
+        }
 
-  const activeBubble = bubbles[state];
-  const activeRow    = rows[state];
-  if (activeBubble) {
-    activeBubble.classList.add(transitioning ? 'transitioning' : 'active');
-    activeRow.classList.add('active-row');
-  }
-}
+        console.log("── Model loaded ─────────────────────────────────");
+        console.log(`Model:      ${config.label}`);
+        console.log(`Scale:      ${config.scale}`);
+        console.log(
+          `Clips (${gltf.animations.length}):`,
+          gltf.animations.map((c) => c.name),
+        );
+        console.log(`ClipMap:`, config.clipMap);
+        console.log("AnimationMixer:", mixer);
+        console.log("─────────────────────────────────────────────────");
 
-// ─────────────────────────────────────────────────────────────
-// STEP 14: Live action weights panel
-//   Shows the effective weight of each action as a bar that fills
-//   and drains during crossfades. This makes the blending visible
-//   — students see that both actions have non-zero weight during
-//   the fade, and that the weights sum to 1 throughout.
-//
-// ANIMATION CONCEPT: why weights sum to 1 during a crossfade
-//   crossFadeTo schedules complementary fades: as one action's
-//   weight goes from 1→0, the other goes from 0→1. The mixer
-//   does NOT enforce that weights sum to 1 — that is just what
-//   crossFadeTo does. You could have two actions both at weight 1
-//   (additive blending) or both at weight 0.5. The weights panel
-//   shows whatever the mixer's internal schedule produces.
-// ─────────────────────────────────────────────────────────────
-/**
- * Build the weight panel HTML structure once after a model loads.
- * updateWeightPanel() then refreshes the bar widths every frame.
- *
- * @param {{ idle: string, walk: string, run: string }} clipMap
- */
-function buildWeightPanel(clipMap) {
-  const states = ['idle', 'walk', 'run'];
-  let html = '';
-  for (const state of states) {
-    const clipName = clipMap[state] || '—';
-    html += `
+        // ── Resolve each state's AnimationAction ─────────────────
+        // ANIMATION CONCEPT: actions map and duplicate clip handling
+        //   mixer.clipAction(clip) is idempotent — calling it with the
+        //   same clip always returns the SAME AnimationAction object.
+        //   A model that maps all three states to one clip would have
+        //   resolved.idle === resolved.walk === resolved.run.
+        //
+        //   The key rule: we must NOT call .play() on the same action
+        //   multiple times before it has started, and we must NOT set
+        //   weight to 0 on an action we are about to make active.
+        //   Strategy: collect unique actions, set them all to weight 0
+        //   and play them (so the mixer tracks them), then set the idle
+        //   action's weight to 1 as the starting pose. When all states
+        //   share the same action, setting weight to 1 for idle is
+        //   correct — the single action plays at full weight.
+        const resolved = { idle: null, walk: null, run: null };
+        const seenActions = new Set();
+
+        for (const [state, clipName] of Object.entries(config.clipMap)) {
+          const clip = clipByName[clipName];
+          if (!clip) {
+            console.warn(
+              `State '${state}': clip '${clipName}' not found in ${config.label}. Available: ${Object.keys(clipByName).join(", ")}`,
+            );
+            continue;
+          }
+          const action = mixer.clipAction(clip);
+          action.loop = THREE.LoopRepeat;
+          resolved[state] = action;
+
+          // Only configure each unique action object once.
+          // If walk and run share the same action as idle (a single-clip model),
+          // we skip the duplicate set — the idle pass below handles it.
+          if (!seenActions.has(action)) {
+            seenActions.add(action);
+            // Start at weight 0 so all non-active actions contribute
+            // nothing to the pose until the state machine activates them.
+            action.setEffectiveWeight(0);
+            action.play();
+          }
+        }
+        actions = resolved;
+
+        // ── Update the state table clip-name cells ─────────────────
+        clipNameIdle.textContent = config.clipMap.idle || "—";
+        clipNameWalk.textContent = config.clipMap.walk || "—";
+        clipNameRun.textContent = config.clipMap.run || "—";
+
+        // ── Build live weight panel ─────────────────────────────────
+        buildWeightPanel(config.clipMap);
+
+        // ── Start in idle state ──────────────────────────────────────
+        // Set the idle action to full weight immediately. No crossfade
+        // on the first load — the character just starts in idle.
+        if (actions.idle) {
+          actions.idle.setEffectiveWeight(1);
+          activeAction = actions.idle;
+          currentState = "idle";
+        }
+        setHudState("idle", false);
+
+        overlay.classList.add("hidden");
+        isTransitioning = false;
+        transitionTimer = 0;
+
+        // Reset the speed slider to 0 on model switch.
+        speedSlider.value = 0;
+        speedVal.textContent = "0.0 m/s";
+
+        // Sync threshold sliders to this model's defaults.
+        threshWalkSlider.value = config.thresholdWalk;
+        threshRunSlider.value = config.thresholdRun;
+        threshWalkVal.textContent = config.thresholdWalk.toFixed(1) + " m/s";
+        threshRunVal.textContent = config.thresholdRun.toFixed(1) + " m/s";
+        updateThresholdMarkers();
+      }
+
+      /**
+       * Progress callback for GLTFLoader.load().
+       * Updates the progress bar and percentage label.
+       *
+       * @param {ProgressEvent} xhr
+       */
+      function onProgress(xhr) {
+        if (xhr.lengthComputable) {
+          const pct = Math.round((xhr.loaded / xhr.total) * 100);
+          progressEl.value = pct;
+          pctLabel.textContent = pct + "%";
+        }
+      }
+
+      /**
+       * Error callback for GLTFLoader.load().
+       * Shows the error overlay with a drop zone so the user can
+       * supply the file manually (required when opened via file://).
+       *
+       * @param {ErrorEvent} err
+       * @param {object}     config - The registry config, used to name the file.
+       */
+      function onLoadError(err, config) {
+        console.error("GLTFLoader error:", err);
+        console.error(`Expected path: ${config.path}`);
+        console.error(
+          "If opened via file://, drop the .glb file into the error overlay.",
+        );
+        errorEl.classList.add("visible");
+        overlay.classList.add("hidden");
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 9c: buildSkeletonOverlay
+      //   Our own skeleton visualisation, replacing THREE.SkeletonHelper.
+      //
+      // THREE.JS CONCEPT: why not SkeletonHelper?
+      //   SkeletonHelper stores bone positions relative to its root object
+      //   and then draws them through that root's matrixWorld. With a scaled
+      //   root or an armature nested under extra transforms, the two can
+      //   disagree. Here we skip that indirection entirely: every frame we
+      //   read each bone's matrixWorld translation (the exact point the
+      //   skinning shader uses) and write it into a world-space line buffer.
+      //   The overlay lives in the scene at identity, so there is nothing to
+      //   mis-scale.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * @param {THREE.Object3D} root - The character root.
+       * @returns {THREE.Group} Group with userData.update() and dispose().
+       */
+      function buildSkeletonOverlay(root) {
+        // 1. Collect every bone used by any skin (fallback: any Bone object).
+        const boneSet = new Set();
+        root.traverse((o) => {
+          if (o.isSkinnedMesh && o.skeleton)
+            o.skeleton.bones.forEach((b) => boneSet.add(b));
+        });
+        if (boneSet.size === 0)
+          root.traverse((o) => {
+            if (o.isBone) boneSet.add(o);
+          });
+        const bones = [...boneSet];
+
+        // 2. Segments: each bone → its nearest ancestor that is also a bone.
+        //    (Skips non-bone nodes such as an 'Armature' group in between.)
+        const segs = [];
+        for (const b of bones) {
+          let p = b.parent;
+          while (p && !boneSet.has(p)) p = p.parent;
+          if (p) segs.push([b, p]);
+        }
+
+        const linePos = new THREE.BufferAttribute(
+          new Float32Array(segs.length * 6),
+          3,
+        );
+        const jointPos = new THREE.BufferAttribute(
+          new Float32Array(bones.length * 3),
+          3,
+        );
+        linePos.setUsage(THREE.DynamicDrawUsage);
+        jointPos.setUsage(THREE.DynamicDrawUsage);
+
+        const lineGeo = new THREE.BufferGeometry();
+        const jointGeo = new THREE.BufferGeometry();
+        lineGeo.setAttribute("position", linePos);
+        jointGeo.setAttribute("position", jointPos);
+
+        const lineMat = new THREE.LineBasicMaterial({
+          color: 0x34d399,
+          depthTest: false,
+          transparent: true,
+        });
+        const jointMat = new THREE.PointsMaterial({
+          color: 0xfb923c,
+          size: 6,
+          sizeAttenuation: false,
+          depthTest: false,
+          transparent: true,
+        });
+
+        const lines = new THREE.LineSegments(lineGeo, lineMat);
+        const joints = new THREE.Points(jointGeo, jointMat);
+        // Positions change every frame; never cull on a stale bounding sphere.
+        lines.frustumCulled = false;
+        joints.frustumCulled = false;
+        lines.renderOrder = 999;
+        joints.renderOrder = 1000;
+
+        const group = new THREE.Group();
+        group.add(lines, joints);
+        group.matrixAutoUpdate = false; // identity: positions are already world-space
+        group.userData.bones = bones;
+
+        const v = new THREE.Vector3();
+        group.userData.update = () => {
+          root.updateMatrixWorld(true); // make sure bone matrices are current
+          for (let i = 0; i < segs.length; i++) {
+            v.setFromMatrixPosition(segs[i][0].matrixWorld);
+            linePos.setXYZ(i * 2, v.x, v.y, v.z);
+            v.setFromMatrixPosition(segs[i][1].matrixWorld);
+            linePos.setXYZ(i * 2 + 1, v.x, v.y, v.z);
+          }
+          for (let i = 0; i < bones.length; i++) {
+            v.setFromMatrixPosition(bones[i].matrixWorld);
+            jointPos.setXYZ(i, v.x, v.y, v.z);
+          }
+          linePos.needsUpdate = true;
+          jointPos.needsUpdate = true;
+        };
+
+        group.dispose = () => {
+          lineGeo.dispose();
+          jointGeo.dispose();
+          lineMat.dispose();
+          jointMat.dispose();
+        };
+
+        group.userData.update();
+        return group;
+      }
+
+      /**
+       * Console diagnostic: compares the skinned-mesh bounding box with the
+       * bone-position bounding box. If the skeleton is inside the body the
+       * two boxes overlap closely.
+       */
+      function logBoundsComparison(root, overlay) {
+        const meshBox = new THREE.Box3().setFromObject(root, true);
+        const pts = overlay.userData.bones.map((b) =>
+          new THREE.Vector3().setFromMatrixPosition(b.matrixWorld),
+        );
+        const boneBox = new THREE.Box3().setFromPoints(pts);
+        const f = (b) =>
+          `min(${b.min.x.toFixed(2)}, ${b.min.y.toFixed(2)}, ${b.min.z.toFixed(2)}) max(${b.max.x.toFixed(2)}, ${b.max.y.toFixed(2)}, ${b.max.z.toFixed(2)})`;
+        console.log(`Bones: ${pts.length}`);
+        console.log(`Mesh box:     ${f(meshBox)}`);
+        console.log(`Skeleton box: ${f(boneBox)}`);
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 10: fitCameraToModel
+      //   Computes the bounding box of the loaded model and positions
+      //   the camera to frame it. Works for models of any scale
+      //   (Fox at 0.01, KayKit at 1.0).
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Reframe the camera and orbit target around a loaded model.
+       *
+       * @param {THREE.Object3D} root - The root scene node of the model.
+       */
+      function fitCameraToModel(root) {
+        const box = new THREE.Box3().setFromObject(root);
+        const centre = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        controls.target.copy(centre);
+        camera.position.set(
+          centre.x,
+          centre.y + size * 0.3,
+          centre.z + size * 0.9,
+        );
+        controls.update();
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 11: The state machine — enterState
+      //
+      // ANIMATION CONCEPT: the crossFadeTo pattern
+      //   This function is the entire locomotion state machine.
+      //   It receives the name of the target state ('idle'|'walk'|'run')
+      //   and fires a crossFadeTo if the target differs from the current
+      //   state. Breaking it down line by line:
+      //
+      //   nextAction.reset()
+      //     Resets the action's time to 0 and clears any residual
+      //     fades. Needed because the action may have been fading out
+      //     when we switch back to it.
+      //
+      //   .setEffectiveWeight(1)
+      //     setEffectiveWeight overrides any active fade schedule.
+      //     Do NOT set .weight directly while a fade is in progress —
+      //     it causes weight glitches. setEffectiveWeight is the safe API.
+      //
+      //   .play()
+      //     Activates the action. An action must be playing for
+      //     crossFadeTo to affect it.
+      //
+      //   activeAction.crossFadeTo(nextAction, fadeDur, true)
+      //     Schedules the crossfade:
+      //       - Fades activeAction's weight from 1 → 0 over fadeDur seconds
+      //       - Fades nextAction's weight from 0 → 1 over fadeDur seconds
+      //     The third argument (warp: true) adjusts each action's timeScale
+      //     so that clips of different durations stay aligned during the fade.
+      //     Without warp, a 1-second idle and a 2-second run clip would be
+      //     at different cycle points mid-transition, producing a stutter.
+      //
+      //   isTransitioning / transitionTimer
+      //     Guard flags that prevent the state machine from firing a new
+      //     crossFadeTo before the previous one completes. Without them,
+      //     rapid slider movement would fire dozens of fades per second,
+      //     causing the mixer's weight scheduler to produce chaotic output.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Transition the state machine to a new locomotion state.
+       * Fires crossFadeTo() and sets isTransitioning for the fade duration.
+       *
+       * @param {'idle'|'walk'|'run'} nextState - The state to transition into.
+       */
+      function enterState(nextState) {
+        if (!mixer) return;
+        if (nextState === currentState) return;
+
+        const nextAction = actions[nextState];
+        if (!nextAction) {
+          // This model doesn't have a clip for the target state.
+          console.warn(
+            `No action for state '${nextState}' on model '${activeModelKey}'.`,
+          );
+          return;
+        }
+
+        console.log(
+          `── State transition: ${currentState} → ${nextState} (fade: ${fadeDur.toFixed(2)} s) ──`,
+        );
+        console.log(
+          `  from: ${actions[currentState]?.getClip().name || "none"}`,
+        );
+        console.log(`  to:   ${nextAction.getClip().name}`);
+
+        // THREE.JS CONCEPT: the canonical crossFadeTo pattern
+        //   When activeAction and nextAction are the SAME object (e.g.
+        //   a model maps all states to one clip), crossFadeTo(self)
+        //   would fight itself and corrupt the weight schedule. We guard
+        //   against this: if they are the same action, just ensure it is
+        //   playing at full weight and skip the crossfade entirely.
+        if (activeAction && activeAction !== nextAction) {
+          nextAction.reset().setEffectiveWeight(1).play();
+          activeAction.crossFadeTo(nextAction, fadeDur, true);
+        } else if (!activeAction) {
+          nextAction.reset().setEffectiveWeight(1).play();
+        }
+        // If activeAction === nextAction, it is already playing at the
+        // correct weight — nothing to do.
+
+        activeAction = nextAction;
+        currentState = nextState;
+
+        // Mark as transitioning for fadeDur seconds to prevent
+        // immediate re-triggering from the speed slider.
+        isTransitioning = true;
+        transitionTimer = fadeDur;
+
+        setHudState(nextState, true);
+        // After the fade completes, clear the transitioning flag and
+        // update the HUD to show the settled state (no longer in flux).
+        setTimeout(() => {
+          isTransitioning = false;
+          setHudState(nextState, false);
+        }, fadeDur * 1000);
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 12: evaluateStateMachine
+      //
+      // ANIMATION CONCEPT: the parameter-to-state mapping
+      //   This function is called every frame with the current speed
+      //   value from the slider. It maps the continuous speed parameter
+      //   to a discrete state name and calls enterState() if the state
+      //   should change.
+      //
+      //   Thresholds are stored in the model's registry config so each
+      //   character can have different transition points (a large dinosaur
+      //   might walk above 1.0 m/s and run above 8.0 m/s; a small fox
+      //   might use tighter ranges).
+      //
+      //   In a real game engine, the speed parameter would come from the
+      //   physics/movement system (rigidbody velocity magnitude), not from
+      //   a slider. The state machine doesn't care — it just reads a float.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Evaluate the locomotion state machine for the current speed.
+       * Determines the target state from speed thresholds and calls
+       * enterState() if a transition is needed.
+       *
+       * @param {number} speed - Current speed in m/s (0–10).
+       */
+      function evaluateStateMachine(speed) {
+        if (!mixer || isTransitioning) return;
+
+        // Read thresholds live from the sliders so changes take effect immediately.
+        // The slider values are kept in sync with MODEL_REGISTRY in the input handlers,
+        // but reading from the DOM here means we always use the latest value even if
+        // the handlers haven't fired yet (e.g. programmatic value changes).
+        const tWalk = parseFloat(threshWalkSlider.value);
+        const tRun = parseFloat(threshRunSlider.value);
+        let targetState;
+
+        if (speed >= tRun) {
+          targetState = "run";
+        } else if (speed >= tWalk) {
+          targetState = "walk";
+        } else {
+          targetState = "idle";
+        }
+
+        if (targetState !== currentState) {
+          enterState(targetState);
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 13: HUD state update
+      //   Updates the three state bubbles in the canvas overlay to
+      //   reflect the current state. The 'transitioning' flag gives
+      //   the active bubble a blue colour during the crossfade, then
+      //   returns to orange once settled.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Update the three state HUD bubbles to show the current state.
+       *
+       * @param {'idle'|'walk'|'run'} state        - The settled or target state.
+       * @param {boolean}             transitioning - Whether a crossfade is in progress.
+       */
+      function setHudState(state, transitioning) {
+        const bubbles = { idle: bubbleIdle, walk: bubbleWalk, run: bubbleRun };
+        const rows = { idle: rowIdle, walk: rowWalk, run: rowRun };
+
+        for (const [s, el] of Object.entries(bubbles)) {
+          el.classList.remove("active", "transitioning");
+          rows[s].classList.remove("active-row");
+        }
+
+        const activeBubble = bubbles[state];
+        const activeRow = rows[state];
+        if (activeBubble) {
+          activeBubble.classList.add(
+            transitioning ? "transitioning" : "active",
+          );
+          activeRow.classList.add("active-row");
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 14: Live action weights panel
+      //   Shows the effective weight of each action as a bar that fills
+      //   and drains during crossfades. This makes the blending visible
+      //   — students see that both actions have non-zero weight during
+      //   the fade, and that the weights sum to 1 throughout.
+      //
+      // ANIMATION CONCEPT: why weights sum to 1 during a crossfade
+      //   crossFadeTo schedules complementary fades: as one action's
+      //   weight goes from 1→0, the other goes from 0→1. The mixer
+      //   does NOT enforce that weights sum to 1 — that is just what
+      //   crossFadeTo does. You could have two actions both at weight 1
+      //   (additive blending) or both at weight 0.5. The weights panel
+      //   shows whatever the mixer's internal schedule produces.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Build the weight panel HTML structure once after a model loads.
+       * updateWeightPanel() then refreshes the bar widths every frame.
+       *
+       * @param {{ idle: string, walk: string, run: string }} clipMap
+       */
+      function buildWeightPanel(clipMap) {
+        const states = ["idle", "walk", "run"];
+        let html = "";
+        for (const state of states) {
+          const clipName = clipMap[state] || "—";
+          html += `
       <div class="weight-row">
         <span class="weight-label">${state}</span>
         <div class="weight-bar-track">
@@ -1304,219 +2242,341 @@ function buildWeightPanel(clipMap) {
       </div>
       <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin:-4px 0 8px 58px;">${clipName}</div>
     `;
-  }
-  weightPanel.innerHTML = html;
-}
+        }
+        weightPanel.innerHTML = html;
+      }
 
-/**
- * Update the weight bars and numbers every frame.
- * Reads the effective weight from each AnimationAction.
- */
-function updateWeightPanel() {
-  if (!mixer) return;
+      /**
+       * Update the weight bars and numbers every frame.
+       * Reads the effective weight from each AnimationAction.
+       */
+      function updateWeightPanel() {
+        if (!mixer) return;
 
-  const states = ['idle', 'walk', 'run'];
-  for (const state of states) {
-    const bar = document.getElementById(`wbar-${state}`);
-    const num = document.getElementById(`wnum-${state}`);
-    if (!bar || !num) continue;
+        const states = ["idle", "walk", "run"];
+        for (const state of states) {
+          const bar = document.getElementById(`wbar-${state}`);
+          const num = document.getElementById(`wnum-${state}`);
+          if (!bar || !num) continue;
 
-    const action = actions[state];
-    // getEffectiveWeight() returns the weight after any scheduled
-    // fade has been applied at the current mixer time.
-    const w = action ? action.getEffectiveWeight() : 0;
-    bar.style.width    = (w * 100).toFixed(1) + '%';
-    num.textContent    = w.toFixed(2);
-  }
-}
+          const action = actions[state];
+          // getEffectiveWeight() returns the weight after any scheduled
+          // fade has been applied at the current mixer time.
+          const w = action ? action.getEffectiveWeight() : 0;
+          bar.style.width = (w * 100).toFixed(1) + "%";
+          num.textContent = w.toFixed(2);
+        }
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 15: applyWireframe
-// ─────────────────────────────────────────────────────────────
-/**
- * Toggle wireframe mode on all meshes in the scene.
- *
- * @param {boolean} enabled
- */
-function applyWireframe(enabled) {
-  if (!characterRoot) return;
-  characterRoot.traverse((obj) => {
-    if (obj.isMesh && obj.material) {
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      mats.forEach((m) => { m.wireframe = enabled; });
-    }
-  });
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 15: applyWireframe
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Toggle wireframe mode on all meshes in the scene.
+       *
+       * @param {boolean} enabled
+       */
+      function applyWireframe(enabled) {
+        if (!characterRoot) return;
+        characterRoot.traverse((obj) => {
+          if (obj.isMesh && obj.material) {
+            const mats = Array.isArray(obj.material)
+              ? obj.material
+              : [obj.material];
+            mats.forEach((m) => {
+              m.wireframe = enabled;
+            });
+          }
+        });
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 16: Render loop
-//
-// ANIMATION CONCEPT: mixer.update(delta)
-//   This single call advances every active AnimationAction by
-//   delta * action.timeScale seconds, evaluates all KeyframeTracks
-//   at the new time, and writes interpolated values into the scene
-//   graph (bone quaternions, positions, scales). After this call,
-//   all bones reflect the blended pose for the current frame.
-//
-//   The clock.getDelta() pattern ensures frame-rate independence:
-//   the animation advances by real elapsed time, not by a fixed
-//   increment. At 30 fps, delta ≈ 0.033 s; at 120 fps, delta ≈
-//   0.008 s. The animation speed is identical in both cases.
-// ─────────────────────────────────────────────────────────────
-const clock = new THREE.Clock();
+      // ─────────────────────────────────────────────────────────────
+      // STEP 16: Render loop
+      //
+      // ANIMATION CONCEPT: mixer.update(delta)
+      //   This single call advances every active AnimationAction by
+      //   delta * action.timeScale seconds, evaluates all KeyframeTracks
+      //   at the new time, and writes interpolated values into the scene
+      //   graph (bone quaternions, positions, scales). After this call,
+      //   all bones reflect the blended pose for the current frame.
+      //
+      //   The clock.getDelta() pattern ensures frame-rate independence:
+      //   the animation advances by real elapsed time, not by a fixed
+      //   increment. At 30 fps, delta ≈ 0.033 s; at 120 fps, delta ≈
+      //   0.008 s. The animation speed is identical in both cases.
+      // ─────────────────────────────────────────────────────────────
+      const clock = new THREE.Clock();
 
-function animate() {
-  requestAnimationFrame(animate);
+      function animate() {
+        requestAnimationFrame(animate);
 
-  const delta = clock.getDelta();
+        const delta = clock.getDelta();
 
-  // ANIMATION CONCEPT: this single line drives all animation.
-  if (mixer) mixer.update(delta);
+        // ANIMATION CONCEPT: this single line drives all animation.
+        if (mixer) mixer.update(delta);
 
-  // Evaluate the state machine every frame.
-  // The speed slider value is read directly — no need to cache it
-  // since DOM reads are cheap and the slider doesn't change between
-  // frames unless the user moves it.
-  evaluateStateMachine(parseFloat(speedSlider.value));
+        // Re-read bone world positions AFTER the mixer has posed them.
+        if (skeletonHelper) skeletonHelper.userData.update();
 
-  // Count down the transition guard timer.
-  if (isTransitioning) {
-    transitionTimer -= delta;
-    if (transitionTimer <= 0) {
-      isTransitioning = false;
-      transitionTimer  = 0;
-    }
-  }
+        // Auto-play: sweep the speed slider up and down automatically.
+        if (isPlaying) {
+          let v = parseFloat(speedSlider.value) + playDir * PLAY_RATE * delta;
+          if (v >= 10) {
+            v = 10;
+            playDir = -1;
+          }
+          if (v <= 0) {
+            v = 0;
+            playDir = 1;
+          }
+          speedSlider.value = v;
+          speedVal.textContent = v.toFixed(1) + " m/s";
+        }
 
-  updateWeightPanel();
-  controls.update();
-  renderer.render(scene, camera);
-}
+        // Evaluate the state machine every frame.
+        // The speed slider value is read directly — no need to cache it
+        // since DOM reads are cheap and the slider doesn't change between
+        // frames unless the user moves it.
+        evaluateStateMachine(parseFloat(speedSlider.value));
 
-// ─────────────────────────────────────────────────────────────
-// STEP 17: Speed slider
-//   Reads the slider value (0–10 m/s) and updates the label.
-//   The actual state machine evaluation happens in animate()
-//   every frame, not in this event handler — the handler only
-//   updates the display label.
-// ─────────────────────────────────────────────────────────────
-speedSlider.addEventListener('input', () => {
-  const v = parseFloat(speedSlider.value);
-  speedVal.textContent = v.toFixed(1) + ' m/s';
-});
+        // Count down the transition guard timer.
+        if (isTransitioning) {
+          transitionTimer -= delta;
+          if (transitionTimer <= 0) {
+            isTransitioning = false;
+            transitionTimer = 0;
+          }
+        }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 18: Fade duration slider
-//   Controls how long crossFadeTo() takes in seconds.
-//   A short fade (0.05 s) produces an abrupt pop — the character
-//   snaps between states. A long fade (1.0 s) produces a smooth
-//   but sluggish transition. 0.2–0.4 s is typical for locomotion.
-//   Adjusting this live while the character is in motion shows
-//   students why the duration matters perceptually.
-// ─────────────────────────────────────────────────────────────
-fadeDuration.addEventListener('input', () => {
-  fadeDur = parseFloat(fadeDuration.value);
-  fadeLabel.textContent = fadeDur.toFixed(2) + ' s';
-});
+        updateWeightPanel();
+        controls.update();
+        renderer.render(scene, camera);
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 19: Model selector
-// ─────────────────────────────────────────────────────────────
-document.getElementById('modelSelect').addEventListener('change', function () {
-  loadModel(this.value);
-});
+      // ─────────────────────────────────────────────────────────────
+      // STEP 16b: Threshold marker positions
+      //   The two coloured tick marks on the speed slider show where
+      //   the walk and run thresholds currently sit. We compute the
+      //   percentage position along the slider track and set `left`
+      //   on each marker div. Called whenever a threshold slider changes.
+      // ─────────────────────────────────────────────────────────────
+      /**
+       * Reposition the walk/run threshold markers on the speed bar.
+       * Must be called after any threshold slider change and on init.
+       */
+      function updateThresholdMarkers() {
+        const min = parseFloat(speedSlider.min); // 0
+        const max = parseFloat(speedSlider.max); // 10
+        const tW = parseFloat(threshWalkSlider.value);
+        const tR = parseFloat(threshRunSlider.value);
 
-// ─────────────────────────────────────────────────────────────
-// STEP 20: Viewport toggle controls
-// ─────────────────────────────────────────────────────────────
-document.getElementById('skelBtn').addEventListener('click', function () {
-  skeletonVisible = !skeletonVisible;
-  if (skeletonHelper) skeletonHelper.visible = skeletonVisible;
-  this.textContent = skeletonVisible ? 'On' : 'Off';
-  this.classList.toggle('active', skeletonVisible);
-});
+        // The slider thumb travels the full client width of the input element.
+        // Browsers reserve ~8px of padding at each end for the thumb, so we
+        // approximate the usable track as (width - 16px). Good enough for a marker.
+        const pctW = ((tW - min) / (max - min)) * 100;
+        const pctR = ((tR - min) / (max - min)) * 100;
+        markerWalk.style.left = `calc(${pctW}% - 1px)`;
+        markerRun.style.left = `calc(${pctR}% - 1px)`;
+      }
 
-document.getElementById('wireBtn').addEventListener('click', function () {
-  wireframeOn = !wireframeOn;
-  applyWireframe(wireframeOn);
-  this.textContent = wireframeOn ? 'On' : 'Off';
-  this.classList.toggle('active', wireframeOn);
-});
+      // ─────────────────────────────────────────────────────────────
+      // STEP 17: Speed slider
+      //   Reads the slider value (0–10 m/s) and updates the label.
+      //   The actual state machine evaluation happens in animate()
+      //   every frame, not in this event handler — the handler only
+      //   updates the display label.
+      // ─────────────────────────────────────────────────────────────
+      speedSlider.addEventListener("input", () => {
+        const v = parseFloat(speedSlider.value);
+        speedVal.textContent = v.toFixed(1) + " m/s";
+        // Manual drag cancels auto-play so the user retains control.
+        if (isPlaying) {
+          isPlaying = false;
+          playBtn.textContent = "▶";
+          playBtn.classList.remove("playing");
+        }
+      });
 
-document.getElementById('gridBtn').addEventListener('click', function () {
-  gridOn = !gridOn;
-  grid.visible = gridOn;
-  this.textContent = gridOn ? 'On' : 'Off';
-  this.classList.toggle('active', gridOn);
-});
+      // ─────────────────────────────────────────────────────────────
+      // STEP 17b: Threshold sliders
+      //   Walk threshold — must stay below the run threshold.
+      //   Run threshold  — must stay above the walk threshold.
+      //   We clamp the values against each other so they never cross,
+      //   then write the new values back into MODEL_REGISTRY so the
+      //   console logs stay consistent with the live thresholds.
+      // ─────────────────────────────────────────────────────────────
+      threshWalkSlider.addEventListener("input", () => {
+        let tW = parseFloat(threshWalkSlider.value);
+        let tR = parseFloat(threshRunSlider.value);
+        // Clamp: walk must be at least 0.2 below run
+        if (tW >= tR - 0.1) {
+          tW = tR - 0.1;
+          threshWalkSlider.value = tW.toFixed(1);
+        }
+        threshWalkVal.textContent = tW.toFixed(1) + " m/s";
+        MODEL_REGISTRY[activeModelKey].thresholdWalk = tW;
+        updateThresholdMarkers();
+      });
 
-// ─────────────────────────────────────────────────────────────
-// STEP 21: File loading fallback (CORS / file://)
-//   When this page is opened via file://, the browser blocks
-//   fetch() calls, so GLTFLoader.load('seminar_04/Fox.glb')
-//   fails with a CORS error. The error overlay offers a drop
-//   zone where the user can supply the .glb manually.
-//   FileReader reads the file as a data: URL, which GLTFLoader
-//   can load without any network request.
-//   This is the same fallback pattern as Demo 1 and Demo 2.
-// ─────────────────────────────────────────────────────────────
+      threshRunSlider.addEventListener("input", () => {
+        let tW = parseFloat(threshWalkSlider.value);
+        let tR = parseFloat(threshRunSlider.value);
+        // Clamp: run must be at least 0.1 above walk
+        if (tR <= tW + 0.1) {
+          tR = tW + 0.1;
+          threshRunSlider.value = tR.toFixed(1);
+        }
+        threshRunVal.textContent = tR.toFixed(1) + " m/s";
+        MODEL_REGISTRY[activeModelKey].thresholdRun = tR;
+        updateThresholdMarkers();
+      });
 
-/**
- * Load a GLB from a File object chosen by the user.
- * Used as a CORS fallback when the page is opened via file://.
- *
- * @param {File} file - The .glb or .gltf file to load.
- */
-function loadFromFile(file) {
-  if (!file) return;
-  if (!/\.(glb|gltf)$/i.test(file.name)) { alert('Please pick a .glb or .gltf file.'); return; }
+      // ─────────────────────────────────────────────────────────────
+      // STEP 17c: Play button
+      //   Toggles the auto-speed-sweep. Resets direction to +1 when
+      //   the slider is already at max so the sweep starts downward.
+      // ─────────────────────────────────────────────────────────────
+      playBtn.addEventListener("click", () => {
+        isPlaying = !isPlaying;
+        if (isPlaying) {
+          playBtn.textContent = "⏸";
+          playBtn.classList.add("playing");
+          // Start direction: go up unless we're already at the top
+          playDir = parseFloat(speedSlider.value) >= 9.9 ? -1 : 1;
+        } else {
+          playBtn.textContent = "▶";
+          playBtn.classList.remove("playing");
+        }
+      });
 
-  const config = MODEL_REGISTRY[activeModelKey] || MODEL_REGISTRY['fox'];
-  errorEl.classList.remove('visible');
-  overlay.classList.remove('hidden');
-  progressEl.value = 0;
-  pctLabel.textContent = '0%';
-  loadingTitle.textContent = `Loading ${file.name}…`;
-  loadingSub.textContent   = 'Local file · no upload';
+      // ─────────────────────────────────────────────────────────────
+      // STEP 18: Fade duration slider
+      //   Controls how long crossFadeTo() takes in seconds.
+      //   A short fade (0.05 s) produces an abrupt pop — the character
+      //   snaps between states. A long fade (1.0 s) produces a smooth
+      //   but sluggish transition. 0.2–0.4 s is typical for locomotion.
+      //   Adjusting this live while the character is in motion shows
+      //   students why the duration matters perceptually.
+      // ─────────────────────────────────────────────────────────────
+      fadeDuration.addEventListener("input", () => {
+        fadeDur = parseFloat(fadeDuration.value);
+        fadeLabel.textContent = fadeDur.toFixed(2) + " s";
+      });
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    clearScene();
-    const loader = new GLTFLoader();
-    loader.load(
-      e.target.result,
-      (gltf) => onModelLoad(gltf, config),
-      (xhr)  => onProgress(xhr),
-      (err)  => onLoadError(err, config)
-    );
-  };
-  reader.readAsDataURL(file);
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 19: Model selector
+      // ─────────────────────────────────────────────────────────────
+      document
+        .getElementById("modelSelect")
+        .addEventListener("change", function () {
+          loadModel(this.value);
+        });
 
-const picker   = document.getElementById('glbFilePicker');
-const dropZone = document.getElementById('dropZone');
+      // ─────────────────────────────────────────────────────────────
+      // STEP 20: Viewport toggle controls
+      // ─────────────────────────────────────────────────────────────
+      document.getElementById("skelBtn").addEventListener("click", function () {
+        skeletonVisible = !skeletonVisible;
+        if (skeletonHelper) skeletonHelper.visible = skeletonVisible;
+        this.textContent = skeletonVisible ? "On" : "Off";
+        this.classList.toggle("active", skeletonVisible);
+      });
 
-dropZone.addEventListener('click', () => picker.click());
-picker.addEventListener('change', () => loadFromFile(picker.files[0]));
-dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('dragover');
-  loadFromFile(e.dataTransfer.files[0]);
-});
+      document.getElementById("wireBtn").addEventListener("click", function () {
+        wireframeOn = !wireframeOn;
+        applyWireframe(wireframeOn);
+        this.textContent = wireframeOn ? "On" : "Off";
+        this.classList.toggle("active", wireframeOn);
+      });
 
-canvasWrap.addEventListener('dragover', (e) => e.preventDefault());
-canvasWrap.addEventListener('drop', (e) => { e.preventDefault(); loadFromFile(e.dataTransfer.files[0]); });
+      document.getElementById("gridBtn").addEventListener("click", function () {
+        gridOn = !gridOn;
+        grid.visible = gridOn;
+        this.textContent = gridOn ? "On" : "Off";
+        this.classList.toggle("active", gridOn);
+      });
 
-// ─────────────────────────────────────────────────────────────
-// STEP 22: Startup
-// ─────────────────────────────────────────────────────────────
-window.addEventListener('resize', setRendererSize);
-setRendererSize();
-animate();
-loadModel('fox');
+      // ─────────────────────────────────────────────────────────────
+      // STEP 21: File loading fallback (CORS / file://)
+      //   When this page is opened via file://, the browser blocks
+      //   fetch() calls, so GLTFLoader.load('04_gltf/Fox.glb')
+      //   fails with a CORS error. The error overlay offers a drop
+      //   zone where the user can supply the .glb manually.
+      //   FileReader reads the file as a data: URL, which GLTFLoader
+      //   can load without any network request.
+      //   This is the same fallback pattern as Demo 1 and Demo 2.
+      // ─────────────────────────────────────────────────────────────
 
-</script>
-</body>
+      /**
+       * Load a GLB from a File object chosen by the user.
+       * Used as a CORS fallback when the page is opened via file://.
+       *
+       * @param {File} file - The .glb or .gltf file to load.
+       */
+      function loadFromFile(file) {
+        if (!file) return;
+        if (!/\.(glb|gltf)$/i.test(file.name)) {
+          alert("Please pick a .glb or .gltf file.");
+          return;
+        }
+
+        const config = MODEL_REGISTRY[activeModelKey] || MODEL_REGISTRY["fox"];
+        errorEl.classList.remove("visible");
+        overlay.classList.remove("hidden");
+        progressEl.value = 0;
+        pctLabel.textContent = "0%";
+        loadingTitle.textContent = `Loading ${file.name}…`;
+        loadingSub.textContent = "Local file · no upload";
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          clearScene();
+          const loader = new GLTFLoader();
+          loader.load(
+            e.target.result,
+            (gltf) => onModelLoad(gltf, config),
+            (xhr) => onProgress(xhr),
+            (err) => onLoadError(err, config),
+          );
+        };
+        reader.readAsDataURL(file);
+      }
+
+      const picker = document.getElementById("glbFilePicker");
+      const dropZone = document.getElementById("dropZone");
+
+      dropZone.addEventListener("click", () => picker.click());
+      picker.addEventListener("change", () => loadFromFile(picker.files[0]));
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+      dropZone.addEventListener("dragleave", () =>
+        dropZone.classList.remove("dragover"),
+      );
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        loadFromFile(e.dataTransfer.files[0]);
+      });
+
+      canvasWrap.addEventListener("dragover", (e) => e.preventDefault());
+      canvasWrap.addEventListener("drop", (e) => {
+        e.preventDefault();
+        loadFromFile(e.dataTransfer.files[0]);
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 22: Startup
+      // ─────────────────────────────────────────────────────────────
+      window.addEventListener("resize", () => {
+        setRendererSize();
+        updateThresholdMarkers();
+      });
+      setRendererSize();
+      animate();
+      updateThresholdMarkers();
+      loadModel("fox");
+    </script>
+  </body>
 </html>
