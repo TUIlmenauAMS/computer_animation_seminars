@@ -1726,19 +1726,18 @@
           }
         });
 
-        // Add the character to the scene FIRST, then force a full matrix
-        // world update so every bone's matrixWorld is valid before we
-        // measure the model and read bone positions.
+        // Add the character to the scene first.
         scene.add(characterRoot);
-        characterRoot.updateMatrixWorld(true);
 
         // ── Build the skeleton overlay ────────────────────────────────
-        // The skeleton overlay reads bone world positions directly, so it is
-        // always inside the body regardless of scale or armature nesting.
-        skeletonHelper = buildSkeletonOverlay(characterRoot);
+        // THREE.SkeletonHelper is added as a child of characterRoot so it
+        // inherits the model's scale automatically. This is the same pattern
+        // used in Demo 2 (04_ca_skeleton.html) and is the correct approach
+        // for scaled models like Fox (scale 0.01): bones live in the scaled
+        // hierarchy, so the helper must live there too.
+        skeletonHelper = new THREE.SkeletonHelper(characterRoot);
         skeletonHelper.visible = skeletonVisible;
         scene.add(skeletonHelper);
-        logBoundsComparison(characterRoot, skeletonHelper);
 
         fitCameraToModel(characterRoot);
         applyWireframe(wireframeOn);
@@ -1876,133 +1875,10 @@
         overlay.classList.add("hidden");
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 9c: buildSkeletonOverlay
-      //   Our own skeleton visualisation, replacing THREE.SkeletonHelper.
-      //
-      // THREE.JS CONCEPT: why not SkeletonHelper?
-      //   SkeletonHelper stores bone positions relative to its root object
-      //   and then draws them through that root's matrixWorld. With a scaled
-      //   root or an armature nested under extra transforms, the two can
-      //   disagree. Here we skip that indirection entirely: every frame we
-      //   read each bone's matrixWorld translation (the exact point the
-      //   skinning shader uses) and write it into a world-space line buffer.
-      //   The overlay lives in the scene at identity, so there is nothing to
-      //   mis-scale.
-      // ─────────────────────────────────────────────────────────────
-      /**
-       * @param {THREE.Object3D} root - The character root.
-       * @returns {THREE.Group} Group with userData.update() and dispose().
-       */
-      function buildSkeletonOverlay(root) {
-        // 1. Collect every bone used by any skin (fallback: any Bone object).
-        const boneSet = new Set();
-        root.traverse((o) => {
-          if (o.isSkinnedMesh && o.skeleton)
-            o.skeleton.bones.forEach((b) => boneSet.add(b));
-        });
-        if (boneSet.size === 0)
-          root.traverse((o) => {
-            if (o.isBone) boneSet.add(o);
-          });
-        const bones = [...boneSet];
-
-        // 2. Segments: each bone → its nearest ancestor that is also a bone.
-        //    (Skips non-bone nodes such as an 'Armature' group in between.)
-        const segs = [];
-        for (const b of bones) {
-          let p = b.parent;
-          while (p && !boneSet.has(p)) p = p.parent;
-          if (p) segs.push([b, p]);
-        }
-
-        const linePos = new THREE.BufferAttribute(
-          new Float32Array(segs.length * 6),
-          3,
-        );
-        const jointPos = new THREE.BufferAttribute(
-          new Float32Array(bones.length * 3),
-          3,
-        );
-        linePos.setUsage(THREE.DynamicDrawUsage);
-        jointPos.setUsage(THREE.DynamicDrawUsage);
-
-        const lineGeo = new THREE.BufferGeometry();
-        const jointGeo = new THREE.BufferGeometry();
-        lineGeo.setAttribute("position", linePos);
-        jointGeo.setAttribute("position", jointPos);
-
-        const lineMat = new THREE.LineBasicMaterial({
-          color: 0x34d399,
-          depthTest: false,
-          transparent: true,
-        });
-        const jointMat = new THREE.PointsMaterial({
-          color: 0xfb923c,
-          size: 6,
-          sizeAttenuation: false,
-          depthTest: false,
-          transparent: true,
-        });
-
-        const lines = new THREE.LineSegments(lineGeo, lineMat);
-        const joints = new THREE.Points(jointGeo, jointMat);
-        // Positions change every frame; never cull on a stale bounding sphere.
-        lines.frustumCulled = false;
-        joints.frustumCulled = false;
-        lines.renderOrder = 999;
-        joints.renderOrder = 1000;
-
-        const group = new THREE.Group();
-        group.add(lines, joints);
-        group.matrixAutoUpdate = false; // identity: positions are already world-space
-        group.userData.bones = bones;
-
-        const v = new THREE.Vector3();
-        group.userData.update = () => {
-          root.updateMatrixWorld(true); // make sure bone matrices are current
-          for (let i = 0; i < segs.length; i++) {
-            v.setFromMatrixPosition(segs[i][0].matrixWorld);
-            linePos.setXYZ(i * 2, v.x, v.y, v.z);
-            v.setFromMatrixPosition(segs[i][1].matrixWorld);
-            linePos.setXYZ(i * 2 + 1, v.x, v.y, v.z);
-          }
-          for (let i = 0; i < bones.length; i++) {
-            v.setFromMatrixPosition(bones[i].matrixWorld);
-            jointPos.setXYZ(i, v.x, v.y, v.z);
-          }
-          linePos.needsUpdate = true;
-          jointPos.needsUpdate = true;
-        };
-
-        group.dispose = () => {
-          lineGeo.dispose();
-          jointGeo.dispose();
-          lineMat.dispose();
-          jointMat.dispose();
-        };
-
-        group.userData.update();
-        return group;
-      }
-
-      /**
-       * Console diagnostic: compares the skinned-mesh bounding box with the
-       * bone-position bounding box. If the skeleton is inside the body the
-       * two boxes overlap closely.
-       */
-      function logBoundsComparison(root, overlay) {
-        const meshBox = new THREE.Box3().setFromObject(root, true);
-        const pts = overlay.userData.bones.map((b) =>
-          new THREE.Vector3().setFromMatrixPosition(b.matrixWorld),
-        );
-        const boneBox = new THREE.Box3().setFromPoints(pts);
-        const f = (b) =>
-          `min(${b.min.x.toFixed(2)}, ${b.min.y.toFixed(2)}, ${b.min.z.toFixed(2)}) max(${b.max.x.toFixed(2)}, ${b.max.y.toFixed(2)}, ${b.max.z.toFixed(2)})`;
-        console.log(`Bones: ${pts.length}`);
-        console.log(`Mesh box:     ${f(meshBox)}`);
-        console.log(`Skeleton box: ${f(boneBox)}`);
-      }
+      // NOTE: Skeleton visualisation is handled by THREE.SkeletonHelper,
+      // created in onModelLoad(). It attaches to characterRoot and inherits
+      // the model's scale, which correctly handles the Fox (scale 0.01) and
+      // the KayKit characters (scale 1.0) without any manual coordinate work.
 
       // ─────────────────────────────────────────────────────────────
       // STEP 10: fitCameraToModel
@@ -2315,8 +2191,7 @@
         // ANIMATION CONCEPT: this single line drives all animation.
         if (mixer) mixer.update(delta);
 
-        // Re-read bone world positions AFTER the mixer has posed them.
-        if (skeletonHelper) skeletonHelper.userData.update();
+        // THREE.SkeletonHelper updates itself automatically each frame.
 
         // Auto-play: sweep the speed slider up and down automatically.
         if (isPlaying) {
