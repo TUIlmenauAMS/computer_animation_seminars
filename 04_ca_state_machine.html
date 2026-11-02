@@ -940,7 +940,22 @@ function onModelLoad(gltf, config) {
       child.receiveShadow = true;
     }
   });
+
+  // Add the character to the scene FIRST, then force a full
+  // matrix world update before creating SkeletonHelper.
+  //
+  // THREE.JS CONCEPT: why order matters for SkeletonHelper
+  //   SkeletonHelper reads the world-space positions of every bone
+  //   at construction time to build its line geometry. If the
+  //   character is not yet part of the scene graph, or if
+  //   updateMatrixWorld() has not been called since it was added,
+  //   bone world matrices are stale (identity or from a previous
+  //   frame). The helper will then draw all lines at the origin
+  //   or in the wrong place. Calling updateMatrixWorld(true) with
+  //   force=true propagates transforms down the full hierarchy
+  //   immediately, so the helper gets correct positions.
   scene.add(characterRoot);
+  characterRoot.updateMatrixWorld(true);
 
   skeletonHelper = new THREE.SkeletonHelper(characterRoot);
   skeletonHelper.visible = skeletonVisible;
@@ -971,24 +986,43 @@ function onModelLoad(gltf, config) {
   console.log('─────────────────────────────────────────────────');
 
   // ── Resolve each state's AnimationAction ─────────────────
-  // ANIMATION CONCEPT: actions map
-  //   We create exactly one AnimationAction per state. If a model
-  //   maps two states to the same clip (CesiumMan maps all three
-  //   to 'animation_0'), mixer.clipAction() returns the SAME
-  //   action object for all three — which is fine, the mixer
-  //   handles it correctly.
+  // ANIMATION CONCEPT: actions map and duplicate clip handling
+  //   mixer.clipAction(clip) is idempotent — calling it with the
+  //   same clip always returns the SAME AnimationAction object.
+  //   CesiumMan maps all three states to 'animation_0', so
+  //   resolved.idle === resolved.walk === resolved.run.
+  //
+  //   The key rule: we must NOT call .play() on the same action
+  //   multiple times before it has started, and we must NOT set
+  //   weight to 0 on an action we are about to make active.
+  //   Strategy: collect unique actions, set them all to weight 0
+  //   and play them (so the mixer tracks them), then set the idle
+  //   action's weight to 1 as the starting pose. When all states
+  //   share the same action, setting weight to 1 for idle is
+  //   correct — the single action plays at full weight.
   const resolved = { idle: null, walk: null, run: null };
+  const seenActions = new Set();
+
   for (const [state, clipName] of Object.entries(config.clipMap)) {
     const clip = clipByName[clipName];
     if (!clip) {
       console.warn(`State '${state}': clip '${clipName}' not found in ${config.label}. Available: ${Object.keys(clipByName).join(', ')}`);
       continue;
     }
-    resolved[state] = mixer.clipAction(clip);
-    resolved[state].loop = THREE.LoopRepeat;
-    // Start all actions at weight 0, stopped. The state machine
-    // will activate the idle action immediately below.
-    resolved[state].setEffectiveWeight(0).play();
+    const action = mixer.clipAction(clip);
+    action.loop = THREE.LoopRepeat;
+    resolved[state] = action;
+
+    // Only configure each unique action object once.
+    // If walk and run share the same action as idle (CesiumMan),
+    // we skip the duplicate set — the idle pass below handles it.
+    if (!seenActions.has(action)) {
+      seenActions.add(action);
+      // Start at weight 0 so all non-active actions contribute
+      // nothing to the pose until the state machine activates them.
+      action.setEffectiveWeight(0);
+      action.play();
+    }
   }
   actions = resolved;
 
@@ -1001,12 +1035,12 @@ function onModelLoad(gltf, config) {
   buildWeightPanel(config.clipMap);
 
   // ── Start in idle state ──────────────────────────────────────
-  // Force an immediate transition into idle without crossfading —
-  // we call enterState directly since there is no previous action.
+  // Set the idle action to full weight immediately. No crossfade
+  // on the first load — the character just starts in idle.
   if (actions.idle) {
     actions.idle.setEffectiveWeight(1);
-    activeAction  = actions.idle;
-    currentState  = 'idle';
+    activeAction = actions.idle;
+    currentState = 'idle';
   }
   setHudState('idle', false);
 
@@ -1129,10 +1163,19 @@ function enterState(nextState) {
   console.log(`  to:   ${nextAction.getClip().name}`);
 
   // THREE.JS CONCEPT: the canonical crossFadeTo pattern
-  nextAction.reset().setEffectiveWeight(1).play();
+  //   When activeAction and nextAction are the SAME object (e.g.
+  //   CesiumMan maps all states to one clip), crossFadeTo(self)
+  //   would fight itself and corrupt the weight schedule. We guard
+  //   against this: if they are the same action, just ensure it is
+  //   playing at full weight and skip the crossfade entirely.
   if (activeAction && activeAction !== nextAction) {
+    nextAction.reset().setEffectiveWeight(1).play();
     activeAction.crossFadeTo(nextAction, fadeDur, true);
+  } else if (!activeAction) {
+    nextAction.reset().setEffectiveWeight(1).play();
   }
+  // If activeAction === nextAction, it is already playing at the
+  // correct weight — nothing to do.
 
   activeAction  = nextAction;
   currentState  = nextState;
