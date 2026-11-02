@@ -1744,9 +1744,72 @@
         });
         console.log("─────────────────────────────────────────────────");
 
+        // THREE.SkeletonHelper must be passed a root whose matrixWorld matches
+        // the coordinate space the bones live in. Passing characterRoot (the
+        // gltf.scene Group) works mathematically, but breaks for the Fox GLB
+        // because the Fox has two sibling scene roots: the mesh node and the
+        // skeleton root node. Their world positions can differ from what
+        // SkeletonHelper expects when it inverts characterRoot.matrixWorld.
+        //
+        // The robust fix: find the first SkinnedMesh and pass it directly.
+        // SkeletonHelper's getBoneList() traverses the object's children for
+        // bones, but since we're passing the SkinnedMesh, it finds 0 bones
+        // that way — HOWEVER, Three.js r152+ also checks isSkinnedMesh and
+        // uses skinnedMesh.skeleton.bones directly. For older Three.js, we
+        // instead find the root bone (skeleton root joint) and pass that, since
+        // the skeleton root's matrixWorld is the natural reference frame for
+        // all descendant bones (they are all children of it).
+        //
+        // Strategy: find the first SkinnedMesh, get its skeleton's root bone
+        // (the bone with no bone parent), and pass that as the helper root.
+        let skinnedMesh = null;
+        characterRoot.traverse((child) => {
+          if (child.isSkinnedMesh && !skinnedMesh) skinnedMesh = child;
+        });
+
+        // Find the root bone: the bone in the skeleton whose parent is not a bone.
+        let rootBone = null;
+        if (skinnedMesh) {
+          for (const bone of skinnedMesh.skeleton.bones) {
+            if (!bone.parent || !bone.parent.isBone) {
+              rootBone = bone;
+              break;
+            }
+          }
+        }
+
+        // DEBUG: revert to simplest possible approach — original code
         skeletonHelper = new THREE.SkeletonHelper(characterRoot);
         skeletonHelper.visible = skeletonVisible;
         scene.add(skeletonHelper);
+
+        // DEBUG: after 3 frames, log actual world positions so we can
+        // see where bones actually end up vs where the helper renders them.
+        let debugFrames = 0;
+        const debugFn = () => {
+          if (++debugFrames < 3) { requestAnimationFrame(debugFn); return; }
+          console.log("=== DEBUG BONE WORLD POSITIONS (frame 3) ===");
+          characterRoot.traverse(o => {
+            if (o.isBone) {
+              const wp = new THREE.Vector3();
+              o.getWorldPosition(wp);
+              console.log(`  BONE "${o.name}" world=(${wp.x.toFixed(4)}, ${wp.y.toFixed(4)}, ${wp.z.toFixed(4)})`);
+            }
+          });
+          const helperPos = skeletonHelper.geometry.getAttribute('position');
+          console.log("=== SKELETON HELPER geometry (local space, first 6 verts) ===");
+          for (let i = 0; i < Math.min(6, helperPos.count); i++) {
+            const lv = new THREE.Vector3(helperPos.getX(i), helperPos.getY(i), helperPos.getZ(i));
+            const wv = lv.clone().applyMatrix4(skeletonHelper.matrixWorld);
+            console.log(`  vert[${i}] local=(${lv.x.toFixed(3)},${lv.y.toFixed(3)},${lv.z.toFixed(3)}) world=(${wv.x.toFixed(4)},${wv.y.toFixed(4)},${wv.z.toFixed(4)})`);
+          }
+          console.log("=== HELPER matrixWorld ===");
+          console.log(skeletonHelper.matrixWorld.elements.map(v=>v.toFixed(4)));
+          console.log("=== characterRoot matrixWorld ===");
+          console.log(characterRoot.matrixWorld.elements.map(v=>v.toFixed(4)));
+          console.log("=== helper.matrix === characterRoot.matrixWorld?", skeletonHelper.matrix === characterRoot.matrixWorld);
+        };
+        requestAnimationFrame(debugFn);
 
         fitCameraToModel(characterRoot);
         applyWireframe(wireframeOn);
