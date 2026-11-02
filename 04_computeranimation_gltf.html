@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 04: glTF & Character Animation — Computeranimation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161a22;
+    --border:  #252b38;
+    --text:    #d8dce6;
+    --muted:   #5a6175;
+    --accent:  #4f9cf9;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --orange:  #fb923c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 24px 0 20px;
+  }
+  .header-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .header-logo img { width: 100px; border-radius: 10px; display: block; }
+  .header-info h1 { font-size: clamp(18px,3vw,26px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
+  .header-info h2 { font-size: 14px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
+  .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .header-meta a { color: var(--accent); text-decoration: none; }
+  .header-meta a:hover { text-decoration: underline; }
+
+  /* ── breadcrumb ── */
+  .breadcrumb {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 14px 32px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .breadcrumb a { color: var(--accent); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb span { margin: 0 6px; }
+
+  /* ── main ── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+
+  /* ── notebook content ── */
+  .nb-content { display: flex; flex-direction: column; gap: 0; }
+  .nb-cell { padding: 0; }
+
+  /* ── prose ── */
+  .nb-cell h1 {
+    font-size: clamp(22px, 3.5vw, 32px);
+    font-weight: 500;
+    color: #f0f2f7;
+    line-height: 1.25;
+    margin: 40px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nb-cell h2 {
+    font-size: 20px;
+    font-weight: 500;
+    color: #e8eaf2;
+    margin: 48px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .nb-cell h3 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--accent2);
+    margin: 28px 0 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+  }
+  .nb-cell p { margin-bottom: 14px; color: var(--text); }
+  .nb-cell ul, .nb-cell ol { margin: 0 0 14px 22px; }
+  .nb-cell li { margin-bottom: 6px; }
+  .nb-cell strong { color: #eef0f6; font-weight: 500; }
+  .nb-cell em { color: var(--text); }
+  .nb-cell a { color: var(--accent); text-decoration: none; }
+  .nb-cell a:hover { text-decoration: underline; }
+  .nb-cell hr { border: none; border-top: 1px solid var(--border); margin: 8px 0 0; }
+
+  /* tables */
+  .nb-cell table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 20px;
+    font-size: 13.5px;
+  }
+  .nb-cell th {
+    text-align: left;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .nb-cell td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(37,43,56,0.6);
+    vertical-align: top;
+    color: var(--text);
+  }
+  .nb-cell tr:last-child td { border-bottom: none; }
+  .nb-cell tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* inline code */
+  .nb-cell code {
+    background: rgba(79,156,249,0.08);
+    color: #93c5fd;
+    font-family: var(--mono);
+    font-size: 0.88em;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* code blocks */
+  .nb-cell pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 14px 0 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.65;
+    color: #c9d1e0;
+  }
+  .nb-cell pre code {
+    background: none;
+    color: inherit;
+    font-size: inherit;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  /* pill links */
+  .nb-cell a[style*="border:1px solid #1a73e8"],
+  .nb-cell a[style*="border: 1px solid #1a73e8"] {
+    display: inline-flex !important;
+    align-items: center;
+    padding: 5px 14px !important;
+    margin: 4px 6px 4px 0 !important;
+    border: 1px solid rgba(79,156,249,0.4) !important;
+    border-radius: 20px !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+    font-size: 12px !important;
+    color: var(--accent) !important;
+    background: rgba(79,156,249,0.07) !important;
+    font-family: var(--mono);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .nb-cell a[style*="border:1px solid #1a73e8"]:hover,
+  .nb-cell a[style*="border: 1px solid #1a73e8"]:hover {
+    background: rgba(79,156,249,0.14) !important;
+    border-color: rgba(79,156,249,0.7) !important;
+  }
+
+  /* callout / info boxes */
+  .nb-cell div[style*="border-left:5px solid #1a73e8"],
+  .nb-cell div[style*="border-left: 5px solid #1a73e8"] {
+    border-left: 4px solid var(--accent) !important;
+    background: rgba(79,156,249,0.06) !important;
+    border-radius: 6px;
+    padding: 16px 20px !important;
+    margin: 20px 0 !important;
+    color: var(--text);
+  }
+
+  /* demo boxes */
+  .demo-box {
+    border-left: 4px solid var(--green);
+    background: rgba(52,211,153,0.06);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  .demo-box strong { color: var(--green); }
+  .demo-box a { color: var(--green); }
+
+  /* warning/orange boxes */
+  .warn-box {
+    border-left: 4px solid var(--orange);
+    background: rgba(251,146,60,0.06);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: var(--text);
+  }
+  .warn-box strong { color: var(--orange); }
+
+  /* images */
+  .nb-cell img {
+    max-width: 100%;
+    border-radius: 10px;
+    display: block;
+  }
+
+  /* footer cell */
+  .nb-footer-cell {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 2px solid var(--border);
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .nb-footer-cell b { color: var(--text); }
+  .nb-footer-cell a { color: var(--accent); text-decoration: none; }
+  .nb-footer-cell a:hover { text-decoration: underline; }
+
+  /* ── prev / next navigation ── */
+  .chapter-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .chapter-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 8px 14px;
+    border: 1px solid rgba(79,156,249,0.3);
+    border-radius: 6px;
+    background: rgba(79,156,249,0.05);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .chapter-nav a:hover {
+    background: rgba(79,156,249,0.12);
+    border-color: rgba(79,156,249,0.6);
+  }
+  .chapter-nav .nav-label {
+    font-size: 11px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 1px;
+  }
+  .chapter-nav .nav-title { color: var(--accent); }
+
+  /* ── page footer ── */
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 18px 32px 24px;
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
+    .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .chapter-nav { flex-direction: column; align-items: stretch; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-logo">
+      <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau">
+    </div>
+    <div class="header-info">
+      <h1>Computeranimation</h1>
+      <h2>Chapter 04: glTF &amp; Character Animation</h2>
+      <p class="header-meta">
+        <strong>Institut für Medientechnik –
+          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+             target="_blank" rel="noopener">AMS Group</a>
+          – Technische Universität Ilmenau</strong><br>
+        <strong>Fachgebietsleiter:</strong> Prof. Dr.-Ing. Gerald Schuller &nbsp;·&nbsp;
+        <strong>Wissenschaftlicher Mitarbeiter:</strong> Renato Fera P.
+        <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+      </p>
+    </div>
+  </div>
+</header>
+
+<nav class="breadcrumb">
+  <a href="index.html">Seminar Materials</a>
+  <span>›</span>
+  Chapter 04: glTF &amp; Character Animation
+</nav>
+
+<main>
+<div class="nb-content">
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 1 — chapter intro                                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<h1>Chapter 04: glTF &amp; Character Animation</h1>
+<p>Every character you see moving in a game, film, or real-time 3D app rests on two foundations: a <strong>standard file format</strong> that carries the geometry, skeleton, and animation data from the authoring tool to the runtime, and a <strong>skinning and blending system</strong> inside the engine that drives the final pose. This chapter covers both.</p>
+<p>The file format is <strong>glTF 2.0</strong> — the open Khronos standard that has become the JPEG of 3D. The runtime is <strong>Three.js</strong>, whose <code>GLTFLoader</code>, <code>SkinnedMesh</code>, and <code>AnimationMixer</code> translate every byte of a <code>.glb</code> file into moving geometry on screen. The tooling layer is <strong>Python</strong> with <code>pygltflib</code>, which lets you inspect and modify glTF binary data programmatically — the same work a pipeline technical director does in a production studio.</p>
+<p>By the end of this chapter you will be able to read a raw glTF JSON file, understand the skinning matrix equation that drives every animated character, play and blend animation clips with <code>AnimationMixer</code>, and write Python scripts that inspect and modify keyframe data in a binary <code>.glb</code> file.</p>
+
+<h3>What this chapter covers</h3>
+<table>
+  <thead><tr><th>#</th><th>Topic</th><th>What you will learn</th><th>Demo</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Why glTF?</td><td>The 3D asset exchange problem and how glTF solves it</td><td>—</td></tr>
+    <tr><td>2</td><td>glTF 2.0 Structure</td><td>Every top-level key: nodes, meshes, accessors, skins, animations</td><td>Demo 1</td></tr>
+    <tr><td>3</td><td>Skeletal Animation</td><td>Bones, the bind pose, the skinning equation, morph targets</td><td>Demo 2</td></tr>
+    <tr><td>4</td><td>Three.js + glTF</td><td>GLTFLoader, SkinnedMesh, AnimationMixer, AnimationAction</td><td>Demo 3</td></tr>
+    <tr><td>5</td><td>Blending &amp; Crossfading</td><td>crossFadeTo, direct weight control, 1D blend trees, slerp</td><td>Demo 4</td></tr>
+    <tr><td>6</td><td>glTF in Python</td><td>pygltflib: inspect, read binary data, modify keyframes, save</td><td>Demo 5</td></tr>
+    <tr><td>7</td><td>Free glTF Assets</td><td>Where to find rigged characters; Blender export; Mixamo workflow</td><td>—</td></tr>
+    <tr><td>8</td><td>Demo Index</td><td>All five demos with run instructions</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>Assets used in this chapter.</strong> The browser demos use <strong>Fox.glb</strong> and the Python demo uses <strong>CesiumMan.glb</strong>, both from the official <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener">Khronos glTF Sample Assets</a> repository. Fox.glb is licensed CC0/CC-BY 4.0; CesiumMan.glb is CC-BY 4.0. Both are committed to <code>seminar_04/</code> in the course repository.
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 2 — Section 1: Why glTF?                               -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="why-gltf">1. Why glTF? The JPEG of 3D</h2>
+
+<h3>The 3D asset exchange problem</h3>
+<p>For decades, every major 3D authoring tool — Maya, Blender, Cinema 4D, 3ds Max — used its own proprietary file format. Moving assets between tools, to game engines, or to the web required a chain of lossy conversions. An artist exporting from Blender to Unity might pass through FBX, losing material properties. An asset pipeline for a web viewer might chain Blender → Collada → custom preprocessor → binary blob, with a different script breaking at each step every time a tool updated.</p>
+<p>This was the state of the industry until 2017, when the <strong>Khronos Group</strong> — the same standards body behind OpenGL, Vulkan, and OpenCL — released <strong>glTF 2.0</strong>. The goal was explicit: create the "JPEG of 3D", a compact, runtime-ready delivery format that any tool could export to and any engine could load from.</p>
+
+<h3>What makes glTF runtime-ready</h3>
+<p>The key design insight of glTF is that geometry and animation data are stored in a binary layout that GPUs can consume <em>directly</em>. Vertex positions, normals, texture coordinates, bone weights — everything is packed as typed arrays (float32, uint16, etc.) in a binary buffer. There is no text parsing, no type conversion, no triangle-list reconstruction from an indexed OBJ face. The <code>accessors</code> and <code>bufferViews</code> in the glTF JSON are essentially typed pointers into that binary blob. This is why a large glTF model loads in milliseconds where an equivalent OBJ might take seconds.</p>
+<p>Contrast this with formats designed for authoring:</p>
+<table>
+  <thead><tr><th>Format</th><th>Designed for</th><th>Runtime-ready?</th><th>Typical size</th></tr></thead>
+  <tbody>
+    <tr><td><strong>glTF / GLB</strong></td><td>Delivery &amp; runtime</td><td>Yes — GPU-uploadable binary</td><td>Compact</td></tr>
+    <tr><td><strong>OBJ + MTL</strong></td><td>Simple interchange</td><td>No — text, needs parsing</td><td>Large (ASCII)</td></tr>
+    <tr><td><strong>FBX</strong></td><td>Autodesk authoring</td><td>No — binary but proprietary, needs SDK</td><td>Large</td></tr>
+    <tr><td><strong>Collada (DAE)</strong></td><td>XML interchange</td><td>No — verbose XML, slow to parse</td><td>Very large</td></tr>
+    <tr><td><strong>.blend</strong></td><td>Blender native</td><td>No — authoring format, not for engines</td><td>Very large</td></tr>
+  </tbody>
+</table>
+
+<h3>The two file variants</h3>
+<p>glTF comes in two packaging forms. You will encounter both:</p>
+<ul>
+  <li><strong><code>.gltf</code> + <code>.bin</code> + textures</strong> — a JSON descriptor file, a separate binary blob for geometry and animation data, and separate image files for textures. Good for inspection and tooling: you can open the <code>.gltf</code> in a text editor and read the scene graph. Bad for delivery: three or more files with relative path dependencies.</li>
+  <li><strong><code>.glb</code> (binary glTF)</strong> — all of the above packed into a single binary container. The <code>.bin</code> and textures are embedded as binary chunks. One file, no relative path issues, slightly smaller total size. This is what the course uses for all demos.</li>
+</ul>
+
+<h3>Where glTF is used today</h3>
+<p>Industry adoption is essentially universal: Three.js, Babylon.js, Unity, Unreal Engine, Godot, iOS RealityKit, Android Sceneform, the <code>&lt;model-viewer&gt;</code> web component, Sketchfab, and every major 3D viewer on the web. When a 3D artist exports an asset for delivery, they export to glTF. When a game engine imports a character, it imports from glTF. This is the industry workflow.</p>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>glTF is to 3D what MP3 is to audio.</strong> You author in Blender or Maya — full resolution, non-destructive, all the extra data you need while creating. You export to glTF — optimised for delivery and playback. The renderer loads glTF directly, with no further processing. This separation of authoring format from delivery format is the same principle that makes JPEG and MP3 ubiquitous. glTF completes that picture for 3D.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF 2.0 Specification &#8599;</a>
+  <a href="https://www.khronos.org/gltf/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Khronos glTF Overview &#8599;</a>
+  <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF Sample Assets &#8599;</a>
+</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 3 — Section 2: glTF Structure                          -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="gltf-structure">2. glTF 2.0 Structure: A Deep Dive</h2>
+<p>A <code>.gltf</code> file is a JSON document with a fixed set of top-level arrays. Every element — mesh, bone, texture, animation keyframe — is described in this JSON. Binary data (vertices, indices, animation values) lives in a separate buffer, referenced by index. Opening any <code>.gltf</code> file in a text editor and reading it top-to-bottom is the fastest way to understand what a 3D asset contains.</p>
+<p>The following annotated excerpt covers the major top-level keys you will encounter with Fox.glb and any other skinned character. (In a real Fox.gltf the arrays are much longer — this is a representative skeleton.)</p>
+
+<pre><code>{
+  // ── Asset metadata ──────────────────────────────────────────────────────
+  "asset": {
+    "version":   "2.0",          // glTF specification version — always "2.0"
+    "generator": "Khronos glTF Blender I/O v3.6.0",  // tool that wrote this file
+    "copyright": "CC-BY 4.0 — Khronos Group"
+  },
+
+  // ── Default scene ────────────────────────────────────────────────────────
+  "scene": 0,          // index into scenes[] — which scene to display by default
+  "scenes": [
+    { "name": "Scene", "nodes": [0] }  // root nodes of this scene
+  ],
+
+  // ── Scene graph ──────────────────────────────────────────────────────────
+  // Each node is a transform (position, rotation, scale) in the hierarchy.
+  // Nodes without a mesh are skeleton bones or organisational transforms.
+  "nodes": [
+    {
+      "name": "_rootJoint",         // the root bone of the Fox skeleton
+      "children": [1, 2],           // indices of child nodes
+      "translation": [0, 0, 0],     // local position (X, Y, Z)
+      "rotation": [0, 0, 0, 1],     // local rotation as quaternion (X, Y, Z, W)
+      "scale": [1, 1, 1]
+    },
+    {
+      "name": "b_Root_00",          // a bone — no mesh, just a transform
+      "children": [3]
+    },
+    {
+      "name": "Fox_mesh",           // a renderable node
+      "mesh": 0,                    // index into meshes[]
+      "skin": 0                     // index into skins[] — this mesh is skinned
+    }
+    // ... more nodes
+  ],
+
+  // ── Meshes ───────────────────────────────────────────────────────────────
+  // Each mesh has primitives — one per material group / draw call.
+  "meshes": [
+    {
+      "name": "Fox_mesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION":   0,   // accessor index → vec3 float32 vertex positions
+            "NORMAL":     1,   // accessor index → vec3 float32 vertex normals
+            "TEXCOORD_0": 2,   // accessor index → vec2 float32 UV coordinates
+            "JOINTS_0":   3,   // accessor index → vec4 uint16 bone indices per vertex
+            "WEIGHTS_0":  4    // accessor index → vec4 float32 bone weights per vertex
+            // JOINTS_0 and WEIGHTS_0 are present ONLY on skinned meshes.
+            // They are what makes skeletal animation possible.
+          },
+          "indices":  5,       // accessor index → triangle indices
+          "material": 0        // index into materials[]
+        }
+      ]
+    }
+  ],
+
+  // ── Materials ────────────────────────────────────────────────────────────
+  // glTF uses PBR metallic-roughness — the same model as Three.js MeshStandardMaterial.
+  "materials": [
+    {
+      "name": "Fox_material",
+      "pbrMetallicRoughness": {
+        "baseColorTexture":   { "index": 0 },  // albedo / diffuse texture
+        "metallicFactor":     0.0,
+        "roughnessFactor":    1.0
+      }
+    }
+  ],
+
+  // ── Accessors ────────────────────────────────────────────────────────────
+  // An accessor is a typed view into a buffer. It says WHAT the data is.
+  "accessors": [
+    {
+      "bufferView":    0,
+      "byteOffset":    0,
+      "componentType": 5126,   // 5126 = FLOAT (see table below)
+      "count":         3456,   // number of elements (here: 3456 vertices)
+      "type":          "VEC3", // each element is a 3-component vector
+      "max": [1.2, 2.4, 0.8],
+      "min": [-1.2, 0.0, -0.8]
+    }
+    // ... more accessors
+  ],
+
+  // ── Buffer views ─────────────────────────────────────────────────────────
+  // A buffer view is a byte slice of a buffer. It says WHERE in the binary blob.
+  "bufferViews": [
+    {
+      "buffer":     0,
+      "byteOffset": 0,
+      "byteLength": 41472,   // 3456 vertices × 3 components × 4 bytes/float
+      "byteStride": 12,      // bytes between the start of consecutive elements
+      "target":     34962    // 34962 = ARRAY_BUFFER (vertex data), 34963 = ELEMENT_ARRAY_BUFFER
+    }
+  ],
+
+  // ── Buffers ──────────────────────────────────────────────────────────────
+  // In .gltf: a reference to a .bin file. In .glb: the binary chunk is embedded.
+  "buffers": [
+    {
+      "uri":        "Fox.bin",   // omitted in .glb — data comes from the binary chunk
+      "byteLength": 159320
+    }
+  ],
+
+  // ── Skins ────────────────────────────────────────────────────────────────
+  // A skin defines a skeleton: the list of bone nodes and their bind-pose inverses.
+  "skins": [
+    {
+      "name":                 "Armature",
+      "skeleton":             0,    // root bone node index
+      "joints":               [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],  // bone node indices
+      "inverseBindMatrices":  6     // accessor index → MAT4 float32, one per joint
+      // Each matrix is the inverse of the bone's world-space transform at bind pose.
+    }
+  ],
+
+  // ── Animations ───────────────────────────────────────────────────────────
+  // Fox.glb has three animations: Survey, Walk, Run.
+  "animations": [
+    {
+      "name": "Survey",      // clip name — used by AnimationMixer.clipAction()
+      "samplers": [
+        {
+          "input":         7,   // accessor → time keyframes (float32 seconds)
+          "output":        8,   // accessor → value keyframes (VEC3 or VEC4)
+          "interpolation": "LINEAR"  // LINEAR | STEP | CUBICSPLINE
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 1,              // which node to animate
+            "path": "rotation"      // what to animate: translation | rotation | scale | weights
+          }
+        }
+      ]
+    },
+    { "name": "Walk",  "samplers": [ /* ... */ ], "channels": [ /* ... */ ] },
+    { "name": "Run",   "samplers": [ /* ... */ ], "channels": [ /* ... */ ] }
+  ]
+}</code></pre>
+
+<h3>Accessor componentType codes</h3>
+<table>
+  <thead><tr><th>Code</th><th>Type</th><th>Bytes</th><th>Common use in glTF</th></tr></thead>
+  <tbody>
+    <tr><td><code>5120</code></td><td>BYTE (int8)</td><td>1</td><td>Rarely used directly</td></tr>
+    <tr><td><code>5121</code></td><td>UNSIGNED_BYTE (uint8)</td><td>1</td><td>Small indices, packed normals</td></tr>
+    <tr><td><code>5122</code></td><td>SHORT (int16)</td><td>2</td><td>Compressed coordinates</td></tr>
+    <tr><td><code>5123</code></td><td>UNSIGNED_SHORT (uint16)</td><td>2</td><td>Triangle indices, JOINTS_0</td></tr>
+    <tr><td><code>5125</code></td><td>UNSIGNED_INT (uint32)</td><td>4</td><td>Large mesh indices (&gt;65535 vertices)</td></tr>
+    <tr><td><code>5126</code></td><td>FLOAT (float32)</td><td>4</td><td>Positions, normals, UVs, weights, animation values</td></tr>
+  </tbody>
+</table>
+
+<h3>Mesh attribute semantics</h3>
+<table>
+  <thead><tr><th>Attribute</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>POSITION</code></td><td>VEC3 FLOAT</td><td>Vertex position in object space</td></tr>
+    <tr><td><code>NORMAL</code></td><td>VEC3 FLOAT</td><td>Vertex normal (for lighting)</td></tr>
+    <tr><td><code>TANGENT</code></td><td>VEC4 FLOAT</td><td>Tangent vector (for normal mapping); W encodes handedness</td></tr>
+    <tr><td><code>TEXCOORD_0</code></td><td>VEC2 FLOAT</td><td>Primary UV coordinates</td></tr>
+    <tr><td><code>TEXCOORD_1</code></td><td>VEC2 FLOAT</td><td>Secondary UV coordinates (lightmaps etc.)</td></tr>
+    <tr><td><code>COLOR_0</code></td><td>VEC3/VEC4 FLOAT</td><td>Per-vertex colour</td></tr>
+    <tr><td><code>JOINTS_0</code></td><td>VEC4 UNSIGNED_SHORT</td><td>Four bone indices influencing this vertex (skeletal animation)</td></tr>
+    <tr><td><code>JOINTS_1</code></td><td>VEC4 UNSIGNED_SHORT</td><td>Four more bone indices (for &gt;4-bone influences)</td></tr>
+    <tr><td><code>WEIGHTS_0</code></td><td>VEC4 FLOAT</td><td>Weights for JOINTS_0 — components sum to 1.0</td></tr>
+    <tr><td><code>WEIGHTS_1</code></td><td>VEC4 FLOAT</td><td>Weights for JOINTS_1</td></tr>
+  </tbody>
+</table>
+
+<h3>Animation interpolation modes</h3>
+<table>
+  <thead><tr><th>Mode</th><th>Description</th><th>Best for</th></tr></thead>
+  <tbody>
+    <tr><td><code>LINEAR</code></td><td>Linear interpolation between keyframes</td><td>Most animation — smooth and predictable</td></tr>
+    <tr><td><code>STEP</code></td><td>Hold the previous keyframe value until the next one</td><td>Visibility toggles, discrete state changes</td></tr>
+    <tr><td><code>CUBICSPLINE</code></td><td>Hermite cubic spline with in/out tangents stored alongside each keyframe value</td><td>High-quality smooth curves with fewer keyframes</td></tr>
+  </tbody>
+</table>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>Accessors and buffer views are typed pointers.</strong> In glTF, geometry is not stored as Python lists or JS arrays — it is stored as a typed binary blob that the GPU can upload directly. The <code>accessors</code> and <code>bufferViews</code> are a pointer (<code>byteOffset</code>), a length (<code>byteLength</code>), and a type annotation (<code>componentType</code>, <code>type</code>) into that blob. This is why glTF loads faster than OBJ: there is no text parsing, no type conversion, no reconstruction of the data structure. The GPU gets the bytes exactly as they are stored in the file.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#concepts" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF 2.0 Spec §5 Concepts &#8599;</a>
+  <a href="https://github.com/KhronosGroup/glTF-Tutorials/blob/main/gltfTutorial/README.md" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF Tutorials (Khronos) &#8599;</a>
+  <a href="https://github.khronos.org/glTF-Validator/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF Validator &#8599;</a>
+</p>
+
+<div class="demo-box">
+  <strong>Demo 1 — glTF Viewer.</strong> <code>04_ca_gltf_viewer.html</code> loads Fox.glb with GLTFLoader and OrbitControls, displays a loading progress bar, and prints a human-readable asset report (node count, mesh count, animation names, material list) in a side panel alongside the 3D view. Open your browser's developer console and inspect the logged <code>gltf</code> object — you will see the same structure described in the JSON above.
+  <p style="margin:10px 0 0 0;"><a href="04_ca_gltf_viewer.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 1 &#8599;</a></p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 4 — Section 3: Skeletal Animation                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="skeletal-animation">3. Skeletal Animation: Bones, Skinning, and the Bind Pose</h2>
+
+<h3>3.1 What is a skeleton?</h3>
+<p>A skeleton is a hierarchy of <strong>bones</strong> (also called joints). Each bone is a transformation node: it has a position, rotation, and scale relative to its parent bone. Moving a parent bone moves all its children with it — exactly like a real skeleton where moving the upper arm carries the forearm and hand.</p>
+<p>In glTF, bones are not a special object type. They are ordinary nodes in the scene graph — the same <code>nodes[]</code> array that holds meshes and cameras. What makes them bones is that they are listed in <code>skins[].joints[]</code>. The skin is a declaration: "these specific nodes act as the skeleton for this mesh." There is nothing intrinsically different about a bone node; it is the skin that gives it that role.</p>
+<p>The root bone (typically a pelvis or hips node) is a child of the scene. Moving it moves the entire character. Three.js's <code>SkeletonHelper</code> draws a wireframe overlay of the skeleton: each bone appears as a line segment from the parent joint position to the child joint position.</p>
+
+<h3>3.2 The bind pose</h3>
+<p>The <strong>bind pose</strong> (also called the rest pose or T-pose) is the reference pose in which the mesh was modelled and skinned. Typically the character stands with arms outstretched in a T-shape or an A-shape, making every joint accessible and well-defined.</p>
+<p>The bind pose defines the world-space transform of each bone at the moment the artist assigned vertices to bones. This reference is stored in glTF as the <code>inverseBindMatrices</code> accessor: one 4×4 float32 matrix per joint. Entry <em>i</em> is the mathematical inverse of joint <em>i</em>'s world-space transform in the bind pose.</p>
+<p>Why store the inverse? Because the skinning algorithm needs to "undo" the bind-pose transform before applying the current animated pose. You cannot apply an animation pose on top of the bind pose — you must first transform the vertex back to bone-local space (using the inverse bind matrix), and <em>then</em> apply the animated bone transform.</p>
+
+<h3>3.3 Skinning: the vertex weight equation</h3>
+<p>A skinned mesh vertex is not rigidly attached to one bone. It can be influenced by up to four bones simultaneously, with each bone contributing a weighted fraction to the final position. This is what makes cloth, muscle, and joint deformation look smooth rather than hard-edged.</p>
+<p>The skinning equation — the core of all real-time skeletal animation — is:</p>
+
+<pre><code>p_final = Σ ( w_i  ×  M_joint_i  ×  M_invBind_i  ×  p_bind )   for i in [0 .. 3]
+
+Where:
+  p_bind       — vertex position in bind pose (object space), from the POSITION accessor
+  M_invBind_i  — inverse bind matrix for bone i (from skins[].inverseBindMatrices)
+                 transforms the vertex from object space → bone i's local space
+  M_joint_i    — current world-space transform of bone i (the animated pose)
+                 transforms the vertex from bone i's local space → world space
+  w_i          — blend weight for bone i (from the WEIGHTS_0 accessor)
+                 all four weights sum to 1.0
+  p_final      — final vertex position in world space, ready for rendering</code></pre>
+
+<p>The four bone indices for each vertex come from the <code>JOINTS_0</code> attribute (a VEC4 of UNSIGNED_SHORT). The four weights come from the <code>WEIGHTS_0</code> attribute (a VEC4 of FLOAT). Both are vertex attributes uploaded to the GPU alongside <code>POSITION</code> and <code>NORMAL</code>. The skinning calculation itself runs in the vertex shader — it happens per-vertex, on the GPU, every frame, at full rendering speed.</p>
+<p>Three.js's <code>SkinnedMesh</code> handles the entire pipeline automatically. The purpose of understanding the equation here is to know what Three.js is doing under the hood — which helps when something goes wrong (broken bind poses, incorrect bone weights, T-pose freezes).</p>
+
+<h3>Three.js mesh types compared</h3>
+<table>
+  <thead><tr><th>Three.js type</th><th>Movable parts</th><th>Skinning</th><th>Use case</th></tr></thead>
+  <tbody>
+    <tr><td><code>Mesh</code></td><td>No (static geometry)</td><td>None</td><td>Environment props, walls, ground</td></tr>
+    <tr><td><code>SkinnedMesh</code></td><td>Yes — bone-driven</td><td>Full skeletal skinning</td><td>Characters, creatures, mechanical rigs</td></tr>
+    <tr><td><code>Points</code></td><td>N/A</td><td>Optional</td><td>Particle systems, point clouds</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4 Morph targets (blend shapes)</h3>
+<p>Skeletal animation drives body motion by transforming bone nodes. But for subtle surface deformation — lips, cheeks, eyelids, wrinkles — bones produce unnatural crease artifacts. <strong>Morph targets</strong> (also called blend shapes) solve this.</p>
+<p>A morph target stores the <em>delta</em> (displacement vector) of each vertex from its rest position. Multiple targets can be mixed simultaneously with scalar weights. The result is a smooth, artist-controlled deformation with no bones involved.</p>
+<p>In glTF, morph targets are stored as <code>mesh.primitives[].targets[]</code> — each target is a map of displacement accessors (POSITION deltas, NORMAL deltas, TANGENT deltas). The <code>mesh.weights[]</code> array gives the default weights. An animation can target <code>path: "weights"</code> to animate the morph weights over time, blending between facial expressions or shape variations.</p>
+<p>In Three.js: <code>SkinnedMesh.morphTargetInfluences[]</code> holds the current weights as a Float32Array. <code>AnimationMixer</code> can animate these weights exactly like bone transforms — the API is identical.</p>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>Skeleton + blend shapes = professional character animation.</strong> Every film and game character uses both systems together. The skeleton drives the body — a character with 10,000 vertices needs only ~50 bone matrices, making it highly efficient. Blend shapes drive the face — subtle lip curls, cheek puffs, and eyelid blinks require per-vertex control that bones cannot provide cleanly. Apple's ARKit face tracking outputs 52 blend shape coefficients in real time. Pixar characters typically have several hundred blend shapes per face. The two systems are designed to compose.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#skins" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF 2.0 Spec §3.7 Skins &#8599;</a>
+  <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#morph-targets" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF 2.0 Spec §3.8 Morph Targets &#8599;</a>
+  <a href="https://threejs.org/docs/#api/en/objects/SkinnedMesh" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js SkinnedMesh &#8599;</a>
+</p>
+
+<div class="demo-box">
+  <strong>Demo 2 — Skeleton Visualiser.</strong> <code>04_ca_skeleton.html</code> loads Fox.glb, adds a <code>THREE.SkeletonHelper</code> overlay, and builds an interactive bone hierarchy panel. Click any bone name to see it highlighted in the 3D view with a sphere marker, and watch its local translation and rotation update live in the render loop.
+  <p style="margin:10px 0 0 0;"><a href="04_ca_skeleton.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 2 &#8599;</a></p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 5 — Section 4: Three.js + glTF                         -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="threejs-gltf">4. Three.js and glTF: GLTFLoader, SkinnedMesh, AnimationMixer</h2>
+
+<h3>4.1 GLTFLoader</h3>
+<p><code>GLTFLoader</code> is an official Three.js extra — it lives in <code>three/examples/jsm/loaders/GLTFLoader.js</code>. It is not in the Three.js core bundle; it is imported separately via an importmap. The loader is fully async and returns a structured <code>gltf</code> object in the <code>onLoad</code> callback.</p>
+
+<pre><code>// STEP 0: Import map — tells the browser how to resolve bare module specifiers
+// like 'three' and 'three/examples/jsm/...' without a bundler.
+// This is the modern Three.js usage pattern for standalone HTML files.
+// All URLs are pinned to three@0.165.0 — never use @latest in course demos.
+
+// In the HTML <head>:
+// &lt;script type="importmap"&gt;
+// {
+//   "imports": {
+//     "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+//     "three/examples/jsm/loaders/GLTFLoader.js":
+//       "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js",
+//     "three/examples/jsm/controls/OrbitControls.js":
+//       "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+//   }
+// }
+// &lt;/script&gt;
+
+import * as THREE from 'three';
+import { GLTFLoader }    from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+// STEP 1: Create the loader
+const loader = new GLTFLoader();
+
+loader.load(
+    'seminar_04/Fox.glb',         // URL — relative path served by GitHub Pages
+
+    (gltf) => {                   // onLoad callback: called once when the file is ready
+
+        // GLTF CONCEPT: gltf.scene is a THREE.Group containing the entire
+        // scene hierarchy from the .glb: all meshes, bones, and cameras.
+        // Adding it to the Three.js scene integrates the whole asset at once.
+        scene.add(gltf.scene);
+
+        // gltf.animations — Array<THREE.AnimationClip>, one per named animation.
+        // For Fox.glb: ['Survey', 'Walk', 'Run']
+        // clip.name comes directly from animations[i].name in the glTF JSON.
+        console.log('Animations:', gltf.animations.map(c => c.name));
+
+        // gltf.asset — { version, generator, copyright }
+        // Same as the "asset" top-level key in the glTF JSON.
+        console.log('glTF version:', gltf.asset.version);
+
+        // Log the full gltf object so students can explore it in the console.
+        // ANIMATION CONCEPT: gltf.scene.traverse() visits every descendant Object3D.
+        // Checking object.isSkinnedMesh finds the skinned meshes inside the loaded group.
+        console.log('Full gltf object:', gltf);
+    },
+
+    (xhr) => {                    // onProgress callback
+        const pct = (xhr.loaded / xhr.total * 100).toFixed(0);
+        progressElement.textContent = `Loading Fox.glb… ${pct}%`;
+    },
+
+    (error) => {                  // onError callback — the most common error is a wrong path
+        overlayElement.textContent =
+            'Could not load Fox.glb — check that the file exists at ' +
+            'seminar_04/Fox.glb relative to this HTML file.';
+        console.error('GLTFLoader error:', error);
+    }
+);</code></pre>
+
+<h3>4.2 SkinnedMesh and the Three.js skeleton</h3>
+<p>When <code>GLTFLoader</code> encounters a skinned mesh node in the glTF file, it creates a <code>THREE.SkinnedMesh</code> and a <code>THREE.Skeleton</code>. The skeleton holds an array of <code>THREE.Bone</code> objects, which are <code>Object3D</code> subclasses — they live in the scene graph as children of the character root, just like any other Three.js object.</p>
+<pre><code>// After gltf loads, find the SkinnedMesh inside the loaded group:
+let skinnedMesh;
+gltf.scene.traverse((object) => {
+    // THREE.JS CONCEPT: isSkinnedMesh is the standard guard for finding
+    // skinned meshes inside a loaded glTF. The first one found is the character mesh.
+    if (object.isSkinnedMesh) skinnedMesh = object;
+});
+
+// The skeleton attached to the SkinnedMesh:
+const skeleton = skinnedMesh.skeleton;
+
+// skeleton.bones — flat Array<THREE.Bone> of all bones.
+// The ordering matches skins[0].joints[] in the glTF JSON.
+console.log('Bone count:', skeleton.bones.length);
+console.log('Bone names:', skeleton.bones.map(b => b.name));
+
+// skeleton.boneMatrices — Float32Array of all current bone matrices.
+// Updated by Three.js every frame and uploaded to the GPU as a uniform array.
+// Length = bones.length * 16 (one 4×4 matrix per bone).
+
+// Morph targets (if present):
+// skinnedMesh.morphTargetInfluences — Float32Array of current morph weights.
+// skinnedMesh.morphTargetDictionary — maps morph target name → array index.</code></pre>
+
+<h3>4.3 SkeletonHelper</h3>
+<p><code>THREE.SkeletonHelper</code> draws a debug line from every parent joint to its child joint, making the skeleton visible without any extra geometry. It updates automatically every frame and does not affect the animation in any way.</p>
+<pre><code>// Create a SkeletonHelper rooted at the loaded character group.
+// It will draw a line for every bone in every SkinnedMesh found in the subtree.
+const helper = new THREE.SkeletonHelper(gltf.scene);
+scene.add(helper);
+
+// Toggle visibility at any time:
+helper.visible = false;  // hide
+helper.visible = true;   // show</code></pre>
+
+<h3>4.4 AnimationMixer — the playback engine</h3>
+<p><code>THREE.AnimationMixer</code> is the animation runtime. It manages every active <code>AnimationAction</code> in a hierarchy, advances their time each frame, evaluates the keyframes, and writes the resulting transforms into the bone nodes. One mixer per character; two characters require two mixers.</p>
+<pre><code>// Create the mixer, rooted at the character's scene group.
+const mixer = new THREE.AnimationMixer(gltf.scene);
+
+// mixer.clipAction(clip) returns (or creates) an AnimationAction for a clip.
+// ANIMATION CONCEPT: clipAction() is idempotent — calling it multiple times
+// with the same clip always returns the same AnimationAction object.
+// Cache the actions once in onLoad; do not create them on every button click.
+const surveyAction = mixer.clipAction(gltf.animations[0]); // 'Survey'
+const walkAction   = mixer.clipAction(gltf.animations[1]); // 'Walk'
+const runAction    = mixer.clipAction(gltf.animations[2]); // 'Run'
+
+surveyAction.play();   // Start playing the Survey idle animation.
+
+// ── The render loop ──────────────────────────────────────────────────────────
+// ANIMATION CONCEPT: The mixer does not update itself. You MUST call
+// mixer.update(delta) every frame. This is the same delta-time pattern from
+// seminars 01 and 02: always use elapsed time, never a fixed increment.
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const delta = clock.getDelta();   // seconds elapsed since the last getDelta() call
+    mixer.update(delta);               // advance all active actions by delta seconds
+
+    controls.update();                 // required for OrbitControls damping
+    renderer.render(scene, camera);
+}
+animate();</code></pre>
+
+<h3>AnimationAction methods and properties</h3>
+<table>
+  <thead><tr><th>Method / Property</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>.play()</code></td><td>Start or resume playback</td></tr>
+    <tr><td><code>.stop()</code></td><td>Stop and reset to time 0</td></tr>
+    <tr><td><code>.paused</code></td><td>Boolean — pause/unpause without resetting to 0</td></tr>
+    <tr><td><code>.weight</code></td><td>Raw blend weight 0–1 (use <code>setEffectiveWeight</code> instead when fading)</td></tr>
+    <tr><td><code>.timeScale</code></td><td>Playback speed multiplier — 1 = normal, 0.5 = half speed, -1 = reverse, 0 = frozen</td></tr>
+    <tr><td><code>.loop</code></td><td><code>THREE.LoopRepeat</code> / <code>LoopOnce</code> / <code>LoopPingPong</code></td></tr>
+    <tr><td><code>.fadeIn(t)</code></td><td>Smoothly fade weight from 0 to 1 over <em>t</em> seconds</td></tr>
+    <tr><td><code>.fadeOut(t)</code></td><td>Smoothly fade weight from 1 to 0 over <em>t</em> seconds</td></tr>
+    <tr><td><code>.crossFadeTo(action, t, warp)</code></td><td>Simultaneously fade this out and <em>action</em> in over <em>t</em> seconds; see Section 5</td></tr>
+    <tr><td><code>.reset()</code></td><td>Reset playback time to 0 — chain before <code>.play()</code></td></tr>
+    <tr><td><code>.setEffectiveWeight(w)</code></td><td>Set weight, overriding any in-progress fade schedule cleanly</td></tr>
+    <tr><td><code>.getMixer()</code></td><td>Returns the parent <code>AnimationMixer</code></td></tr>
+  </tbody>
+</table>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>AnimationMixer is the manual version of the animation graph.</strong> Unity's Animator Controller, Unreal's Animation Blueprint, and Godot's AnimationTree all implement the same concept visually: clips as nodes, weights for blending, a state machine for transitions. Three.js exposes the same machinery directly through the <code>AnimationMixer</code> API. Understanding the mixer here transfers directly to working with those visual tools — they generate the same structure automatically.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://threejs.org/docs/#api/en/animation/AnimationMixer" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js AnimationMixer &#8599;</a>
+  <a href="https://threejs.org/docs/#api/en/animation/AnimationAction" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js AnimationAction &#8599;</a>
+  <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#animations" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">glTF 2.0 Spec §3.9 Animations &#8599;</a>
+</p>
+
+<div class="demo-box">
+  <strong>Demo 3 — Animation Clip Player.</strong> <code>04_ca_clips.html</code> loads Fox.glb, creates an <code>AnimationMixer</code>, and provides Survey / Walk / Run buttons. Each button calls <code>crossFadeTo</code> with a 0.3 s blend. A speed slider controls <code>timeScale</code>. A progress bar shows playback position within the current clip.
+  <p style="margin:10px 0 0 0;"><a href="04_ca_clips.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 3 &#8599;</a></p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 6 — Section 5: Blending                                -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="blending">5. Blending and Crossfading</h2>
+
+<h3>5.1 Why animation blending?</h3>
+<p>A character running on rough terrain must simultaneously play a run cycle and a stumble reaction. A character walking and looking at something continues the walk cycle while the upper body rotates. A character transitioning from idle to sprint cannot instantly jump from one clip to the other — the pop would be jarring.</p>
+<p>The solution is <strong>blending</strong>: every <code>AnimationAction</code> has a weight between 0 and 1. The final pose is the weighted average of all active actions' poses, evaluated per bone. Setting one action's weight to 1 and another's to 0 plays the first purely; setting both to 0.5 mixes them equally. This is the same <code>lerp</code> from seminar 01 — applied per bone transform, once per frame, at 60+ fps.</p>
+
+<h3>5.2 The crossFadeTo pattern</h3>
+<p>The canonical blending pattern in Three.js — used in the official skinning examples and in every professional Three.js character demo — is a helper function built around <code>crossFadeTo</code>:</p>
+<pre><code>let currentAction = null;
+
+/**
+ * Switch to a new animation clip, blending out the previous one.
+ * @param {THREE.AnimationAction} nextAction - The clip to blend in.
+ * @param {number} fadeDuration - Blend time in seconds (default: 0.3 s).
+ */
+function playAction(nextAction, fadeDuration = 0.3) {
+    // Guard: if the requested action is already playing, do nothing.
+    if (currentAction === nextAction) return;
+
+    // Reset the incoming action to time 0 and set its weight to 1.
+    // ANIMATION CONCEPT: reset() avoids a stale time offset if the action
+    // was previously stopped partway through its clip.
+    // setEffectiveWeight(1) sets the weight before the fade schedule starts,
+    // preventing a one-frame weight glitch at the beginning of the transition.
+    nextAction.reset().setEffectiveWeight(1).play();
+
+    if (currentAction) {
+        // crossFadeTo simultaneously fades THIS action out and nextAction in
+        // over fadeDuration seconds. The warp: true argument adjusts timeScale
+        // so clips of different lengths stay in sync during the blend.
+        // ANIMATION CONCEPT: if Walk is 1.2 s and Run is 0.8 s, without warp
+        // the Walk plays at normal speed while the Run tries to keep up —
+        // resulting in a jerky transition. warp: true matches their speeds.
+        currentAction.crossFadeTo(nextAction, fadeDuration, true);
+    }
+
+    currentAction = nextAction;
+}
+
+// Usage:
+playAction(walkAction);   // blends from Survey → Walk over 0.3 s
+playAction(runAction);    // blends from Walk   → Run  over 0.3 s</code></pre>
+
+<h3>5.3 Direct weight control: the 1D blend tree</h3>
+<p>For a continuous blend driven by a parameter (character speed, for example), set both actions' weights directly from a slider value:</p>
+<pre><code>// Both actions are playing simultaneously. A slider drives the blend parameter.
+// blendFactor = 0 → pure Walk. blendFactor = 1 → pure Run.
+// Values between produce a blended pose — the character visually interpolates
+// between the two gaits.
+
+slider.addEventListener('input', () => {
+    const t = parseFloat(slider.value);  // 0.0 … 1.0
+
+    // ANIMATION CONCEPT: setEffectiveWeight vs. setting .weight directly.
+    // setEffectiveWeight respects any fade schedule currently in progress.
+    // If a crossFadeTo is running when the slider moves, setEffectiveWeight
+    // overrides it cleanly. Raw .weight during a fade produces glitches.
+    walkAction.setEffectiveWeight(1 - t);
+    runAction.setEffectiveWeight(t);
+});
+
+// Start both playing (an action with weight 0 contributes nothing, but must
+// be playing for its weight to take effect when the slider moves):
+walkAction.play();
+runAction.play();</code></pre>
+
+<p>This slider is a <strong>1D blend tree</strong> — the simplest form of the animation graph used in every game engine. Unity calls it "1D Blend Space"; Unreal calls it "Blend Space 1D". In a full engine the blend parameter is driven automatically by gameplay variables like character speed. Here you drive it manually to see the effect directly.</p>
+
+<h3>5.4 Interpolation in animation</h3>
+<p>Recall from seminar 01: <code>lerp(a, b, t) = (1 - t) * a + t * b</code>. Animation blending is per-bone lerp on positions and scales, and per-bone <strong>slerp</strong> on quaternion rotations.</p>
+<p>Slerp (spherical linear interpolation) interpolates along the shortest arc on the unit quaternion hypersphere, producing constant-speed rotation. You cannot lerp quaternions directly — the result collapses towards zero length and produces incorrect, non-constant-speed motion. Three.js uses <code>quaternion.slerpQuaternions(a, b, t)</code> for all bone rotation blending internally.</p>
+
+<table>
+  <thead><tr><th>Interpolation</th><th>Input space</th><th>Formula</th><th>Use in animation</th></tr></thead>
+  <tbody>
+    <tr><td>Lerp</td><td>Linear (positions, scales)</td><td><code>(1-t)*a + t*b</code></td><td>Position and scale blending</td></tr>
+    <tr><td>Slerp</td><td>Quaternion rotations</td><td>quaternion slerp on unit sphere</td><td>Bone rotation blending — always use slerp</td></tr>
+    <tr><td>Cubic Bézier</td><td>Time (easing curves)</td><td>Bézier parametric</td><td>Easing within a keyframe channel</td></tr>
+    <tr><td>CUBICSPLINE</td><td>glTF tangent-based</td><td>Hermite cubic spline</td><td>High-quality keyframe interpolation with fewer keys</td></tr>
+  </tbody>
+</table>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>Blending is why modern game characters feel smooth.</strong> A character in an open-world game typically has 20–50 active AnimationActions at any moment: a locomotion blend tree, a hit-reaction layer, a facial expression layer, an eye-dart layer, a breathing layer, an injury-limp layer. The total pose is the weighted sum of all of them, evaluated in real time at 60+ fps. What you control in the blend demo below is a simplified version of the same system.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://threejs.org/examples/#webgl_animation_skinning_blending" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js Skinning Blend Example &#8599;</a>
+  <a href="https://threejs.org/examples/#webgl_morphtargets" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js Morph Targets Example &#8599;</a>
+  <a href="https://docs.unity3d.com/Manual/class-BlendTree.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Unity Blend Trees (reference) &#8599;</a>
+</p>
+
+<div class="demo-box">
+  <strong>Demo 4 — Clip Blending.</strong> <code>04_ca_blend.html</code> plays Walk and Run simultaneously. A blend slider (0 = pure Walk, 1 = pure Run) drives the weights directly, making the 1D blend tree concept tangible. A second button triggers an automatic <code>crossFadeTo</code> transition. A live table shows the current weight, time, and duration of each active action, updated every frame.
+  <p style="margin:10px 0 0 0;"><a href="04_ca_blend.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 4 &#8599;</a></p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 7 — Section 6: Python / pygltflib                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="python-pygltflib">6. glTF in Python: pygltflib</h2>
+
+<h3>6.1 Why a Python glTF library?</h3>
+<p>Not every step in a 3D pipeline happens inside an interactive engine. Production pipelines routinely process glTF files programmatically: batch-convert assets from Blender, validate that all required animation clip names are present, modify keyframe data without opening a DCC tool, inject procedural motion from a simulation, strip unreferenced materials, or report polygon budgets for every asset in a project. All of this happens in Python scripts run from the command line.</p>
+<p><strong>pygltflib</strong> is a pure-Python glTF 2.0 read/write library. It maps the glTF JSON spec directly to Python dataclasses. Every top-level array you saw in Section 2 — <code>nodes</code>, <code>meshes</code>, <code>animations</code>, <code>skins</code> — becomes a Python list of typed objects. Accessors are Python objects with <code>.componentType</code>, <code>.type</code>, <code>.count</code>. Binary data is accessed through <code>get_data_from_accessor()</code>.</p>
+<p>The demo for this section is a Python script (<code>seminar_04/04_ca_gltf_python.py</code>), run with the same <code>uv</code> project setup from seminar 03. The pattern is identical: <code>cd seminar_04 &amp;&amp; uv sync &amp;&amp; uv run python 04_ca_gltf_python.py</code>.</p>
+
+<h3>6.2 uv commands (seminar 04 reminder)</h3>
+<p>The project structure follows the same <code>uv</code> pattern established in seminar 03 — students already know it. A quick reminder:</p>
+<pre><code># 1. Clone the repo (skip if already done in seminar 03)
+git clone https://github.com/TUIlmenauAMS/computer_animation_seminars
+cd computer_animation_seminars/seminar_04
+
+# 2. Create the virtual environment and install dependencies
+#    (pygltflib>=1.16.0 and numpy>=1.26.0 are declared in pyproject.toml)
+uv sync
+
+# 3. Run the Python demo
+uv run python 04_ca_gltf_python.py
+
+# 4. (Development) lint and format
+uv run ruff check .
+uv run ruff format .</code></pre>
+
+<h3>6.3 Loading and inspecting a glTF file</h3>
+<pre><code>from pygltflib import GLTF2
+
+# GLTF2().load() reads the .glb, parses the JSON header, and retains the
+# binary blob in memory. The returned object mirrors the glTF JSON structure
+# exactly: gltf.nodes, gltf.meshes, gltf.animations, gltf.skins, etc.
+gltf = GLTF2().load("CesiumMan.glb")
+
+# Top-level counts — a quick asset inventory
+print(f"Scenes:     {len(gltf.scenes)}")
+print(f"Nodes:      {len(gltf.nodes)}")
+print(f"Meshes:     {len(gltf.meshes)}")
+print(f"Animations: {len(gltf.animations)}")
+print(f"Skins:      {len(gltf.skins)}")
+print(f"Materials:  {len(gltf.materials)}")
+
+# List all animations with their channels and target information
+for i, anim in enumerate(gltf.animations):
+    print(f"\nAnimation {i}: '{anim.name}'")
+    print(f"  Channels: {len(anim.channels)}")
+    print(f"  Samplers: {len(anim.samplers)}")
+    for ch in anim.channels:
+        # GLTF CONCEPT: ch.target.node is a node index. Look it up in gltf.nodes
+        # to get the human-readable bone name — same as the Three.js bone name.
+        node_name = gltf.nodes[ch.target.node].name
+        print(f"    → node '{node_name}'  path '{ch.target.path}'")</code></pre>
+
+<h3>6.4 Reading binary animation data</h3>
+<p>Animation keyframe data is stored in binary buffers. The accessor describes the data type; the buffer view says where in the binary blob; <code>get_data_from_accessor()</code> returns the raw bytes. Wrap in <code>np.frombuffer</code> to get a NumPy array.</p>
+<pre><code>import numpy as np
+from pygltflib import GLTF2
+
+gltf = GLTF2().load("CesiumMan.glb")
+
+# Navigate: animation → channel → sampler → accessor indices
+anim = gltf.animations[0]
+ch   = anim.channels[0]
+samp = anim.samplers[ch.sampler]
+
+# PYTHON CONCEPT: np.frombuffer() returns a read-only NumPy array backed
+# by the original bytes object. Python bytes are immutable; NumPy respects
+# this by marking the array as non-writable. Always call .copy() before
+# you intend to modify values in place.
+times  = np.frombuffer(
+    gltf.get_data_from_accessor(samp.input),   # raw bytes of the time accessor
+    dtype=np.float32                            # keyframe times are always float32
+)
+values_raw = np.frombuffer(
+    gltf.get_data_from_accessor(samp.output),  # raw bytes of the value accessor
+    dtype=np.float32
+)
+
+# Determine the number of components per keyframe from the accessor type:
+# VEC3 (translation, scale) → 3 components. VEC4 (rotation quaternion) → 4.
+acc_out = gltf.accessors[samp.output]
+n_components = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}[acc_out.type]
+values = values_raw.reshape(-1, n_components)   # shape: (N, 3) or (N, 4)
+
+print(f"Channel target:  node='{gltf.nodes[ch.target.node].name}'  path='{ch.target.path}'")
+print(f"Keyframe count:  {len(times)}")
+print(f"Duration:        {times[-1]:.3f} s")
+print(f"First keyframe:  t={times[0]:.4f}  value={values[0]}")</code></pre>
+
+<h3>6.5 Modifying keyframe data and saving</h3>
+<pre><code>from pygltflib import GLTF2
+import numpy as np
+
+gltf = GLTF2().load("CesiumMan.glb")
+
+anim = gltf.animations[0]
+ch   = anim.channels[0]
+samp = anim.samplers[ch.sampler]
+
+# Read the current output (value) data
+raw    = gltf.get_data_from_accessor(samp.output)
+values = np.frombuffer(raw, dtype=np.float32).copy()  # .copy() — frombuffer is read-only
+
+# Example: double the Y (height) component of every translation keyframe.
+# ch.target.path is "translation", so values are VEC3 (x, y, z).
+if ch.target.path == "translation":
+    values_3d = values.reshape(-1, 3)
+    values_3d[:, 1] *= 2.0    # column 1 = Y axis
+    values = values_3d.flatten()
+
+# Patch the binary blob directly: find the byte range of the output accessor,
+# replace it with the modified data, and write the blob back to the GLTF2 object.
+# PIPELINE CONCEPT: we write to a new file to preserve the original — a
+# professional pipeline always keeps the source asset untouched.
+accessor = gltf.accessors[samp.output]
+bufview  = gltf.bufferViews[accessor.bufferView]
+blob     = gltf.binary_blob()
+new_blob = bytearray(blob)
+new_blob[bufview.byteOffset : bufview.byteOffset + bufview.byteLength] = values.tobytes()
+gltf.set_binary_blob(bytes(new_blob))
+
+# Save as a new .glb — the modified file is a valid glTF asset loadable by Three.js.
+gltf.save("CesiumMan_modified.glb")
+print("Saved CesiumMan_modified.glb")</code></pre>
+
+<h3>6.6 The Python animation pipeline concept</h3>
+<p>The script above is a minimal version of what a <strong>pipeline technical director (TD)</strong> writes. A real pipeline script might: load a Blender-exported glTF, validate that all animation clip names match what the engine expects, rename clips from Blender's default naming convention to the studio's standard, strip debug meshes, apply a global scale correction, and write the final <code>.glb</code> to the delivery folder — all without opening any GUI, on every asset in a large library, automatically.</p>
+<p>Blender's Python API (<code>bpy</code>) is the upstream step: <code>bpy.ops.export_scene.gltf(...)</code> exports directly from Blender to <code>.glb</code>. The <code>pygltflib</code> script then post-processes the output. Connecting these two steps is exactly the kind of pipeline automation covered in seminar 03 — Python is the tool that bridges the authoring environment and the engine.</p>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>Every professional game studio has a glTF processing pipeline.</strong> It validates exports from the art team against engine requirements — correct bone names, animation clip names, polygon budget, texture formats, LOD levels. Writing and reading this pipeline in Python is exactly what technical artists and pipeline TDs do day-to-day. The script in Demo 5 is that job in miniature: load, inspect, validate, modify, save.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://pypi.org/project/pygltflib/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">pygltflib on PyPI &#8599;</a>
+  <a href="https://github.com/lukas-blecher/pygltflib" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">pygltflib on GitHub &#8599;</a>
+  <a href="https://www.mixamo.com/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Mixamo (Adobe) &#8599;</a>
+  <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Khronos Sample Assets &#8599;</a>
+</p>
+
+<div class="demo-box">
+  <strong>Demo 5 — glTF Inspection in Python.</strong> <code>seminar_04/04_ca_gltf_python.py</code> loads CesiumMan.glb, prints a full scene tree, lists all animations with keyframe counts and durations, reads the binary keyframe arrays with NumPy, modifies a translation keyframe (doubles the Y component at the midpoint), saves the modified file, and re-loads it to verify the change was applied. Run with:
+  <pre style="margin:10px 0 0; background: rgba(52,211,153,0.05); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:12px 16px; font-size:13px;">cd seminar_04
+uv sync        # first time only
+uv run python 04_ca_gltf_python.py</pre>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 8 — Section 7: Free Assets                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="free-assets">7. Where to Find Free glTF Assets</h2>
+<p>This section is a practical reference for your final project. All six sources below provide rigged, animated glTF characters that load directly with the <code>GLTFLoader</code> code from this seminar.</p>
+
+<table>
+  <thead><tr><th>Source</th><th>URL</th><th>License</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Khronos glTF Sample Assets</strong></td><td><a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank">github.com/KhronosGroup/glTF-Sample-Assets</a></td><td>CC0 / CC-BY 4.0</td><td>Official reference models; validated and tested with all major engines</td></tr>
+    <tr><td><strong>Sketchfab</strong></td><td><a href="https://sketchfab.com" target="_blank">sketchfab.com</a></td><td>CC-BY (filtered)</td><td>Large library — use the "Downloadable" and "CC" license filters</td></tr>
+    <tr><td><strong>Mixamo</strong></td><td><a href="https://www.mixamo.com" target="_blank">mixamo.com</a></td><td>Free with Adobe account</td><td>Auto-rig from photo/mesh + ~2500 motion-captured animations. See workflow below.</td></tr>
+    <tr><td><strong>Poly Pizza</strong></td><td><a href="https://poly.pizza" target="_blank">poly.pizza</a></td><td>CC0</td><td>Low-poly, stylised; good for quick demos and prototyping</td></tr>
+    <tr><td><strong>Kenney.nl</strong></td><td><a href="https://kenney.nl/assets" target="_blank">kenney.nl/assets</a></td><td>CC0</td><td>High-quality game asset packs, several include animated characters</td></tr>
+    <tr><td><strong>ReadyPlayerMe</strong></td><td><a href="https://readyplayer.me" target="_blank">readyplayer.me</a></td><td>MIT (SDK)</td><td>Avatar platform; exports fully rigged, customisable glTF avatars</td></tr>
+  </tbody>
+</table>
+
+<h3>Exporting from Blender to glTF</h3>
+<p>If you have a character in Blender (or download a <code>.blend</code> file), export it as follows: <strong>File → Export → glTF 2.0</strong>. Key export settings to check:</p>
+<ul>
+  <li><strong>Format: GLB</strong> — produces a single binary file, the simplest to deploy.</li>
+  <li><strong>Include Animations: ✓</strong> — required to export the animation clips.</li>
+  <li><strong>Export Deform Bones Only: ✓</strong> — strips control bones used only for rigging; produces a cleaner skeleton with fewer nodes.</li>
+  <li><strong>Apply Modifiers: ✓</strong> — bakes mesh modifiers (subdivision, mirror) into the exported geometry.</li>
+  <li><strong>Y Up: ✓</strong> — glTF uses Y-up convention; this corrects the export from Blender's Z-up coordinate system.</li>
+</ul>
+<p>After export, open the <code>.glb</code> in the glTF Validator (<a href="https://github.khronos.org/glTF-Validator/" target="_blank" rel="noopener">github.khronos.org/glTF-Validator</a>) to confirm the file is well-formed before using it in a demo.</p>
+
+<h3>Mixamo workflow: auto-rig and download</h3>
+<ol>
+  <li>Create a free Adobe account and go to <a href="https://www.mixamo.com" target="_blank" rel="noopener">mixamo.com</a>.</li>
+  <li>Upload your character mesh as an OBJ or FBX (or choose from the built-in character library).</li>
+  <li>Mixamo's auto-rigger runs in the browser: it detects the character's proportions, places joints, and skins the mesh automatically in about 30 seconds.</li>
+  <li>Browse the animation library (~2500 motion-captured clips). Preview them on your character. Download as <strong>FBX for Unity</strong> — this is actually a general FBX with the skeleton baked in.</li>
+  <li>Import the FBX into Blender (<strong>File → Import → FBX</strong>), then export as glTF 2.0 using the settings above.</li>
+</ol>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>For your final project.</strong> The simplest path: download Fox.glb or CesiumMan.glb from the Khronos Sample Assets repository (linked above) — they are already validated and load cleanly with the GLTFLoader code from this seminar. For a custom character: use Mixamo to rig it, export as FBX, re-export from Blender as GLB, and you have a fully rigged character with a motion-captured animation library ready to load in Three.js.
+</div>
+
+<p style="margin:12px 0 0 0;">
+  <a href="https://docs.blender.org/manual/en/latest/addons/import_export/scene_gltf2.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Blender glTF Exporter Docs &#8599;</a>
+  <a href="https://helpx.adobe.com/creative-cloud/using/mixamo.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Mixamo Help &#8599;</a>
+</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 9 — Section 8: Connections to other seminars           -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="connections">Connections to Other Seminars</h2>
+<table>
+  <thead><tr><th>Seminar</th><th>Direction</th><th>Connection</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Seminar 01</strong></td><td>← Backward</td><td>The skinning matrix equation uses the same matrix pipeline. <code>lerp</code> from seminar 01 is per-bone pose blending; slerp extends it to quaternion rotations.</td></tr>
+    <tr><td><strong>Seminar 02</strong></td><td>← Backward</td><td>All four browser demos build directly on the Three.js foundations from seminar 02: Scene, Renderer, Camera, OrbitControls, the render loop with <code>clock.getDelta()</code>.</td></tr>
+    <tr><td><strong>Seminar 03</strong></td><td>← Backward</td><td>The Python demo follows the same <code>uv</code> project structure and Python-as-tooling philosophy. The pyproject.toml format and run commands are identical.</td></tr>
+    <tr><td><strong>Seminar 05</strong></td><td>Forward →</td><td>Physics-based animation drives bone transforms directly — the same <code>SkinnedMesh</code> bones exposed in Demo 2 can be positioned by a physics engine for ragdoll animation.</td></tr>
+    <tr><td><strong>Seminar 06</strong></td><td>Forward →</td><td>Procedural animation sets bone transforms via code. A noise-driven spine sway uses the same <code>bone.rotation.set(...)</code> API shown in the skeleton demo.</td></tr>
+    <tr><td><strong>Final project</strong></td><td>Direct</td><td>The <code>AnimationMixer</code> API from demos 3 and 4 is the direct foundation for a character animation viewer project. Any free glTF character from Section 7 works as the subject.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Cell 10 — Section 8: Demo index                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="nb-cell">
+<hr>
+<h2 id="demo-index">8. Demo Index</h2>
+<p>Five demos accompany this chapter. The first four run in the browser directly from GitHub Pages. The fifth runs as a Python script from the <code>seminar_04/</code> folder.</p>
+<table>
+  <thead><tr><th>#</th><th>File</th><th>Type</th><th>Key concept</th><th>How to run</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><a href="04_ca_gltf_viewer.html" target="_blank"><code>04_ca_gltf_viewer.html</code></a></td>
+      <td>Browser</td>
+      <td>GLTFLoader, OrbitControls, sRGB color space, asset report panel</td>
+      <td>Open via GitHub Pages</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><a href="04_ca_skeleton.html" target="_blank"><code>04_ca_skeleton.html</code></a></td>
+      <td>Browser</td>
+      <td>SkeletonHelper, bone hierarchy panel, live transform display</td>
+      <td>Open via GitHub Pages</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><a href="04_ca_clips.html" target="_blank"><code>04_ca_clips.html</code></a></td>
+      <td>Browser</td>
+      <td>AnimationMixer, crossFadeTo, timeScale slider, clip progress bar</td>
+      <td>Open via GitHub Pages</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><a href="04_ca_blend.html" target="_blank"><code>04_ca_blend.html</code></a></td>
+      <td>Browser</td>
+      <td>Direct weight control, 1D blend tree, live action state table</td>
+      <td>Open via GitHub Pages</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><code>seminar_04/04_ca_gltf_python.py</code></td>
+      <td>Python</td>
+      <td>pygltflib, NumPy, binary keyframe reading and modification</td>
+      <td><code>cd seminar_04 &amp;&amp; uv sync &amp;&amp; uv run python 04_ca_gltf_python.py</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- prev / next navigation -->
+<nav class="chapter-nav">
+  <a href="03_computeranimation_pyside6.html">
+    <span class="nav-label">← Previous</span>
+    <span class="nav-title">Chapter 03: PySide6</span>
+  </a>
+  <a href="05_computeranimation_physics.html">
+    <span class="nav-label">Next →</span>
+    <span class="nav-title">Chapter 05: Physics</span>
+  </a>
+</nav>
+
+<!-- Footer cell -->
+<div class="nb-footer-cell">
+  <p><strong>Computeranimation</strong> &middot; Chapter 04: glTF &amp; Character Animation<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>Notebook created by <strong>Renato Fera P.</strong> &middot;
+  <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a></p>
+</div>
+
+</div><!-- end nb-content -->
+</main>
+
+<footer>
+  <p><strong>Computeranimation</strong> &middot; Seminar Materials<br>
+  Institut für Medientechnik &ndash; Technische Universität Ilmenau</p>
+  <p>
+    Page maintained by <strong>Renato Fera P.</strong> &middot;
+    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/TUIlmenauAMS/computer_animation_seminars" target="_blank" rel="noopener">github.com/TUIlmenauAMS/computer_animation_seminars</a>
+  </p>
+</footer>
+
+</body>
+</html>
