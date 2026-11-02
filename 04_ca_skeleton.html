@@ -1,1254 +1,1933 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo 3: Animation Playback — Computeranimation Seminar 04</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Demo 2: Skeleton and Animation Playback — Computeranimation Seminar 04
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-  :root {
-    --bg:      #0d0f14;
-    --surface: #161a22;
-    --border:  #252b38;
-    --text:    #d8dce6;
-    --muted:   #5a6175;
-    --accent:  #4f9cf9;
-    --accent2: #a78bfa;
-    --green:   #34d399;
-    --orange:  #fb923c;
-    --red:     #f87171;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-  }
+      :root {
+        --bg: #0d0f14;
+        --surface: #161a22;
+        --border: #252b38;
+        --text: #d8dce6;
+        --muted: #5a6175;
+        --accent: #4f9cf9;
+        --accent2: #a78bfa;
+        --green: #34d399;
+        --orange: #fb923c;
+        --red: #f87171;
+        --mono: "IBM Plex Mono", monospace;
+        --sans: "IBM Plex Sans", sans-serif;
+      }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.7;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.7;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
 
-  /* ── header ── */
-  header { border-bottom: 2px solid var(--border); padding: 24px 0 20px; flex-shrink: 0; }
-  .header-inner {
-    max-width: 1200px; margin: 0 auto; padding: 0 32px;
-    display: flex; align-items: center; gap: 24px;
-  }
-  .header-logo img { width: 100px; border-radius: 10px; display: block; }
-  .header-info h1 { font-size: clamp(16px,2.5vw,22px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
-  .header-info h2 { font-size: 13px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
-  .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
-  .header-meta a { color: var(--accent); text-decoration: none; }
-  .header-meta a:hover { text-decoration: underline; }
-  .header-author {
-    display: flex; align-items: center; gap: 10px;
-    margin-top: 8px; padding-top: 8px;
-    border-top: 1px solid var(--border);
-    font-size: 13px; color: var(--muted);
-  }
-  .header-author span { color: var(--text); font-weight: 500; }
-  .header-author .linkedin-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(79,156,249,0.1); color: var(--accent);
-    font-family: var(--mono); font-size: 11px;
-    padding: 2px 9px; border-radius: 20px;
-    border: 1px solid rgba(79,156,249,0.25);
-    text-decoration: none; transition: background 0.15s;
-  }
-  .header-author .linkedin-badge:hover { background: rgba(79,156,249,0.2); }
+      /* ── header ── */
+      header {
+        border-bottom: 2px solid var(--border);
+        padding: 24px 0 20px;
+        flex-shrink: 0;
+      }
+      .header-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 32px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+      }
+      .header-logo img {
+        width: 100px;
+        border-radius: 10px;
+        display: block;
+      }
+      .header-info h1 {
+        font-size: clamp(16px, 2.5vw, 22px);
+        font-weight: 500;
+        color: #f0f2f7;
+        line-height: 1.2;
+        margin-bottom: 4px;
+      }
+      .header-info h2 {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--muted);
+        font-family: var(--mono);
+        margin-bottom: 8px;
+      }
+      .header-meta {
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .header-meta a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .header-meta a:hover {
+        text-decoration: underline;
+      }
+      .header-author {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .header-author span {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .header-author .linkedin-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(79, 156, 249, 0.1);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 2px 9px;
+        border-radius: 20px;
+        border: 1px solid rgba(79, 156, 249, 0.25);
+        text-decoration: none;
+        transition: background 0.15s;
+      }
+      .header-author .linkedin-badge:hover {
+        background: rgba(79, 156, 249, 0.2);
+      }
 
-  /* ── breadcrumb ── */
-  .breadcrumb {
-    max-width: 1200px; margin: 0 auto; padding: 14px 32px 0;
-    font-family: var(--mono); font-size: 12px; color: var(--muted); flex-shrink: 0;
-  }
-  .breadcrumb a { color: var(--accent); text-decoration: none; }
-  .breadcrumb a:hover { text-decoration: underline; }
-  .breadcrumb span { margin: 0 6px; }
+      /* ── breadcrumb ── */
+      .breadcrumb {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 14px 32px 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .breadcrumb a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .breadcrumb a:hover {
+        text-decoration: underline;
+      }
+      .breadcrumb span {
+        margin: 0 6px;
+      }
 
-  /* ── main ── */
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 32px 48px; flex: 1; width: 100%; }
+      /* ── main ── */
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px 32px 48px;
+        flex: 1;
+        width: 100%;
+      }
 
-  /* ── demo intro ── */
-  .demo-intro {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
-  }
-  .demo-intro h1 { font-size: clamp(17px,2.2vw,24px); font-weight: 500; color: #f0f2f7; margin-bottom: 8px; }
-  .demo-badge {
-    display: inline-block;
-    background: rgba(52,211,153,0.10); color: var(--green);
-    font-family: var(--mono); font-size: 11px;
-    padding: 2px 10px; border-radius: 20px;
-    border: 1px solid rgba(52,211,153,0.28); margin-bottom: 10px;
-  }
-  .demo-intro p { color: var(--text); margin-bottom: 6px; font-size: 14px; }
-  .demo-intro p:last-child { margin-bottom: 0; }
+      /* ── demo intro ── */
+      .demo-intro {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+      }
+      .demo-intro h1 {
+        font-size: clamp(17px, 2.2vw, 24px);
+        font-weight: 500;
+        color: #f0f2f7;
+        margin-bottom: 8px;
+      }
+      .demo-badge {
+        display: inline-block;
+        background: rgba(52, 211, 153, 0.1);
+        color: var(--green);
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 2px 10px;
+        border-radius: 20px;
+        border: 1px solid rgba(52, 211, 153, 0.28);
+        margin-bottom: 10px;
+      }
+      .demo-intro p {
+        color: var(--text);
+        margin-bottom: 6px;
+        font-size: 14px;
+      }
+      .demo-intro p:last-child {
+        margin-bottom: 0;
+      }
 
-  /* ── layout ── */
-  .demo-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
-  @media (max-width: 900px) { .demo-layout { grid-template-columns: 1fr; } }
+      /* ── layout ── */
+      .demo-layout {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 16px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .demo-layout {
+          grid-template-columns: 1fr;
+        }
+      }
 
-  /* ── canvas ── */
-  .canvas-wrap {
-    position: relative; background: #0a0c11;
-    border: 1px solid var(--border); border-radius: 10px;
-    overflow: hidden; aspect-ratio: 16/10; min-height: 360px;
-  }
-  #threeCanvas { width: 100%; height: 100%; display: block; }
+      /* ── canvas ── */
+      .canvas-wrap {
+        position: relative;
+        background: #0a0c11;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        aspect-ratio: 16/10;
+        min-height: 360px;
+      }
+      #threeCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
 
-  /* ── loading overlay ── */
-  #loadingOverlay {
-    position: absolute; inset: 0;
-    background: rgba(13,15,20,0.93);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 16px; z-index: 10; transition: opacity 0.4s;
-  }
-  #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
-  .loading-title { font-family: var(--mono); font-size: 14px; color: var(--text); }
-  .loading-sub   { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  progress {
-    width: 200px; height: 4px;
-    appearance: none; -webkit-appearance: none;
-    border: none; border-radius: 2px;
-    background: var(--border); overflow: hidden;
-  }
-  progress::-webkit-progress-bar   { background: var(--border); border-radius: 2px; }
-  progress::-webkit-progress-value { background: var(--green);  border-radius: 2px; transition: width 0.2s; }
-  progress::-moz-progress-bar      { background: var(--green);  border-radius: 2px; }
-  #loadingPct { font-family: var(--mono); font-size: 13px; color: var(--green); min-width: 40px; text-align: center; }
-  .progress-row { display: flex; align-items: center; gap: 10px; }
+      /* ── loading overlay ── */
+      #loadingOverlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(13, 15, 20, 0.93);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        z-index: 10;
+        transition: opacity 0.4s;
+      }
+      #loadingOverlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loading-title {
+        font-family: var(--mono);
+        font-size: 14px;
+        color: var(--text);
+      }
+      .loading-sub {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      progress {
+        width: 200px;
+        height: 4px;
+        appearance: none;
+        -webkit-appearance: none;
+        border: none;
+        border-radius: 2px;
+        background: var(--border);
+        overflow: hidden;
+      }
+      progress::-webkit-progress-bar {
+        background: var(--border);
+        border-radius: 2px;
+      }
+      progress::-webkit-progress-value {
+        background: var(--green);
+        border-radius: 2px;
+        transition: width 0.2s;
+      }
+      progress::-moz-progress-bar {
+        background: var(--green);
+        border-radius: 2px;
+      }
+      #loadingPct {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--green);
+        min-width: 40px;
+        text-align: center;
+      }
+      .progress-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
 
-  /* ── error overlay ── */
-  #errorOverlay {
-    display: none; position: absolute; inset: 0;
-    background: rgba(13,15,20,0.93);
-    align-items: center; justify-content: center;
-    z-index: 11; padding: 24px; text-align: center;
-  }
-  #errorOverlay.visible { display: flex; }
-  .error-inner {
-    background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3);
-    border-left: 4px solid var(--red); border-radius: 8px;
-    padding: 20px 24px; max-width: 460px;
-    font-family: var(--mono); font-size: 13px; color: var(--red);
-    text-align: left; line-height: 1.7;
-  }
-  .error-inner strong { display: block; margin-bottom: 8px; font-size: 14px; }
-  #dropZone {
-    display: block; border: 2px dashed rgba(52,211,153,0.4);
-    border-radius: 8px; padding: 18px 12px; text-align: center;
-    cursor: pointer; background: rgba(52,211,153,0.05);
-    color: var(--green); font-size: 12px; line-height: 1.8;
-    transition: background 0.15s, border-color 0.15s; margin-top: 12px;
-  }
-  #dropZone:hover, #dropZone.dragover { background: rgba(52,211,153,0.12); border-color: var(--green); }
+      /* ── error overlay ── */
+      #errorOverlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(13, 15, 20, 0.93);
+        align-items: center;
+        justify-content: center;
+        z-index: 11;
+        padding: 24px;
+        text-align: center;
+      }
+      #errorOverlay.visible {
+        display: flex;
+      }
+      .error-inner {
+        background: rgba(248, 113, 113, 0.08);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        border-left: 4px solid var(--red);
+        border-radius: 8px;
+        padding: 20px 24px;
+        max-width: 460px;
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--red);
+        text-align: left;
+        line-height: 1.7;
+      }
+      .error-inner strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+      #dropZone {
+        display: block;
+        border: 2px dashed rgba(52, 211, 153, 0.4);
+        border-radius: 8px;
+        padding: 18px 12px;
+        text-align: center;
+        cursor: pointer;
+        background: rgba(52, 211, 153, 0.05);
+        color: var(--green);
+        font-size: 12px;
+        line-height: 1.8;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+        margin-top: 12px;
+      }
+      #dropZone:hover,
+      #dropZone.dragover {
+        background: rgba(52, 211, 153, 0.12);
+        border-color: var(--green);
+      }
 
-  /* ── playhead bar ── */
-  .playhead-bar {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    height: 48px; background: rgba(13,15,20,0.82);
-    backdrop-filter: blur(6px);
-    border-top: 1px solid var(--border);
-    display: flex; align-items: center; gap: 10px; padding: 0 14px;
-    z-index: 5;
-  }
-  #playPauseBtn {
-    flex-shrink: 0; width: 30px; height: 30px;
-    border-radius: 50%; border: 1px solid var(--green);
-    background: rgba(52,211,153,0.12); color: var(--green);
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s;
-    font-size: 11px;
-  }
-  #playPauseBtn:hover { background: rgba(52,211,153,0.22); }
-  #playPauseBtn svg { width: 12px; height: 12px; fill: var(--green); }
+      /* ── playhead bar ── */
+      .playhead-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        background: rgba(13, 15, 20, 0.82);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        z-index: 5;
+      }
+      #playPauseBtn {
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 1px solid var(--green);
+        background: rgba(52, 211, 153, 0.12);
+        color: var(--green);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+        font-size: 11px;
+      }
+      #playPauseBtn:hover {
+        background: rgba(52, 211, 153, 0.22);
+      }
+      #playPauseBtn svg {
+        width: 12px;
+        height: 12px;
+        fill: var(--green);
+      }
 
-  /* scrubber */
-  .scrubber-wrap { flex: 1; display: flex; align-items: center; gap: 8px; }
-  #scrubber {
-    flex: 1; -webkit-appearance: none; appearance: none;
-    height: 3px; border-radius: 2px; cursor: pointer;
-    background: var(--border);
-    accent-color: var(--green);
-  }
-  #scrubber::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px;
-    border-radius: 50%; background: var(--green); cursor: pointer;
-    border: 2px solid var(--bg);
-  }
-  #timeLabel { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; min-width: 72px; text-align: right; }
+      /* scrubber */
+      .scrubber-wrap {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #scrubber {
+        flex: 1;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        cursor: pointer;
+        background: var(--border);
+        accent-color: var(--green);
+      }
+      #scrubber::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--green);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+      }
+      #timeLabel {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        flex-shrink: 0;
+        min-width: 72px;
+        text-align: right;
+      }
 
-  /* ── side panels ── */
-  .side-col { display: flex; flex-direction: column; gap: 12px; }
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  .panel-header {
-    padding: 10px 16px; border-bottom: 1px solid var(--border);
-    font-family: var(--mono); font-size: 11px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.07em;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-  .dot.green  { background: var(--green); }
-  .dot.blue   { background: var(--accent); }
-  .dot.orange { background: var(--orange); }
-  .dot.purple { background: var(--accent2); }
-  .panel-body { padding: 14px 16px; }
+      /* ── side panels ── */
+      .side-col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .panel-header {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex-shrink: 0;
+      }
+      .dot.green {
+        background: var(--green);
+      }
+      .dot.blue {
+        background: var(--accent);
+      }
+      .dot.orange {
+        background: var(--orange);
+      }
+      .dot.purple {
+        background: var(--accent2);
+      }
+      .panel-body {
+        padding: 14px 16px;
+      }
 
-  /* model select */
-  .model-select-wrap { display: flex; flex-direction: column; gap: 8px; }
-  .model-select-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  select {
-    width: 100%; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text);
-    font-family: var(--mono); font-size: 12px; padding: 6px 28px 6px 10px;
-    cursor: pointer; appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a6175' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 10px center;
-    transition: border-color 0.15s;
-  }
-  select:focus { outline: none; border-color: var(--green); }
-  select:hover { border-color: var(--green); }
+      /* model select */
+      .model-select-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .model-select-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+      }
+      select {
+        width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 6px 28px 6px 10px;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a6175' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        transition: border-color 0.15s;
+      }
+      select:focus {
+        outline: none;
+        border-color: var(--green);
+      }
+      select:hover {
+        border-color: var(--green);
+      }
 
-  /* viewport toggles */
-  .ctrl-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .ctrl-row:last-child { margin-bottom: 0; }
-  .ctrl-label { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 84px; }
-  .toggle-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 12px; border-radius: 6px;
-    border: 1px solid var(--border); background: var(--bg);
-    color: var(--text); font-family: var(--mono); font-size: 12px;
-    cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
-  }
-  .toggle-btn:hover { border-color: var(--green); color: var(--green); }
-  .toggle-btn.active { background: rgba(52,211,153,0.1); border-color: var(--green); color: var(--green); }
+      /* viewport toggles */
+      .ctrl-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .ctrl-row:last-child {
+        margin-bottom: 0;
+      }
+      .ctrl-label {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        min-width: 84px;
+      }
+      .toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          color 0.15s,
+          background 0.15s;
+      }
+      .toggle-btn:hover {
+        border-color: var(--green);
+        color: var(--green);
+      }
+      .toggle-btn.active {
+        background: rgba(52, 211, 153, 0.1);
+        border-color: var(--green);
+        color: var(--green);
+      }
 
-  /* speed knob */
-  .speed-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-  .speed-row label { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; min-width: 52px; }
-  #speedSlider {
-    flex: 1; -webkit-appearance: none; appearance: none;
-    height: 3px; border-radius: 2px; cursor: pointer;
-    background: var(--border); accent-color: var(--green);
-  }
-  #speedSlider::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px;
-    border-radius: 50%; background: var(--green); cursor: pointer;
-    border: 2px solid var(--bg);
-  }
-  #speedLabel { font-family: var(--mono); font-size: 11px; color: var(--green); min-width: 34px; text-align: right; }
+      /* speed knob */
+      .speed-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .speed-row label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        flex-shrink: 0;
+        min-width: 52px;
+      }
+      #speedSlider {
+        flex: 1;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 3px;
+        border-radius: 2px;
+        cursor: pointer;
+        background: var(--border);
+        accent-color: var(--green);
+      }
+      #speedSlider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--green);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+      }
+      #speedLabel {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--green);
+        min-width: 34px;
+        text-align: right;
+      }
 
-  /* clip list */
-  #clipList { font-family: var(--mono); font-size: 11px; line-height: 1.7; }
-  .clip-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 8px; border-radius: 5px; cursor: pointer;
-    transition: background 0.1s; border: 1px solid transparent;
-    user-select: none;
-  }
-  .clip-item:hover { background: rgba(52,211,153,0.07); }
-  .clip-item.active { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.25); color: var(--green); }
-  .clip-idx { color: var(--muted); font-size: 10px; min-width: 16px; }
-  .clip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .clip-dur { color: var(--muted); font-size: 10px; }
-  .clip-placeholder { color: var(--muted); font-style: italic; font-size: 11px; }
+      /* clip list */
+      #clipList {
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.7;
+      }
+      .clip-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.1s;
+        border: 1px solid transparent;
+        user-select: none;
+      }
+      .clip-item:hover {
+        background: rgba(52, 211, 153, 0.07);
+      }
+      .clip-item.active {
+        background: rgba(52, 211, 153, 0.12);
+        border-color: rgba(52, 211, 153, 0.25);
+        color: var(--green);
+      }
+      .clip-idx {
+        color: var(--muted);
+        font-size: 10px;
+        min-width: 16px;
+      }
+      .clip-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .clip-dur {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .clip-placeholder {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 11px;
+      }
 
-  /* bone hierarchy */
-  #boneTree {
-    font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--muted);
-    max-height: 220px; overflow-y: auto;
-    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
-  }
-  #boneTree::-webkit-scrollbar { width: 4px; }
-  #boneTree::-webkit-scrollbar-track { background: transparent; }
-  #boneTree::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-  .bone-item {
-    display: flex; align-items: center; gap: 6px;
-    padding: 2px 4px; border-radius: 4px; cursor: pointer;
-    white-space: nowrap; transition: background 0.1s; user-select: none;
-  }
-  .bone-item:hover { background: rgba(167,139,250,0.08); color: var(--text); }
-  .bone-item.selected { background: rgba(167,139,250,0.15); color: var(--accent2); }
-  .bone-indent { display: inline-block; flex-shrink: 0; }
-  .bone-icon { color: var(--orange); flex-shrink: 0; font-size: 10px; }
-  .bone-name-label { overflow: hidden; text-overflow: ellipsis; }
-  .bone-placeholder { color: var(--muted); font-style: italic; font-size: 11px; font-family: var(--mono); }
+      /* bone hierarchy */
+      #boneTree {
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--muted);
+        max-height: 220px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+      #boneTree::-webkit-scrollbar {
+        width: 4px;
+      }
+      #boneTree::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #boneTree::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
+      .bone-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.1s;
+        user-select: none;
+      }
+      .bone-item:hover {
+        background: rgba(167, 139, 250, 0.08);
+        color: var(--text);
+      }
+      .bone-item.selected {
+        background: rgba(167, 139, 250, 0.15);
+        color: var(--accent2);
+      }
+      .bone-indent {
+        display: inline-block;
+        flex-shrink: 0;
+      }
+      .bone-icon {
+        color: var(--orange);
+        flex-shrink: 0;
+        font-size: 10px;
+      }
+      .bone-name-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bone-placeholder {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 11px;
+        font-family: var(--mono);
+      }
 
-  /* live transform */
-  #transformDisplay { font-family: var(--mono); font-size: 11px; line-height: 1.9; color: var(--muted); }
-  .tx-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .tx-label { color: var(--muted); flex-shrink: 0; }
-  .tx-val   { color: var(--text); text-align: right; font-size: 10.5px; }
-  .tx-axis-x { color: #f87171; }
-  .tx-axis-y { color: var(--green); }
-  .tx-axis-z { color: #60a5fa; }
-  .tx-section-label { color: var(--accent2); font-size: 10px; margin-top: 8px; margin-bottom: 2px; display: block; letter-spacing: 0.06em; }
-  .tx-placeholder { color: var(--muted); font-style: italic; font-size: 11px; }
+      /* live transform */
+      #transformDisplay {
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.9;
+        color: var(--muted);
+      }
+      .tx-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .tx-label {
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .tx-val {
+        color: var(--text);
+        text-align: right;
+        font-size: 10.5px;
+      }
+      .tx-axis-x {
+        color: #f87171;
+      }
+      .tx-axis-y {
+        color: var(--green);
+      }
+      .tx-axis-z {
+        color: #60a5fa;
+      }
+      .tx-section-label {
+        color: var(--accent2);
+        font-size: 10px;
+        margin-top: 8px;
+        margin-bottom: 2px;
+        display: block;
+        letter-spacing: 0.06em;
+      }
+      .tx-placeholder {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 11px;
+      }
 
-  /* concept boxes */
-  .concept-box {
-    border-left: 4px solid var(--green); background: rgba(52,211,153,0.05);
-    border-radius: 6px; padding: 12px 16px; margin-top: 12px;
-    font-size: 13px; line-height: 1.65;
-  }
-  .concept-box strong { color: var(--green); }
-  .concept-box.purple { border-left-color: var(--accent2); background: rgba(167,139,250,0.05); }
-  .concept-box.purple strong { color: var(--accent2); }
-  .info-box {
-    border-left: 4px solid var(--accent); background: rgba(79,156,249,0.06);
-    border-radius: 6px; padding: 12px 16px; margin-top: 16px;
-    font-size: 13px; line-height: 1.65;
-  }
-  .info-box strong { color: var(--accent); }
+      /* concept boxes */
+      .concept-box {
+        border-left: 4px solid var(--green);
+        background: rgba(52, 211, 153, 0.05);
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin-top: 12px;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      .concept-box strong {
+        color: var(--green);
+      }
+      .concept-box.purple {
+        border-left-color: var(--accent2);
+        background: rgba(167, 139, 250, 0.05);
+      }
+      .concept-box.purple strong {
+        color: var(--accent2);
+      }
+      .info-box {
+        border-left: 4px solid var(--accent);
+        background: rgba(79, 156, 249, 0.06);
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin-top: 16px;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      .info-box strong {
+        color: var(--accent);
+      }
 
-  /* footer */
-  footer {
-    border-top: 2px solid var(--border); padding: 18px 32px 24px;
-    max-width: 1200px; margin: 0 auto;
-    text-align: center; font-size: 13px; color: var(--text); line-height: 1.7; width: 100%;
-  }
-  footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
-  footer a { color: var(--accent); text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
+      /* footer */
+      footer {
+        border-top: 2px solid var(--border);
+        padding: 18px 32px 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+        text-align: center;
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.7;
+        width: 100%;
+      }
+      footer p + p {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
 
-  @media (max-width: 700px) {
-    .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
-    .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
-  }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="header-inner">
-    <div class="header-logo">
-      <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau">
-    </div>
-    <div class="header-info">
-      <h1>Computeranimation — Seminar 04: glTF &amp; Character Animation</h1>
-      <h2>Demo 3 — Animation Playback</h2>
-      <p class="header-meta">
-        <strong>Institut für Medientechnik –
-          <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
-             target="_blank" rel="noopener">AMS Group</a>
-        </strong> · Technische Universität Ilmenau
-      </p>
-      <div class="header-author">
-        Seminar materials by
-        <span>Renato Fera P.</span>
-        <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
-      </div>
-    </div>
-  </div>
-</header>
-
-<nav class="breadcrumb">
-  <a href="index.html">Seminar Materials</a>
-  <span>›</span>
-  <a href="04_computeranimation_gltf.html">Chapter 04: glTF &amp; Character Animation</a>
-  <span>›</span>
-  Demo 3: Animation Playback
-</nav>
-
-<main>
-
-  <div class="demo-intro">
-    <div class="demo-badge">▶ AnimationMixer · AnimationAction · AnimationClip · clip portability · live bone transforms</div>
-    <h1>Demo 3: Animation Playback</h1>
-    <p>
-      Drives a glTF character's skeleton with <strong>THREE.AnimationMixer</strong> — the runtime that
-      evaluates keyframe tracks and writes the results into bone transforms every frame.
-      Switch between models and clips, scrub the timeline, and adjust playback speed.
-      Select any bone in the hierarchy to watch its world position and local rotation
-      change live as the mixer drives it, exactly as you would see in Blender's Graph Editor.
-    </p>
-    <p>
-      Open <strong>DevTools → Console</strong> to see raw clip names vs display names, and to
-      inspect <code>mixer</code> and <code>currentAction</code>. Drop any GLB into the sidebar
-      or onto the canvas to load it live.
-    </p>
-  </div>
-
-  <div class="demo-layout">
-
-    <!-- Canvas -->
-    <div class="canvas-wrap" id="canvasWrap">
-      <canvas id="threeCanvas"></canvas>
-
-      <!-- Loading overlay -->
-      <div id="loadingOverlay">
-        <div class="loading-title" id="loadingTitle">Loading Fox.glb…</div>
-        <div class="progress-row">
-          <progress id="loadProgress" value="0" max="100"></progress>
-          <span id="loadingPct">0%</span>
+      @media (max-width: 700px) {
+        .header-inner,
+        main,
+        footer,
+        .breadcrumb {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+        .header-inner {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-inner">
+        <div class="header-logo">
+          <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" />
         </div>
-        <div class="loading-sub" id="loadingSub">Model: Khronos glTF Sample Assets · CC-BY 4.0</div>
-      </div>
-
-      <!-- Error / drop-zone overlay -->
-      <div id="errorOverlay">
-        <div class="error-inner">
-          <strong>⚠ Could not load model automatically</strong>
-          Opening via <code>file://</code> blocks network requests (CORS).
-          Drop the <strong>.glb file</strong> for the selected model below,
-          or serve this file with a local server (<code>python3 -m http.server</code>).<br><br>
-          <label id="dropZone">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-                 style="display:block;margin:0 auto 6px;">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Drop <strong id="dropLabel">Fox.glb</strong> here, or click to browse
-            <input type="file" id="glbFilePicker" accept=".glb,.gltf" style="display:none;">
-          </label>
-          <div style="margin-top:10px;color:var(--muted);font-size:11px;">
-            The file stays in your browser tab — nothing is uploaded.<br>
-            Switch model in the sidebar first if needed, then drop that model's file.
+        <div class="header-info">
+          <h1>
+            Computeranimation — Seminar 04: glTF &amp; Character Animation
+          </h1>
+          <h2>Demo 3 — Animation Playback</h2>
+          <p class="header-meta">
+            <strong
+              >Institut für Medientechnik –
+              <a
+                href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+                target="_blank"
+                rel="noopener"
+                >AMS Group</a
+              >
+            </strong>
+            · Technische Universität Ilmenau
+          </p>
+          <div class="header-author">
+            Seminar materials by
+            <span>Renato Fera P.</span>
+            <a
+              class="linkedin-badge"
+              href="https://www.linkedin.com/in/renato-profeta/"
+              target="_blank"
+              rel="noopener"
+              >LinkedIn</a
+            >
           </div>
         </div>
       </div>
+    </header>
 
-      <!-- Playhead bar -->
-      <div class="playhead-bar">
-        <button id="playPauseBtn" title="Play / Pause">
-          <!-- Play icon (shown when paused) -->
-          <svg id="iconPlay" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
-          <!-- Pause icon (shown when playing) -->
-          <svg id="iconPause" viewBox="0 0 24 24" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-        </button>
-        <div class="scrubber-wrap">
-          <input type="range" id="scrubber" min="0" max="1000" value="0" step="1">
+    <nav class="breadcrumb">
+      <a href="index.html">Seminar Materials</a>
+      <span>›</span>
+      <a href="04_computeranimation_gltf.html"
+        >Chapter 04: glTF &amp; Character Animation</a
+      >
+      <span>›</span>
+      Demo 3: Animation Playback
+    </nav>
+
+    <main>
+      <div class="demo-intro">
+        <div class="demo-badge">
+          ▶ AnimationMixer · AnimationAction · AnimationClip · clip portability
+          · live bone transforms
         </div>
-        <span id="timeLabel">0.00 / 0.00 s</span>
+        <h1>Demo 3: Animation Playback</h1>
+        <p>
+          Drives a glTF character's skeleton with
+          <strong>THREE.AnimationMixer</strong> — the runtime that evaluates
+          keyframe tracks and writes the results into bone transforms every
+          frame. Switch between models and clips, scrub the timeline, and adjust
+          playback speed. Select any bone in the hierarchy to watch its world
+          position and local rotation change live as the mixer drives it,
+          exactly as you would see in Blender's Graph Editor.
+        </p>
+        <p>
+          Open <strong>DevTools → Console</strong> to see raw clip names vs
+          display names, and to inspect <code>mixer</code> and
+          <code>currentAction</code>. Drop any GLB into the sidebar or onto the
+          canvas to load it live.
+        </p>
       </div>
-    </div>
 
-    <!-- Side panels -->
-    <div class="side-col">
+      <div class="demo-layout">
+        <!-- Canvas -->
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="threeCanvas"></canvas>
 
-      <!-- Model -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot blue"></div>Model</div>
-        <div class="panel-body">
-          <div class="model-select-wrap">
-            <div class="model-select-label">Active character</div>
-            <select id="modelSelect">
-              <option value="fox">Fox — 3 clips (Survey, Walk, Run)</option>
-              <option value="cesium">CesiumMan — 1 clip (Walk)</option>
-              <option value="_sep" disabled style="color:var(--muted);">── or drop any GLB ──────────</option>
-              <option value="_hint" disabled style="color:var(--muted);font-style:italic;">Use the drop zone below ↓</option>
-            </select>
-            <div id="dropAnyWrap" style="margin-top:10px;">
-              <label id="dropAny" style="
-                display:block; border:2px dashed rgba(52,211,153,0.3);
-                border-radius:7px; padding:10px 10px 8px;
-                text-align:center; cursor:pointer;
-                background:rgba(52,211,153,0.04);
-                color:var(--muted); font-family:var(--mono); font-size:11px;
-                line-height:1.7; transition: background 0.15s, border-color 0.15s;
-              ">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-                     style="display:block;margin:0 auto 4px;opacity:0.5;">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
+          <!-- Loading overlay -->
+          <div id="loadingOverlay">
+            <div class="loading-title" id="loadingTitle">Loading Fox.glb…</div>
+            <div class="progress-row">
+              <progress id="loadProgress" value="0" max="100"></progress>
+              <span id="loadingPct">0%</span>
+            </div>
+            <div class="loading-sub" id="loadingSub">
+              Model: Khronos glTF Sample Assets · CC-BY 4.0
+            </div>
+          </div>
+
+          <!-- Error / drop-zone overlay -->
+          <div id="errorOverlay">
+            <div class="error-inner">
+              <strong>⚠ Could not load model automatically</strong>
+              Opening via <code>file://</code> blocks network requests (CORS).
+              Drop the <strong>.glb file</strong> for the selected model below,
+              or serve this file with a local server (<code
+                >python3 -m http.server</code
+              >).<br /><br />
+              <label id="dropZone">
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="display: block; margin: 0 auto 6px"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                Drop any .glb here<br>
-                <span style="color:var(--muted);font-size:10px;">Mixamo · Quaternius · any glTF 2.0</span>
-                <input type="file" id="glbAnyPicker" accept=".glb,.gltf" style="display:none;">
+                Drop <strong id="dropLabel">Fox.glb</strong> here, or click to
+                browse
+                <input
+                  type="file"
+                  id="glbFilePicker"
+                  accept=".glb,.gltf"
+                  style="display: none"
+                />
               </label>
+              <div
+                style="margin-top: 10px; color: var(--muted); font-size: 11px"
+              >
+                The file stays in your browser tab — nothing is uploaded.<br />
+                Switch model in the sidebar first if needed, then drop that
+                model's file.
+              </div>
+            </div>
+          </div>
+
+          <!-- Playhead bar -->
+          <div class="playhead-bar">
+            <button id="playPauseBtn" title="Play / Pause">
+              <!-- Play icon (shown when paused) -->
+              <svg id="iconPlay" viewBox="0 0 24 24">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+              <!-- Pause icon (shown when playing) -->
+              <svg id="iconPause" viewBox="0 0 24 24" style="display: none">
+                <rect x="6" y="4" width="4" height="16" />
+                <rect x="14" y="4" width="4" height="16" />
+              </svg>
+            </button>
+            <div class="scrubber-wrap">
+              <input
+                type="range"
+                id="scrubber"
+                min="0"
+                max="1000"
+                value="0"
+                step="1"
+              />
+            </div>
+            <span id="timeLabel">0.00 / 0.00 s</span>
+          </div>
+        </div>
+
+        <!-- Side panels -->
+        <div class="side-col">
+          <!-- Model -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot blue"></div>
+              Model
+            </div>
+            <div class="panel-body">
+              <div class="model-select-wrap">
+                <div class="model-select-label">Active character</div>
+                <select id="modelSelect">
+                  <option value="fox">Fox — 3 clips (Survey, Walk, Run)</option>
+                  <option value="cesium">CesiumMan — 1 clip (Walk)</option>
+                  <option value="_sep" disabled style="color: var(--muted)">
+                    ── or drop any GLB ──────────
+                  </option>
+                  <option
+                    value="_hint"
+                    disabled
+                    style="color: var(--muted); font-style: italic"
+                  >
+                    Use the drop zone below ↓
+                  </option>
+                </select>
+                <div id="dropAnyWrap" style="margin-top: 10px">
+                  <label
+                    id="dropAny"
+                    style="
+                      display: block;
+                      border: 2px dashed rgba(52, 211, 153, 0.3);
+                      border-radius: 7px;
+                      padding: 10px 10px 8px;
+                      text-align: center;
+                      cursor: pointer;
+                      background: rgba(52, 211, 153, 0.04);
+                      color: var(--muted);
+                      font-family: var(--mono);
+                      font-size: 11px;
+                      line-height: 1.7;
+                      transition:
+                        background 0.15s,
+                        border-color 0.15s;
+                    "
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      style="display: block; margin: 0 auto 4px; opacity: 0.5"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    Drop any .glb here<br />
+                    <span style="color: var(--muted); font-size: 10px"
+                      >Mixamo · Quaternius · any glTF 2.0</span
+                    >
+                    <input
+                      type="file"
+                      id="glbAnyPicker"
+                      accept=".glb,.gltf"
+                      style="display: none"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Animation clips -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot green"></div>
+              Animation Clips
+              <span
+                id="clipCount"
+                style="margin-left: auto; color: var(--muted); font-size: 10px"
+                >—</span
+              >
+            </div>
+            <div class="panel-body" style="padding: 8px 10px">
+              <div id="clipList">
+                <span class="clip-placeholder">Waiting for model…</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Viewport -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot blue"></div>
+              Viewport
+            </div>
+            <div class="panel-body">
+              <div class="ctrl-row">
+                <span class="ctrl-label">Skeleton</span>
+                <button id="skelBtn" class="toggle-btn active">On</button>
+              </div>
+              <div class="ctrl-row">
+                <span class="ctrl-label">Wireframe</span>
+                <button id="wireBtn" class="toggle-btn">Off</button>
+              </div>
+              <div class="ctrl-row">
+                <span class="ctrl-label">Grid</span>
+                <button id="gridBtn" class="toggle-btn active">On</button>
+              </div>
+              <div class="speed-row">
+                <label for="speedSlider">Speed</label>
+                <input
+                  type="range"
+                  id="speedSlider"
+                  min="10"
+                  max="200"
+                  value="100"
+                  step="5"
+                />
+                <span id="speedLabel">1.0×</span>
+              </div>
+              <div
+                class="ctrl-row"
+                style="
+                  margin-top: 8px;
+                  font-family: var(--mono);
+                  font-size: 11px;
+                  color: var(--muted);
+                "
+              >
+                <span>Rotate: drag &nbsp;·&nbsp; Zoom: scroll</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bone hierarchy -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot orange"></div>
+              Bone Hierarchy
+              <span
+                id="boneCount"
+                style="margin-left: auto; color: var(--muted); font-size: 10px"
+                >—</span
+              >
+            </div>
+            <div class="panel-body" style="padding: 8px 10px">
+              <div id="boneTree">
+                <span class="bone-placeholder">Waiting for model…</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live transform -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="dot purple"></div>
+              Selected Bone
+            </div>
+            <div class="panel-body">
+              <div id="transformDisplay">
+                <span class="tx-placeholder"
+                  >Click a bone to inspect its live transform.</span
+                >
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Animation clips -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="dot green"></div>
-          Animation Clips
-          <span id="clipCount" style="margin-left:auto;color:var(--muted);font-size:10px;">—</span>
-        </div>
-        <div class="panel-body" style="padding: 8px 10px;">
-          <div id="clipList"><span class="clip-placeholder">Waiting for model…</span></div>
-        </div>
+      <!-- Concept callouts -->
+      <div class="concept-box" style="margin-top: 20px">
+        <strong>THREE.JS CONCEPT — AnimationMixer</strong><br />
+        <code>mixer = new THREE.AnimationMixer(characterRoot)</code> owns all
+        the animation state for one character. Calling
+        <code>mixer.update(delta)</code> every frame advances time and writes
+        the resulting transforms directly into the scene graph — bone positions,
+        rotations, and scales are updated in-place, which is why the
+        SkeletonHelper and the live transform panel reflect the motion without
+        any additional code.
       </div>
 
-      <!-- Viewport -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot blue"></div>Viewport</div>
-        <div class="panel-body">
-          <div class="ctrl-row">
-            <span class="ctrl-label">Skeleton</span>
-            <button id="skelBtn" class="toggle-btn active">On</button>
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Wireframe</span>
-            <button id="wireBtn" class="toggle-btn">Off</button>
-          </div>
-          <div class="ctrl-row">
-            <span class="ctrl-label">Grid</span>
-            <button id="gridBtn" class="toggle-btn active">On</button>
-          </div>
-          <div class="speed-row">
-            <label for="speedSlider">Speed</label>
-            <input type="range" id="speedSlider" min="10" max="200" value="100" step="5">
-            <span id="speedLabel">1.0×</span>
-          </div>
-          <div class="ctrl-row" style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--muted);">
-            <span>Rotate: drag &nbsp;·&nbsp; Zoom: scroll</span>
-          </div>
-        </div>
+      <div class="concept-box" style="margin-top: 12px">
+        <strong>THREE.JS CONCEPT — AnimationAction &amp; AnimationClip</strong
+        ><br />
+        An <code>AnimationClip</code> is the data: an array of
+        <code>KeyframeTracks</code>, each targeting one bone property (e.g.
+        <code>Spine.quaternion</code>). An <code>AnimationAction</code> is the
+        playback controller: <code>mixer.clipAction(clip)</code> returns one,
+        and calling <code>action.play()</code> activates it. Multiple actions
+        can be blended simultaneously — the foundation of locomotion state
+        machines.
       </div>
 
-      <!-- Bone hierarchy -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="dot orange"></div>
-          Bone Hierarchy
-          <span id="boneCount" style="margin-left:auto;color:var(--muted);font-size:10px;">—</span>
-        </div>
-        <div class="panel-body" style="padding:8px 10px;">
-          <div id="boneTree"><span class="bone-placeholder">Waiting for model…</span></div>
-        </div>
+      <div class="concept-box purple" style="margin-top: 12px">
+        <strong>ANIMATION CONCEPT — Live bone transforms during playback</strong
+        ><br />
+        Select any bone while a clip is playing and watch the rotation values in
+        the panel change every frame. This is exactly what Blender's Graph
+        Editor visualises as F-curves: the interpolated value of a keyframe
+        track at the current time. The mixer evaluates the curves, writes the
+        result into <code>bone.quaternion</code>, and Three.js propagates it
+        down the scene graph via <code>updateMatrixWorld()</code> during the
+        render call.
       </div>
 
-      <!-- Live transform -->
-      <div class="panel">
-        <div class="panel-header"><div class="dot purple"></div>Selected Bone</div>
-        <div class="panel-body">
-          <div id="transformDisplay">
-            <span class="tx-placeholder">Click a bone to inspect its live transform.</span>
-          </div>
-        </div>
+      <div class="concept-box" style="margin-top: 12px">
+        <strong>ANIMATION CONCEPT — Clip name remapping</strong><br />
+        CesiumMan's GLB contains one clip named <code>"animation_0"</code> — a
+        machine name from the old COLLADA2GLTF pipeline. The demo remaps it to
+        <code>"Walk"</code> by writing to <code>clip.name</code> after load. The
+        raw name is preserved in <code>clip._rawName</code>
+        and logged to the console, so you can see exactly what is stored in the
+        file versus what is displayed in the UI. Fox's clips (Survey, Walk, Run)
+        were already human-readable and are passed through unchanged.
       </div>
 
-    </div>
-  </div>
+      <div class="info-box">
+        <strong>Fox vs CesiumMan — animation data</strong><br />
+        Fox ships three clips with 24 bones — a compact quadruped rig. CesiumMan
+        ships one walk cycle with 67 bones, including finger and facial bones,
+        demonstrating the density of a full humanoid rig. Switching models live
+        shows that the <code>AnimationMixer</code> is discarded and rebuilt per
+        character — each model owns its own mixer instance.
+      </div>
+    </main>
 
-  <!-- Concept callouts -->
-  <div class="concept-box" style="margin-top:20px;">
-    <strong>THREE.JS CONCEPT — AnimationMixer</strong><br>
-    <code>mixer = new THREE.AnimationMixer(characterRoot)</code> owns all the animation state for
-    one character. Calling <code>mixer.update(delta)</code> every frame advances time and writes the
-    resulting transforms directly into the scene graph — bone positions, rotations, and scales are
-    updated in-place, which is why the SkeletonHelper and the live transform panel reflect the
-    motion without any additional code.
-  </div>
+    <footer>
+      <p>
+        <strong>Computeranimation</strong> · Institut für Medientechnik · AMS
+        Group · Technische Universität Ilmenau
+      </p>
+      <p>
+        Demo created by
+        <a
+          href="https://www.linkedin.com/in/renato-profeta/"
+          target="_blank"
+          rel="noopener"
+          >Renato Fera P.</a
+        >
+        · Models:
+        <a
+          href="https://github.com/KhronosGroup/glTF-Sample-Assets"
+          target="_blank"
+          rel="noopener"
+          >Khronos glTF Sample Assets</a
+        >
+        (Fox &amp; CesiumMan, CC-BY 4.0)
+      </p>
+    </footer>
 
-  <div class="concept-box" style="margin-top:12px;">
-    <strong>THREE.JS CONCEPT — AnimationAction &amp; AnimationClip</strong><br>
-    An <code>AnimationClip</code> is the data: an array of <code>KeyframeTracks</code>, each targeting
-    one bone property (e.g. <code>Spine.quaternion</code>). An <code>AnimationAction</code> is the
-    playback controller: <code>mixer.clipAction(clip)</code> returns one, and calling
-    <code>action.play()</code> activates it. Multiple actions can be blended simultaneously — the
-    foundation of locomotion state machines.
-  </div>
-
-  <div class="concept-box purple" style="margin-top:12px;">
-    <strong>ANIMATION CONCEPT — Live bone transforms during playback</strong><br>
-    Select any bone while a clip is playing and watch the rotation values in the panel change every
-    frame. This is exactly what Blender's Graph Editor visualises as F-curves: the interpolated
-    value of a keyframe track at the current time. The mixer evaluates the curves, writes the result
-    into <code>bone.quaternion</code>, and Three.js propagates it down the scene graph via
-    <code>updateMatrixWorld()</code> during the render call.
-  </div>
-
-  <div class="concept-box" style="margin-top:12px;">
-    <strong>ANIMATION CONCEPT — Clip name remapping</strong><br>
-    CesiumMan's GLB contains one clip named <code>"animation_0"</code> — a machine name from
-    the old COLLADA2GLTF pipeline. The demo remaps it to <code>"Walk"</code> by writing to
-    <code>clip.name</code> after load. The raw name is preserved in <code>clip._rawName</code>
-    and logged to the console, so you can see exactly what is stored in the file versus what
-    is displayed in the UI. Fox's clips (Survey, Walk, Run) were already human-readable and
-    are passed through unchanged.
-  </div>
-
-  <div class="info-box">
-    <strong>Fox vs CesiumMan — animation data</strong><br>
-    Fox ships three clips with 24 bones — a compact quadruped rig. CesiumMan ships one walk
-    cycle with 67 bones, including finger and facial bones, demonstrating the density of a full
-    humanoid rig. Switching models live shows that the <code>AnimationMixer</code> is discarded
-    and rebuilt per character — each model owns its own mixer instance.
-  </div>
-
-</main>
-
-<footer>
-  <p><strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau</p>
-  <p>
-    Demo created by
-    <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a>
-    · Models: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener">Khronos glTF Sample Assets</a>
-    (Fox &amp; CesiumMan, CC-BY 4.0)
-  </p>
-</footer>
-
-<!-- ═══════════════════════════════════════════════════════════
+    <!-- ═══════════════════════════════════════════════════════════
      STEP 0: Module imports — pinned to three@0.165.0
      ═══════════════════════════════════════════════════════════ -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-    "three/examples/jsm/loaders/GLTFLoader.js":    "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js",
-    "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
-  }
-}
-</script>
-
-<script type="module">
-import * as THREE from 'three';
-import { GLTFLoader }    from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-
-// ─────────────────────────────────────────────────────────────
-// STEP 1: DOM references
-// ─────────────────────────────────────────────────────────────
-const canvas        = document.getElementById('threeCanvas');
-const canvasWrap    = document.getElementById('canvasWrap');
-const overlay       = document.getElementById('loadingOverlay');
-const loadingTitle  = document.getElementById('loadingTitle');
-const loadingSub    = document.getElementById('loadingSub');
-const errorEl       = document.getElementById('errorOverlay');
-const progressEl    = document.getElementById('loadProgress');
-const pctLabel      = document.getElementById('loadingPct');
-const dropLabel     = document.getElementById('dropLabel');
-const boneTreeEl    = document.getElementById('boneTree');
-const boneCountEl   = document.getElementById('boneCount');
-const txDisplay     = document.getElementById('transformDisplay');
-const clipListEl    = document.getElementById('clipList');
-const clipCountEl   = document.getElementById('clipCount');
-const playPauseBtn  = document.getElementById('playPauseBtn');
-const iconPlay      = document.getElementById('iconPlay');
-const iconPause     = document.getElementById('iconPause');
-const scrubber      = document.getElementById('scrubber');
-const timeLabel     = document.getElementById('timeLabel');
-const speedSlider   = document.getElementById('speedSlider');
-const speedLabel    = document.getElementById('speedLabel');
-
-// ─────────────────────────────────────────────────────────────
-// STEP 2: Scene, Renderer, Camera
-// ─────────────────────────────────────────────────────────────
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0c11);
-
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-renderer.outputColorSpace   = THREE.SRGBColorSpace;
-
-const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
-camera.position.set(0, 1.5, 3.5);
-
-function setRendererSize() {
-  const w = canvas.parentElement.clientWidth;
-  const h = canvas.parentElement.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-
-// ─────────────────────────────────────────────────────────────
-// STEP 3: Lighting
-// ─────────────────────────────────────────────────────────────
-scene.add(new THREE.HemisphereLight(0xddeeff, 0x442200, 1.2));
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-dirLight.position.set(3, 8, 5);
-dirLight.castShadow = true;
-dirLight.shadow.camera.near   = 0.1;
-dirLight.shadow.camera.far    = 50;
-dirLight.shadow.camera.left   = -4;
-dirLight.shadow.camera.right  =  4;
-dirLight.shadow.camera.top    =  5;
-dirLight.shadow.camera.bottom = -1;
-dirLight.shadow.mapSize.set(1024, 1024);
-scene.add(dirLight);
-
-const fillLight = new THREE.DirectionalLight(0x88aaff, 0.4);
-fillLight.position.set(-3, 3, -3);
-scene.add(fillLight);
-
-const groundMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(12, 12),
-  new THREE.MeshStandardMaterial({ color: 0x1a1f2b, roughness: 0.9, metalness: 0 })
-);
-groundMesh.rotation.x = -Math.PI / 2;
-groundMesh.receiveShadow = true;
-scene.add(groundMesh);
-
-const grid = new THREE.GridHelper(8, 24, 0x252b38, 0x252b38);
-grid.position.y = 0.001;
-scene.add(grid);
-
-// ─────────────────────────────────────────────────────────────
-// STEP 4: OrbitControls
-// ─────────────────────────────────────────────────────────────
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.minDistance   = 0.3;
-controls.maxDistance   = 20;
-controls.target.set(0, 0.8, 0);
-controls.update();
-
-// ─────────────────────────────────────────────────────────────
-// STEP 5: Model registry
-//
-// clipNames: optional display-name overrides keyed by the raw
-// clip.name stored in the GLB. The COLLADA2GLTF exporter that
-// produced CesiumMan named the single clip "animation_0" — a
-// meaningless machine name. We remap it here so students see
-// something legible. The raw name is logged to the console so
-// they can see exactly what is in the file vs what we display.
-//
-// extraClips: additional .glb files whose animation tracks are
-// merged into the character after the main model loads.
-// THREE.AnimationClip.tracks address bones by name string, so
-// any clip exported for the CesiumMan skeleton works as long as
-// the bone names match. Mixamo exports for CesiumMan satisfy
-// this: download with "In Place" off and "With Skin" off, then
-// place in 04_gltf/. The three extra clips below were obtained
-// from mixamo.com (free, royalty-free) for the CesiumMan rig.
-// ─────────────────────────────────────────────────────────────
-const MODEL_REGISTRY = {
-  fox: {
-    path:  '04_gltf/Fox.glb',
-    label: 'Fox.glb',
-    scale: 0.01,
-    // Fox clip names are already human-readable: Survey, Walk, Run
-    clipNames: {},
-  },
-  cesium: {
-    path:  '04_gltf/CesiumMan.glb',
-    label: 'CesiumMan.glb',
-    scale: 1.0,
-    // The COLLADA2GLTF exporter named the single clip "animation_0".
-    // We remap it to a human-readable name here; the raw name is
-    // preserved in clip._rawName and logged to the console.
-    clipNames: {
-      'animation_0': 'Walk',
-    },
-    extraClips: [],
-  },
-  // "drop" is a virtual key used when the user drops any arbitrary GLB.
-  // loadFromFile() sets activeModelKey to 'drop' and fills in a synthetic
-  // registry entry on the fly — no static config needed here.
-  drop: {
-    path:  '',   // filled dynamically
-    label: 'custom.glb',
-    scale: 1.0,
-    clipNames: {},
-    extraClips: [],
-  },
-};
-
-let activeModelKey = 'fox';
-
-// ─────────────────────────────────────────────────────────────
-// STEP 6: Per-model mutable state
-// ─────────────────────────────────────────────────────────────
-let characterRoot  = null;
-let skeletonHelper = null;
-let bones          = [];
-let selectedBone   = null;
-let axesHelper     = null;
-let pivotMarker    = null;
-
-// ── Animation state ──────────────────────────────────────────
-// ANIMATION CONCEPT: one mixer per character.
-// The mixer owns all AnimationActions for a given root object.
-// When we switch models we destroy the mixer and create a fresh one.
-let mixer          = null;   // THREE.AnimationMixer
-let clips          = [];     // THREE.AnimationClip[]
-let currentAction  = null;   // THREE.AnimationAction currently playing
-let isPlaying      = true;
-let isScrubbing    = false;  // true while the user drags the scrubber
-
-// UI state persisting across model switches
-let skeletonVisible = true;
-let wireframeOn     = false;
-let gridOn          = true;
-
-// ─────────────────────────────────────────────────────────────
-// STEP 7: clearScene
-// ─────────────────────────────────────────────────────────────
-function clearScene() {
-  deselectBone();
-
-  // Stop and discard the mixer before removing the character.
-  if (mixer) {
-    mixer.stopAllAction();
-    mixer = null;
-  }
-  currentAction = null;
-  clips = [];
-
-  if (skeletonHelper) {
-    scene.remove(skeletonHelper);
-    skeletonHelper.dispose();
-    skeletonHelper = null;
-  }
-  if (characterRoot) {
-    characterRoot.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.geometry.dispose();
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach((m) => m.dispose());
-      }
-    });
-    scene.remove(characterRoot);
-    characterRoot = null;
-  }
-
-  bones = [];
-  selectedBone = null;
-  boneTreeEl.innerHTML  = '<span class="bone-placeholder">Loading…</span>';
-  boneCountEl.textContent = '—';
-  txDisplay.innerHTML   = '<span class="tx-placeholder">Click a bone to inspect its live transform.</span>';
-  clipListEl.innerHTML  = '<span class="clip-placeholder">Loading…</span>';
-  clipCountEl.textContent = '—';
-  scrubber.value = 0;
-  timeLabel.textContent = '0.00 / 0.00 s';
-}
-
-// ─────────────────────────────────────────────────────────────
-// STEP 8: loadModel
-// ─────────────────────────────────────────────────────────────
-function loadModel(key) {
-  const config = MODEL_REGISTRY[key];
-  activeModelKey = key;
-  dropLabel.textContent = config.label;
-
-  clearScene();
-  errorEl.classList.remove('visible');
-  overlay.classList.remove('hidden');
-  progressEl.value = 0;
-  pctLabel.textContent = '0%';
-  loadingTitle.textContent = `Loading ${config.label}…`;
-  loadingSub.textContent   = 'Model: Khronos glTF Sample Assets · CC-BY 4.0';
-
-  const loader = new GLTFLoader();
-  loader.load(
-    config.path,
-    (gltf) => onModelLoad(gltf, config),
-    (xhr)  => onProgress(xhr),
-    (err)  => onLoadError(err)
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// STEP 8a: onModelLoad
-// ─────────────────────────────────────────────────────────────
-function onModelLoad(gltf, config) {
-  characterRoot = gltf.scene;
-  characterRoot.scale.setScalar(config.scale);
-
-  characterRoot.traverse((child) => {
-    if (child.isMesh) {
-      child.castShadow    = true;
-      child.receiveShadow = true;
-    }
-  });
-
-  scene.add(characterRoot);
-
-  skeletonHelper = new THREE.SkeletonHelper(characterRoot);
-  skeletonHelper.visible = skeletonVisible;
-  scene.add(skeletonHelper);
-
-  bones = [];
-  characterRoot.traverse((obj) => { if (obj.isBone) bones.push(obj); });
-
-  // ── ANIMATION CONCEPT: create the mixer ───────────────────
-  // THREE.AnimationMixer takes the root object whose bone
-  // hierarchy will be driven. Every clip.update() call walks
-  // the KeyframeTracks and writes the interpolated values into
-  // the matching Object3D nodes by name.
-  mixer = new THREE.AnimationMixer(characterRoot);
-
-  // Expose to DevTools for inspection.
-  window.mixer = mixer;
-  window.gltf  = gltf;
-
-  // ── Rename clips using the registry's clipNames map ───────
-  // This runs before the clip list is built so students see
-  // clean names in the UI. The raw name is preserved in a
-  // _rawName property and logged to the console.
-  clips = (gltf.animations || []).map((clip) => {
-    const mapped = config.clipNames && config.clipNames[clip.name];
-    if (mapped) {
-      clip._rawName = clip.name;
-      clip.name     = mapped;
-    }
-    return clip;
-  });
-
-  console.log('── Model loaded ─────────────────────────────────');
-  console.log(`Model: ${config.label}`);
-  console.log(`Animations (${clips.length}):`, clips.map((c) => `${c.name}${c._rawName ? ' (raw: ' + c._rawName + ')' : ''}`));
-  console.log(`Bones (${bones.length}):`, bones.map((b) => b.name));
-  console.log('AnimationMixer:', mixer);
-  console.log('─────────────────────────────────────────────────');
-
-  fitCameraToModel(characterRoot);
-  applyWireframe(wireframeOn);
-  buildBoneTree(bones);
-
-  // ── Load extra clips (Mixamo single-clip GLBs) ────────────
-  // ANIMATION CONCEPT: clip portability
-  // A THREE.AnimationClip stores all KeyframeTracks as strings
-  // like "Spine.quaternion". As long as another skeleton has
-  // nodes with the same names, you can play a clip exported for
-  // model A on model B without modification.
-  // We load each extra GLB, extract its first AnimationClip,
-  // rename it to the display name, and push it into `clips`.
-  // buildClipList() is deferred until all extras are resolved.
-  const extras = config.extraClips || [];
-  if (extras.length === 0) {
-    buildClipList(clips);
-    if (clips.length > 0) {
-      playClip(0);
-    } else {
-      clipListEl.innerHTML = '<span class="clip-placeholder">No animation clips in this file.</span>';
-      clipCountEl.textContent = '0 clips';
-    }
-    overlay.classList.add('hidden');
-    setPlayingUI(isPlaying);
-    return;
-  }
-
-  // Show a secondary loading note.
-  loadingTitle.textContent = `Loading extra clips (0/${extras.length})…`;
-  overlay.classList.remove('hidden');
-
-  const loader2 = new GLTFLoader();
-  let loaded = 0;
-  extras.forEach(({ path, displayName }) => {
-    loader2.load(
-      path,
-      (extraGltf) => {
-        if (extraGltf.animations && extraGltf.animations.length > 0) {
-          const clip = extraGltf.animations[0];
-          clip._rawName = clip.name;
-          clip.name     = displayName;
-          clips.push(clip);
-          console.log(`Extra clip loaded: ${displayName} (raw: ${clip._rawName}, ${clip.duration.toFixed(3)}s)`);
-        } else {
-          console.warn(`Extra GLB has no animations: ${path}`);
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/examples/jsm/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js",
+          "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
         }
-        loaded++;
-        loadingTitle.textContent = `Loading extra clips (${loaded}/${extras.length})…`;
-        if (loaded === extras.length) finishLoad();
-      },
-      null,
-      (err) => {
-        // Extra clip missing — not fatal. Log and continue.
-        console.warn(`Could not load extra clip "${displayName}" from ${path}:`, err.message || err);
-        loaded++;
-        loadingTitle.textContent = `Loading extra clips (${loaded}/${extras.length})…`;
-        if (loaded === extras.length) finishLoad();
       }
-    );
-  });
+    </script>
 
-  function finishLoad() {
-    buildClipList(clips);
-    overlay.classList.add('hidden');
-    if (clips.length > 0) {
-      playClip(0);
-    } else {
-      clipListEl.innerHTML = '<span class="clip-placeholder">No animation clips in this file.</span>';
-      clipCountEl.textContent = '0 clips';
-    }
-    setPlayingUI(isPlaying);
-  }
-}
+    <script type="module">
+      import * as THREE from "three";
+      import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-// ─────────────────────────────────────────────────────────────
-// STEP 8b–8c: progress and error handlers (unchanged)
-// ─────────────────────────────────────────────────────────────
-function onProgress(xhr) {
-  if (xhr.lengthComputable) {
-    const pct = Math.round((xhr.loaded / xhr.total) * 100);
-    progressEl.value = pct;
-    pctLabel.textContent = pct + '%';
-  }
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 1: DOM references
+      // ─────────────────────────────────────────────────────────────
+      const canvas = document.getElementById("threeCanvas");
+      const canvasWrap = document.getElementById("canvasWrap");
+      const overlay = document.getElementById("loadingOverlay");
+      const loadingTitle = document.getElementById("loadingTitle");
+      const loadingSub = document.getElementById("loadingSub");
+      const errorEl = document.getElementById("errorOverlay");
+      const progressEl = document.getElementById("loadProgress");
+      const pctLabel = document.getElementById("loadingPct");
+      const dropLabel = document.getElementById("dropLabel");
+      const boneTreeEl = document.getElementById("boneTree");
+      const boneCountEl = document.getElementById("boneCount");
+      const txDisplay = document.getElementById("transformDisplay");
+      const clipListEl = document.getElementById("clipList");
+      const clipCountEl = document.getElementById("clipCount");
+      const playPauseBtn = document.getElementById("playPauseBtn");
+      const iconPlay = document.getElementById("iconPlay");
+      const iconPause = document.getElementById("iconPause");
+      const scrubber = document.getElementById("scrubber");
+      const timeLabel = document.getElementById("timeLabel");
+      const speedSlider = document.getElementById("speedSlider");
+      const speedLabel = document.getElementById("speedLabel");
 
-function onLoadError(err) {
-  console.error('GLTFLoader error:', err);
-  errorEl.classList.add('visible');
-  overlay.classList.add('hidden');
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 2: Scene, Renderer, Camera
+      // ─────────────────────────────────────────────────────────────
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c11);
 
-function fitCameraToModel(root) {
-  const box    = new THREE.Box3().setFromObject(root);
-  const centre = box.getCenter(new THREE.Vector3());
-  const size   = box.getSize(new THREE.Vector3()).length();
-  controls.target.copy(centre);
-  camera.position.set(centre.x, centre.y + size * 0.3, centre.z + size * 0.9);
-  controls.update();
-}
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-// ─────────────────────────────────────────────────────────────
-// STEP 9: Animation — playClip
-//
-// ANIMATION CONCEPT: AnimationAction
-// mixer.clipAction(clip) returns a cached AnimationAction that
-// controls playback of one clip on this mixer. Key properties:
-//   action.loop      — LoopRepeat | LoopOnce | LoopPingPong
-//   action.timeScale — multiplies playback speed
-//   action.time      — current time within the clip (writable!)
-// Calling action.play() activates it; stopAllAction() deactivates
-// all currently running actions before we start the new one,
-// preventing two clips from blending together unintentionally.
-// ─────────────────────────────────────────────────────────────
-function playClip(index) {
-  if (!mixer || index < 0 || index >= clips.length) return;
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+      camera.position.set(0, 1.5, 3.5);
 
-  // Deactivate any running action first.
-  if (currentAction) {
-    currentAction.fadeOut(0.2);
-  }
+      function setRendererSize() {
+        const w = canvas.parentElement.clientWidth;
+        const h = canvas.parentElement.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
 
-  const clip   = clips[index];
-  const action = mixer.clipAction(clip);
-  action.loop      = THREE.LoopRepeat;
-  action.timeScale = speedSlider.value / 100;
-  action.reset();
-  action.fadeIn(0.2);
-  action.play();
+      // ─────────────────────────────────────────────────────────────
+      // STEP 3: Lighting
+      // ─────────────────────────────────────────────────────────────
+      scene.add(new THREE.HemisphereLight(0xddeeff, 0x442200, 1.2));
 
-  currentAction = action;
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+      dirLight.position.set(3, 8, 5);
+      dirLight.castShadow = true;
+      dirLight.shadow.camera.near = 0.1;
+      dirLight.shadow.camera.far = 50;
+      dirLight.shadow.camera.left = -4;
+      dirLight.shadow.camera.right = 4;
+      dirLight.shadow.camera.top = 5;
+      dirLight.shadow.camera.bottom = -1;
+      dirLight.shadow.mapSize.set(1024, 1024);
+      scene.add(dirLight);
 
-  // Update scrubber range to match clip duration.
-  scrubber.max   = 1000;
-  scrubber.value = 0;
-  timeLabel.textContent = `0.00 / ${clip.duration.toFixed(2)} s`;
+      const fillLight = new THREE.DirectionalLight(0x88aaff, 0.4);
+      fillLight.position.set(-3, 3, -3);
+      scene.add(fillLight);
 
-  // Highlight the active clip row.
-  clipListEl.querySelectorAll('.clip-item').forEach((el, i) => {
-    el.classList.toggle('active', i === index);
-  });
+      const groundMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(12, 12),
+        new THREE.MeshStandardMaterial({
+          color: 0x1a1f2b,
+          roughness: 0.9,
+          metalness: 0,
+        }),
+      );
+      groundMesh.rotation.x = -Math.PI / 2;
+      groundMesh.receiveShadow = true;
+      scene.add(groundMesh);
 
-  // If we were paused, stay paused but load the clip.
-  if (!isPlaying) {
-    currentAction.paused = true;
-  }
+      const grid = new THREE.GridHelper(8, 24, 0x252b38, 0x252b38);
+      grid.position.y = 0.001;
+      scene.add(grid);
 
-  console.log('── Clip activated ───────────────────────────────');
-  console.log(`Clip[${index}]: ${clip.name} · duration: ${clip.duration.toFixed(3)}s · tracks: ${clip.tracks.length}`);
-  console.log('AnimationAction:', action);
-  console.log('─────────────────────────────────────────────────');
-}
+      // ─────────────────────────────────────────────────────────────
+      // STEP 4: OrbitControls
+      // ─────────────────────────────────────────────────────────────
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 0.3;
+      controls.maxDistance = 20;
+      controls.target.set(0, 0.8, 0);
+      controls.update();
 
-// ─────────────────────────────────────────────────────────────
-// STEP 10: Clip list UI
-// ─────────────────────────────────────────────────────────────
-function buildClipList(clipArray) {
-  clipCountEl.textContent = `${clipArray.length} clip${clipArray.length !== 1 ? 's' : ''}`;
-  if (clipArray.length === 0) {
-    clipListEl.innerHTML = '<span class="clip-placeholder">No animation clips in this file.</span>';
-    return;
-  }
+      // ─────────────────────────────────────────────────────────────
+      // STEP 5: Model registry
+      //
+      // clipNames: optional display-name overrides keyed by the raw
+      // clip.name stored in the GLB. The COLLADA2GLTF exporter that
+      // produced CesiumMan named the single clip "animation_0" — a
+      // meaningless machine name. We remap it here so students see
+      // something legible. The raw name is logged to the console so
+      // they can see exactly what is in the file vs what we display.
+      //
+      // extraClips: additional .glb files whose animation tracks are
+      // merged into the character after the main model loads.
+      // THREE.AnimationClip.tracks address bones by name string, so
+      // any clip exported for the CesiumMan skeleton works as long as
+      // the bone names match. Mixamo exports for CesiumMan satisfy
+      // this: download with "In Place" off and "With Skin" off, then
+      // place in 04_gltf/. The three extra clips below were obtained
+      // from mixamo.com (free, royalty-free) for the CesiumMan rig.
+      // ─────────────────────────────────────────────────────────────
+      const MODEL_REGISTRY = {
+        fox: {
+          path: "04_gltf/Fox.glb",
+          label: "Fox.glb",
+          scale: 0.01,
+          // Fox clip names are already human-readable: Survey, Walk, Run
+          clipNames: {},
+        },
+        cesium: {
+          path: "04_gltf/CesiumMan.glb",
+          label: "CesiumMan.glb",
+          scale: 1.0,
+          // The COLLADA2GLTF exporter named the single clip "animation_0".
+          // We remap it to a human-readable name here; the raw name is
+          // preserved in clip._rawName and logged to the console.
+          clipNames: {
+            animation_0: "Walk",
+          },
+          extraClips: [],
+        },
+        // "drop" is a virtual key used when the user drops any arbitrary GLB.
+        // loadFromFile() sets activeModelKey to 'drop' and fills in a synthetic
+        // registry entry on the fly — no static config needed here.
+        drop: {
+          path: "", // filled dynamically
+          label: "custom.glb",
+          scale: 1.0,
+          clipNames: {},
+          extraClips: [],
+        },
+      };
 
-  const frag = document.createDocumentFragment();
-  clipArray.forEach((clip, i) => {
-    const row = document.createElement('div');
-    row.className = 'clip-item';
+      let activeModelKey = "fox";
 
-    const idx = document.createElement('span');
-    idx.className = 'clip-idx';
-    idx.textContent = i;
+      // ─────────────────────────────────────────────────────────────
+      // STEP 6: Per-model mutable state
+      // ─────────────────────────────────────────────────────────────
+      let characterRoot = null;
+      let skeletonHelper = null;
+      let bones = [];
+      let selectedBone = null;
+      let axesHelper = null;
+      let pivotMarker = null;
 
-    const name = document.createElement('span');
-    name.className = 'clip-name';
-    name.textContent = clip.name || `clip_${i}`;
-    name.title = clip.name || `clip_${i}`;
+      // ── Animation state ──────────────────────────────────────────
+      // ANIMATION CONCEPT: one mixer per character.
+      // The mixer owns all AnimationActions for a given root object.
+      // When we switch models we destroy the mixer and create a fresh one.
+      let mixer = null; // THREE.AnimationMixer
+      let clips = []; // THREE.AnimationClip[]
+      let currentAction = null; // THREE.AnimationAction currently playing
+      let isPlaying = true;
+      let isScrubbing = false; // true while the user drags the scrubber
 
-    const dur = document.createElement('span');
-    dur.className = 'clip-dur';
-    dur.textContent = clip.duration.toFixed(2) + 's';
+      // UI state persisting across model switches
+      let skeletonVisible = true;
+      let wireframeOn = false;
+      let gridOn = true;
 
-    row.appendChild(idx);
-    row.appendChild(name);
-    row.appendChild(dur);
-    row.addEventListener('click', () => playClip(i));
-    frag.appendChild(row);
-  });
+      // ─────────────────────────────────────────────────────────────
+      // STEP 7: clearScene
+      // ─────────────────────────────────────────────────────────────
+      function clearScene() {
+        deselectBone();
 
-  clipListEl.innerHTML = '';
-  clipListEl.appendChild(frag);
-}
+        // Stop and discard the mixer before removing the character.
+        if (mixer) {
+          mixer.stopAllAction();
+          mixer = null;
+        }
+        currentAction = null;
+        clips = [];
 
-// ─────────────────────────────────────────────────────────────
-// STEP 11: Play / Pause
-// ─────────────────────────────────────────────────────────────
-function setPlayingUI(playing) {
-  iconPlay.style.display  = playing ? 'none'  : 'block';
-  iconPause.style.display = playing ? 'block' : 'none';
-}
+        if (skeletonHelper) {
+          scene.remove(skeletonHelper);
+          skeletonHelper.dispose();
+          skeletonHelper = null;
+        }
+        if (characterRoot) {
+          characterRoot.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.geometry.dispose();
+              const mats = Array.isArray(obj.material)
+                ? obj.material
+                : [obj.material];
+              mats.forEach((m) => m.dispose());
+            }
+          });
+          scene.remove(characterRoot);
+          characterRoot = null;
+        }
 
-playPauseBtn.addEventListener('click', () => {
-  if (!currentAction) return;
-  isPlaying = !isPlaying;
-  currentAction.paused = !isPlaying;
-  setPlayingUI(isPlaying);
-});
+        bones = [];
+        selectedBone = null;
+        boneTreeEl.innerHTML = '<span class="bone-placeholder">Loading…</span>';
+        boneCountEl.textContent = "—";
+        txDisplay.innerHTML =
+          '<span class="tx-placeholder">Click a bone to inspect its live transform.</span>';
+        clipListEl.innerHTML = '<span class="clip-placeholder">Loading…</span>';
+        clipCountEl.textContent = "—";
+        scrubber.value = 0;
+        timeLabel.textContent = "0.00 / 0.00 s";
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 12: Scrubber (timeline seek)
-//
-// ANIMATION CONCEPT: seeking by writing action.time
-// action.time is readable and writable. Setting it directly
-// lets us jump to any point in the clip. We must call
-// mixer.update(0) after changing time to force the mixer to
-// re-evaluate all tracks and write updated bone transforms —
-// otherwise the scene graph won't reflect the new pose until
-// the next normal frame update.
-// ─────────────────────────────────────────────────────────────
-scrubber.addEventListener('mousedown', () => { isScrubbing = true; });
-scrubber.addEventListener('touchstart', () => { isScrubbing = true; }, { passive: true });
+      // ─────────────────────────────────────────────────────────────
+      // STEP 8: loadModel
+      // ─────────────────────────────────────────────────────────────
+      function loadModel(key) {
+        const config = MODEL_REGISTRY[key];
+        activeModelKey = key;
+        dropLabel.textContent = config.label;
 
-scrubber.addEventListener('input', () => {
-  if (!currentAction) return;
-  const t = (scrubber.value / 1000) * currentAction.getClip().duration;
-  currentAction.time = t;
-  mixer.update(0); // force pose evaluation at new time
-});
+        clearScene();
+        errorEl.classList.remove("visible");
+        overlay.classList.remove("hidden");
+        progressEl.value = 0;
+        pctLabel.textContent = "0%";
+        loadingTitle.textContent = `Loading ${config.label}…`;
+        loadingSub.textContent =
+          "Model: Khronos glTF Sample Assets · CC-BY 4.0";
 
-document.addEventListener('mouseup',  () => { isScrubbing = false; });
-document.addEventListener('touchend', () => { isScrubbing = false; });
+        const loader = new GLTFLoader();
+        loader.load(
+          config.path,
+          (gltf) => onModelLoad(gltf, config),
+          (xhr) => onProgress(xhr),
+          (err) => onLoadError(err),
+        );
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 13: Speed control
-// ─────────────────────────────────────────────────────────────
-speedSlider.addEventListener('input', () => {
-  const s = speedSlider.value / 100;
-  speedLabel.textContent = s.toFixed(1) + '×';
-  if (currentAction) currentAction.timeScale = s;
-});
+      // ─────────────────────────────────────────────────────────────
+      // STEP 8a: onModelLoad
+      // ─────────────────────────────────────────────────────────────
+      function onModelLoad(gltf, config) {
+        characterRoot = gltf.scene;
+        characterRoot.scale.setScalar(config.scale);
 
-// ─────────────────────────────────────────────────────────────
-// STEP 14: Bone hierarchy tree (same as Demo 2)
-// ─────────────────────────────────────────────────────────────
-function buildBoneTree(boneList) {
-  if (boneList.length === 0) {
-    boneTreeEl.innerHTML = '<span class="bone-placeholder">No bones found in this model.</span>';
-    boneCountEl.textContent = '0 bones';
-    return;
-  }
-  boneCountEl.textContent = `${boneList.length} bones`;
+        characterRoot.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
 
-  const boneSet = new Set(boneList);
-  function boneDepth(bone) {
-    let depth = 0, cur = bone.parent;
-    while (cur && boneSet.has(cur)) { depth++; cur = cur.parent; }
-    return depth;
-  }
+        scene.add(characterRoot);
 
-  const frag = document.createDocumentFragment();
-  boneList.forEach((bone, index) => {
-    const depth = boneDepth(bone);
-    const row = document.createElement('div');
-    row.className = 'bone-item';
-    row.dataset.boneIndex = String(index);
+        skeletonHelper = new THREE.SkeletonHelper(characterRoot);
+        skeletonHelper.visible = skeletonVisible;
+        scene.add(skeletonHelper);
 
-    const spacer = document.createElement('span');
-    spacer.className = 'bone-indent';
-    spacer.style.width = (depth * 12) + 'px';
+        bones = [];
+        characterRoot.traverse((obj) => {
+          if (obj.isBone) bones.push(obj);
+        });
 
-    const icon = document.createElement('span');
-    icon.className = 'bone-icon';
-    icon.textContent = depth === 0 ? '◆' : '·';
+        // ── ANIMATION CONCEPT: create the mixer ───────────────────
+        // THREE.AnimationMixer takes the root object whose bone
+        // hierarchy will be driven. Every clip.update() call walks
+        // the KeyframeTracks and writes the interpolated values into
+        // the matching Object3D nodes by name.
+        mixer = new THREE.AnimationMixer(characterRoot);
 
-    const name = document.createElement('span');
-    name.className = 'bone-name-label';
-    name.textContent = bone.name || `bone_${index}`;
-    name.title = bone.name || `bone_${index}`;
+        // Expose to DevTools for inspection.
+        window.mixer = mixer;
+        window.gltf = gltf;
 
-    row.appendChild(spacer);
-    row.appendChild(icon);
-    row.appendChild(name);
-    row.addEventListener('click', () => selectBone(bone, row));
-    frag.appendChild(row);
-  });
+        // ── Rename clips using the registry's clipNames map ───────
+        // This runs before the clip list is built so students see
+        // clean names in the UI. The raw name is preserved in a
+        // _rawName property and logged to the console.
+        clips = (gltf.animations || []).map((clip) => {
+          const mapped = config.clipNames && config.clipNames[clip.name];
+          if (mapped) {
+            clip._rawName = clip.name;
+            clip.name = mapped;
+          }
+          return clip;
+        });
 
-  boneTreeEl.innerHTML = '';
-  boneTreeEl.appendChild(frag);
-}
+        console.log("── Model loaded ─────────────────────────────────");
+        console.log(`Model: ${config.label}`);
+        console.log(
+          `Animations (${clips.length}):`,
+          clips.map(
+            (c) => `${c.name}${c._rawName ? " (raw: " + c._rawName + ")" : ""}`,
+          ),
+        );
+        console.log(
+          `Bones (${bones.length}):`,
+          bones.map((b) => b.name),
+        );
+        console.log("AnimationMixer:", mixer);
+        console.log("─────────────────────────────────────────────────");
 
-// ─────────────────────────────────────────────────────────────
-// STEP 15: Bone selection (AxesHelper + pivot marker)
-// ─────────────────────────────────────────────────────────────
-function selectBone(bone, row) {
-  deselectBone();
-  selectedBone = bone;
-  row.classList.add('selected');
+        fitCameraToModel(characterRoot);
+        applyWireframe(wireframeOn);
+        buildBoneTree(bones);
 
-  const axesSize = 0.18;
-  axesHelper = new THREE.AxesHelper(axesSize);
-  bone.add(axesHelper);
+        // ── Load extra clips (Mixamo single-clip GLBs) ────────────
+        // ANIMATION CONCEPT: clip portability
+        // A THREE.AnimationClip stores all KeyframeTracks as strings
+        // like "Spine.quaternion". As long as another skeleton has
+        // nodes with the same names, you can play a clip exported for
+        // model A on model B without modification.
+        // We load each extra GLB, extract its first AnimationClip,
+        // rename it to the display name, and push it into `clips`.
+        // buildClipList() is deferred until all extras are resolved.
+        const extras = config.extraClips || [];
+        if (extras.length === 0) {
+          buildClipList(clips);
+          if (clips.length > 0) {
+            playClip(0);
+          } else {
+            clipListEl.innerHTML =
+              '<span class="clip-placeholder">No animation clips in this file.</span>';
+            clipCountEl.textContent = "0 clips";
+          }
+          overlay.classList.add("hidden");
+          setPlayingUI(isPlaying);
+          return;
+        }
 
-  const markerGeo = new THREE.OctahedronGeometry(axesSize * 0.22, 0);
-  const markerMat = new THREE.MeshBasicMaterial({
-    color: 0xa78bfa, depthTest: false, transparent: true, opacity: 0.9,
-  });
-  pivotMarker = new THREE.Mesh(markerGeo, markerMat);
-  pivotMarker.renderOrder = 1;
-  bone.add(pivotMarker);
-}
+        // Show a secondary loading note.
+        loadingTitle.textContent = `Loading extra clips (0/${extras.length})…`;
+        overlay.classList.remove("hidden");
 
-function deselectBone() {
-  if (axesHelper) {
-    if (axesHelper.parent) axesHelper.parent.remove(axesHelper);
-    axesHelper.dispose();
-    axesHelper = null;
-  }
-  if (pivotMarker) {
-    if (pivotMarker.parent) pivotMarker.parent.remove(pivotMarker);
-    pivotMarker.geometry.dispose();
-    pivotMarker.material.dispose();
-    pivotMarker = null;
-  }
-  boneTreeEl.querySelectorAll('.bone-item.selected').forEach((el) => el.classList.remove('selected'));
-  selectedBone = null;
-}
+        const loader2 = new GLTFLoader();
+        let loaded = 0;
+        extras.forEach(({ path, displayName }) => {
+          loader2.load(
+            path,
+            (extraGltf) => {
+              if (extraGltf.animations && extraGltf.animations.length > 0) {
+                const clip = extraGltf.animations[0];
+                clip._rawName = clip.name;
+                clip.name = displayName;
+                clips.push(clip);
+                console.log(
+                  `Extra clip loaded: ${displayName} (raw: ${clip._rawName}, ${clip.duration.toFixed(3)}s)`,
+                );
+              } else {
+                console.warn(`Extra GLB has no animations: ${path}`);
+              }
+              loaded++;
+              loadingTitle.textContent = `Loading extra clips (${loaded}/${extras.length})…`;
+              if (loaded === extras.length) finishLoad();
+            },
+            null,
+            (err) => {
+              // Extra clip missing — not fatal. Log and continue.
+              console.warn(
+                `Could not load extra clip "${displayName}" from ${path}:`,
+                err.message || err,
+              );
+              loaded++;
+              loadingTitle.textContent = `Loading extra clips (${loaded}/${extras.length})…`;
+              if (loaded === extras.length) finishLoad();
+            },
+          );
+        });
 
-// ─────────────────────────────────────────────────────────────
-// STEP 16: Live transform display (now reads animated values)
-// ─────────────────────────────────────────────────────────────
-const _worldPos   = new THREE.Vector3();
-const _worldScale = new THREE.Vector3();
+        function finishLoad() {
+          buildClipList(clips);
+          overlay.classList.add("hidden");
+          if (clips.length > 0) {
+            playClip(0);
+          } else {
+            clipListEl.innerHTML =
+              '<span class="clip-placeholder">No animation clips in this file.</span>';
+            clipCountEl.textContent = "0 clips";
+          }
+          setPlayingUI(isPlaying);
+        }
+      }
 
-function updateTransformDisplay() {
-  if (!selectedBone) return;
-  selectedBone.getWorldPosition(_worldPos);
-  selectedBone.getWorldScale(_worldScale);
+      // ─────────────────────────────────────────────────────────────
+      // STEP 8b–8c: progress and error handlers (unchanged)
+      // ─────────────────────────────────────────────────────────────
+      function onProgress(xhr) {
+        if (xhr.lengthComputable) {
+          const pct = Math.round((xhr.loaded / xhr.total) * 100);
+          progressEl.value = pct;
+          pctLabel.textContent = pct + "%";
+        }
+      }
 
-  const rx = THREE.MathUtils.radToDeg(selectedBone.rotation.x).toFixed(2);
-  const ry = THREE.MathUtils.radToDeg(selectedBone.rotation.y).toFixed(2);
-  const rz = THREE.MathUtils.radToDeg(selectedBone.rotation.z).toFixed(2);
+      function onLoadError(err) {
+        console.error("GLTFLoader error:", err);
+        errorEl.classList.add("visible");
+        overlay.classList.add("hidden");
+      }
 
-  txDisplay.innerHTML = `
+      function fitCameraToModel(root) {
+        const box = new THREE.Box3().setFromObject(root);
+        const centre = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        controls.target.copy(centre);
+        camera.position.set(
+          centre.x,
+          centre.y + size * 0.3,
+          centre.z + size * 0.9,
+        );
+        controls.update();
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 9: Animation — playClip
+      //
+      // ANIMATION CONCEPT: AnimationAction
+      // mixer.clipAction(clip) returns a cached AnimationAction that
+      // controls playback of one clip on this mixer. Key properties:
+      //   action.loop      — LoopRepeat | LoopOnce | LoopPingPong
+      //   action.timeScale — multiplies playback speed
+      //   action.time      — current time within the clip (writable!)
+      // Calling action.play() activates it; stopAllAction() deactivates
+      // all currently running actions before we start the new one,
+      // preventing two clips from blending together unintentionally.
+      // ─────────────────────────────────────────────────────────────
+      function playClip(index) {
+        if (!mixer || index < 0 || index >= clips.length) return;
+
+        // Deactivate any running action first.
+        if (currentAction) {
+          currentAction.fadeOut(0.2);
+        }
+
+        const clip = clips[index];
+        const action = mixer.clipAction(clip);
+        action.loop = THREE.LoopRepeat;
+        action.timeScale = speedSlider.value / 100;
+        action.reset();
+        action.fadeIn(0.2);
+        action.play();
+
+        currentAction = action;
+
+        // Update scrubber range to match clip duration.
+        scrubber.max = 1000;
+        scrubber.value = 0;
+        timeLabel.textContent = `0.00 / ${clip.duration.toFixed(2)} s`;
+
+        // Highlight the active clip row.
+        clipListEl.querySelectorAll(".clip-item").forEach((el, i) => {
+          el.classList.toggle("active", i === index);
+        });
+
+        // If we were paused, stay paused but load the clip.
+        if (!isPlaying) {
+          currentAction.paused = true;
+        }
+
+        console.log("── Clip activated ───────────────────────────────");
+        console.log(
+          `Clip[${index}]: ${clip.name} · duration: ${clip.duration.toFixed(3)}s · tracks: ${clip.tracks.length}`,
+        );
+        console.log("AnimationAction:", action);
+        console.log("─────────────────────────────────────────────────");
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 10: Clip list UI
+      // ─────────────────────────────────────────────────────────────
+      function buildClipList(clipArray) {
+        clipCountEl.textContent = `${clipArray.length} clip${clipArray.length !== 1 ? "s" : ""}`;
+        if (clipArray.length === 0) {
+          clipListEl.innerHTML =
+            '<span class="clip-placeholder">No animation clips in this file.</span>';
+          return;
+        }
+
+        const frag = document.createDocumentFragment();
+        clipArray.forEach((clip, i) => {
+          const row = document.createElement("div");
+          row.className = "clip-item";
+
+          const idx = document.createElement("span");
+          idx.className = "clip-idx";
+          idx.textContent = i;
+
+          const name = document.createElement("span");
+          name.className = "clip-name";
+          name.textContent = clip.name || `clip_${i}`;
+          name.title = clip.name || `clip_${i}`;
+
+          const dur = document.createElement("span");
+          dur.className = "clip-dur";
+          dur.textContent = clip.duration.toFixed(2) + "s";
+
+          row.appendChild(idx);
+          row.appendChild(name);
+          row.appendChild(dur);
+          row.addEventListener("click", () => playClip(i));
+          frag.appendChild(row);
+        });
+
+        clipListEl.innerHTML = "";
+        clipListEl.appendChild(frag);
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 11: Play / Pause
+      // ─────────────────────────────────────────────────────────────
+      function setPlayingUI(playing) {
+        iconPlay.style.display = playing ? "none" : "block";
+        iconPause.style.display = playing ? "block" : "none";
+      }
+
+      playPauseBtn.addEventListener("click", () => {
+        if (!currentAction) return;
+        isPlaying = !isPlaying;
+        currentAction.paused = !isPlaying;
+        setPlayingUI(isPlaying);
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 12: Scrubber (timeline seek)
+      //
+      // ANIMATION CONCEPT: seeking by writing action.time
+      // action.time is readable and writable. Setting it directly
+      // lets us jump to any point in the clip. We must call
+      // mixer.update(0) after changing time to force the mixer to
+      // re-evaluate all tracks and write updated bone transforms —
+      // otherwise the scene graph won't reflect the new pose until
+      // the next normal frame update.
+      // ─────────────────────────────────────────────────────────────
+      scrubber.addEventListener("mousedown", () => {
+        isScrubbing = true;
+      });
+      scrubber.addEventListener(
+        "touchstart",
+        () => {
+          isScrubbing = true;
+        },
+        { passive: true },
+      );
+
+      scrubber.addEventListener("input", () => {
+        if (!currentAction) return;
+        const t = (scrubber.value / 1000) * currentAction.getClip().duration;
+        currentAction.time = t;
+        mixer.update(0); // force pose evaluation at new time
+      });
+
+      document.addEventListener("mouseup", () => {
+        isScrubbing = false;
+      });
+      document.addEventListener("touchend", () => {
+        isScrubbing = false;
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 13: Speed control
+      // ─────────────────────────────────────────────────────────────
+      speedSlider.addEventListener("input", () => {
+        const s = speedSlider.value / 100;
+        speedLabel.textContent = s.toFixed(1) + "×";
+        if (currentAction) currentAction.timeScale = s;
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 14: Bone hierarchy tree (same as Demo 2)
+      // ─────────────────────────────────────────────────────────────
+      function buildBoneTree(boneList) {
+        if (boneList.length === 0) {
+          boneTreeEl.innerHTML =
+            '<span class="bone-placeholder">No bones found in this model.</span>';
+          boneCountEl.textContent = "0 bones";
+          return;
+        }
+        boneCountEl.textContent = `${boneList.length} bones`;
+
+        const boneSet = new Set(boneList);
+        function boneDepth(bone) {
+          let depth = 0,
+            cur = bone.parent;
+          while (cur && boneSet.has(cur)) {
+            depth++;
+            cur = cur.parent;
+          }
+          return depth;
+        }
+
+        const frag = document.createDocumentFragment();
+        boneList.forEach((bone, index) => {
+          const depth = boneDepth(bone);
+          const row = document.createElement("div");
+          row.className = "bone-item";
+          row.dataset.boneIndex = String(index);
+
+          const spacer = document.createElement("span");
+          spacer.className = "bone-indent";
+          spacer.style.width = depth * 12 + "px";
+
+          const icon = document.createElement("span");
+          icon.className = "bone-icon";
+          icon.textContent = depth === 0 ? "◆" : "·";
+
+          const name = document.createElement("span");
+          name.className = "bone-name-label";
+          name.textContent = bone.name || `bone_${index}`;
+          name.title = bone.name || `bone_${index}`;
+
+          row.appendChild(spacer);
+          row.appendChild(icon);
+          row.appendChild(name);
+          row.addEventListener("click", () => selectBone(bone, row));
+          frag.appendChild(row);
+        });
+
+        boneTreeEl.innerHTML = "";
+        boneTreeEl.appendChild(frag);
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 15: Bone selection (AxesHelper + pivot marker)
+      // ─────────────────────────────────────────────────────────────
+      function selectBone(bone, row) {
+        deselectBone();
+        selectedBone = bone;
+        row.classList.add("selected");
+
+        const axesSize = 0.18;
+        axesHelper = new THREE.AxesHelper(axesSize);
+        bone.add(axesHelper);
+
+        const markerGeo = new THREE.OctahedronGeometry(axesSize * 0.22, 0);
+        const markerMat = new THREE.MeshBasicMaterial({
+          color: 0xa78bfa,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.9,
+        });
+        pivotMarker = new THREE.Mesh(markerGeo, markerMat);
+        pivotMarker.renderOrder = 1;
+        bone.add(pivotMarker);
+      }
+
+      function deselectBone() {
+        if (axesHelper) {
+          if (axesHelper.parent) axesHelper.parent.remove(axesHelper);
+          axesHelper.dispose();
+          axesHelper = null;
+        }
+        if (pivotMarker) {
+          if (pivotMarker.parent) pivotMarker.parent.remove(pivotMarker);
+          pivotMarker.geometry.dispose();
+          pivotMarker.material.dispose();
+          pivotMarker = null;
+        }
+        boneTreeEl
+          .querySelectorAll(".bone-item.selected")
+          .forEach((el) => el.classList.remove("selected"));
+        selectedBone = null;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 16: Live transform display (now reads animated values)
+      // ─────────────────────────────────────────────────────────────
+      const _worldPos = new THREE.Vector3();
+      const _worldScale = new THREE.Vector3();
+
+      function updateTransformDisplay() {
+        if (!selectedBone) return;
+        selectedBone.getWorldPosition(_worldPos);
+        selectedBone.getWorldScale(_worldScale);
+
+        const rx = THREE.MathUtils.radToDeg(selectedBone.rotation.x).toFixed(2);
+        const ry = THREE.MathUtils.radToDeg(selectedBone.rotation.y).toFixed(2);
+        const rz = THREE.MathUtils.radToDeg(selectedBone.rotation.z).toFixed(2);
+
+        txDisplay.innerHTML = `
     <span class="bone-name-label" style="color:var(--accent2);font-size:11px;display:block;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-      ${selectedBone.name || 'unnamed bone'}
+      ${selectedBone.name || "unnamed bone"}
     </span>
     <span class="tx-section-label">World Position</span>
     <div class="tx-row"><span class="tx-label tx-axis-x">X</span><span class="tx-val">${_worldPos.x.toFixed(4)}</span></div>
@@ -1261,201 +1940,226 @@ function updateTransformDisplay() {
     <span class="tx-section-label">Euler Order</span>
     <div class="tx-row"><span class="tx-label" style="color:var(--muted);">order</span><span class="tx-val">${selectedBone.rotation.order}</span></div>
   `;
-}
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 17: Scrubber sync during playback
-// ─────────────────────────────────────────────────────────────
-function updateScrubber() {
-  if (!currentAction || isScrubbing) return;
-  const clip = currentAction.getClip();
-  if (clip.duration <= 0) return;
+      // ─────────────────────────────────────────────────────────────
+      // STEP 17: Scrubber sync during playback
+      // ─────────────────────────────────────────────────────────────
+      function updateScrubber() {
+        if (!currentAction || isScrubbing) return;
+        const clip = currentAction.getClip();
+        if (clip.duration <= 0) return;
 
-  const t = currentAction.time;
-  scrubber.value = Math.round((t / clip.duration) * 1000);
-  timeLabel.textContent = `${t.toFixed(2)} / ${clip.duration.toFixed(2)} s`;
-}
+        const t = currentAction.time;
+        scrubber.value = Math.round((t / clip.duration) * 1000);
+        timeLabel.textContent = `${t.toFixed(2)} / ${clip.duration.toFixed(2)} s`;
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 18: Viewport toggle controls
-// ─────────────────────────────────────────────────────────────
-document.getElementById('modelSelect').addEventListener('change', function () {
-  const key = this.value;
-  // 'drop' and the disabled separator are not loadable via the registry path.
-  if (!MODEL_REGISTRY[key] || key === 'drop') return;
-  loadModel(key);
-});
+      // ─────────────────────────────────────────────────────────────
+      // STEP 18: Viewport toggle controls
+      // ─────────────────────────────────────────────────────────────
+      document
+        .getElementById("modelSelect")
+        .addEventListener("change", function () {
+          const key = this.value;
+          // 'drop' and the disabled separator are not loadable via the registry path.
+          if (!MODEL_REGISTRY[key] || key === "drop") return;
+          loadModel(key);
+        });
 
-document.getElementById('skelBtn').addEventListener('click', function () {
-  skeletonVisible = !skeletonVisible;
-  if (skeletonHelper) skeletonHelper.visible = skeletonVisible;
-  this.textContent = skeletonVisible ? 'On' : 'Off';
-  this.classList.toggle('active', skeletonVisible);
-});
+      document.getElementById("skelBtn").addEventListener("click", function () {
+        skeletonVisible = !skeletonVisible;
+        if (skeletonHelper) skeletonHelper.visible = skeletonVisible;
+        this.textContent = skeletonVisible ? "On" : "Off";
+        this.classList.toggle("active", skeletonVisible);
+      });
 
-document.getElementById('wireBtn').addEventListener('click', function () {
-  wireframeOn = !wireframeOn;
-  applyWireframe(wireframeOn);
-  this.textContent = wireframeOn ? 'On' : 'Off';
-  this.classList.toggle('active', wireframeOn);
-});
+      document.getElementById("wireBtn").addEventListener("click", function () {
+        wireframeOn = !wireframeOn;
+        applyWireframe(wireframeOn);
+        this.textContent = wireframeOn ? "On" : "Off";
+        this.classList.toggle("active", wireframeOn);
+      });
 
-document.getElementById('gridBtn').addEventListener('click', function () {
-  gridOn = !gridOn;
-  grid.visible = gridOn;
-  this.textContent = gridOn ? 'On' : 'Off';
-  this.classList.toggle('active', gridOn);
-});
+      document.getElementById("gridBtn").addEventListener("click", function () {
+        gridOn = !gridOn;
+        grid.visible = gridOn;
+        this.textContent = gridOn ? "On" : "Off";
+        this.classList.toggle("active", gridOn);
+      });
 
-function applyWireframe(enabled) {
-  if (!characterRoot) return;
-  characterRoot.traverse((obj) => {
-    if (obj.isMesh && obj.material) {
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      mats.forEach((m) => { m.wireframe = enabled; });
-    }
-  });
-}
+      function applyWireframe(enabled) {
+        if (!characterRoot) return;
+        characterRoot.traverse((obj) => {
+          if (obj.isMesh && obj.material) {
+            const mats = Array.isArray(obj.material)
+              ? obj.material
+              : [obj.material];
+            mats.forEach((m) => {
+              m.wireframe = enabled;
+            });
+          }
+        });
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 19: Render loop
-//
-// KEY CHANGE from Demo 2:
-//   mixer.update(delta) — this is the single call that drives all
-//   animation. delta is seconds since last frame (from THREE.Clock).
-//   The mixer advances every active AnimationAction by delta *
-//   action.timeScale, evaluates the KeyframeTracks at the new time,
-//   and writes the interpolated values into the scene graph nodes.
-//   After this call, all bone Object3Ds reflect the new pose —
-//   the SkeletonHelper, bone selection marker, and transform panel
-//   all update automatically because they read from those same nodes.
-// ─────────────────────────────────────────────────────────────
-const clock = new THREE.Clock();
+      // ─────────────────────────────────────────────────────────────
+      // STEP 19: Render loop
+      //
+      // KEY CHANGE from Demo 2:
+      //   mixer.update(delta) — this is the single call that drives all
+      //   animation. delta is seconds since last frame (from THREE.Clock).
+      //   The mixer advances every active AnimationAction by delta *
+      //   action.timeScale, evaluates the KeyframeTracks at the new time,
+      //   and writes the interpolated values into the scene graph nodes.
+      //   After this call, all bone Object3Ds reflect the new pose —
+      //   the SkeletonHelper, bone selection marker, and transform panel
+      //   all update automatically because they read from those same nodes.
+      // ─────────────────────────────────────────────────────────────
+      const clock = new THREE.Clock();
 
-function animate() {
-  requestAnimationFrame(animate);
+      function animate() {
+        requestAnimationFrame(animate);
 
-  const delta = clock.getDelta();
+        const delta = clock.getDelta();
 
-  // ANIMATION CONCEPT: this single line is what makes things move.
-  if (mixer) mixer.update(delta);
+        // ANIMATION CONCEPT: this single line is what makes things move.
+        if (mixer) mixer.update(delta);
 
-  controls.update();
-  renderer.render(scene, camera);
+        controls.update();
+        renderer.render(scene, camera);
 
-  updateTransformDisplay();
-  updateScrubber();
-}
+        updateTransformDisplay();
+        updateScrubber();
+      }
 
-// ─────────────────────────────────────────────────────────────
-// STEP 20: File loading — error overlay fallback + always-on drop zone
-//
-// Two paths:
-// A) Error overlay drop zone — shown when fetch() fails (file://).
-//    Uses the currently selected model's config so scale is right.
-// B) Sidebar drop zone / picker — always available.
-//    Sets activeModelKey to 'drop' and auto-detects scale from the
-//    bounding box after load (works for any arbitrary GLB).
-// ─────────────────────────────────────────────────────────────
+      // ─────────────────────────────────────────────────────────────
+      // STEP 20: File loading — error overlay fallback + always-on drop zone
+      //
+      // Two paths:
+      // A) Error overlay drop zone — shown when fetch() fails (file://).
+      //    Uses the currently selected model's config so scale is right.
+      // B) Sidebar drop zone / picker — always available.
+      //    Sets activeModelKey to 'drop' and auto-detects scale from the
+      //    bounding box after load (works for any arbitrary GLB).
+      // ─────────────────────────────────────────────────────────────
 
-/** Load a GLB from a File object, using the given registry config. */
-function loadFromFile(file, config) {
-  if (!file) return;
-  if (!/\.(glb|gltf)$/i.test(file.name)) { alert('Please pick a .glb or .gltf file.'); return; }
+      /** Load a GLB from a File object, using the given registry config. */
+      function loadFromFile(file, config) {
+        if (!file) return;
+        if (!/\.(glb|gltf)$/i.test(file.name)) {
+          alert("Please pick a .glb or .gltf file.");
+          return;
+        }
 
-  errorEl.classList.remove('visible');
-  clearScene();
-  overlay.classList.remove('hidden');
-  progressEl.value = 0;
-  pctLabel.textContent = '0%';
-  loadingTitle.textContent = `Loading ${file.name}…`;
-  loadingSub.textContent   = 'Local file · no upload';
+        errorEl.classList.remove("visible");
+        clearScene();
+        overlay.classList.remove("hidden");
+        progressEl.value = 0;
+        pctLabel.textContent = "0%";
+        loadingTitle.textContent = `Loading ${file.name}…`;
+        loadingSub.textContent = "Local file · no upload";
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const loader = new GLTFLoader();
-    loader.load(
-      e.target.result,
-      (gltf) => onModelLoad(gltf, config),
-      (xhr)  => onProgress(xhr),
-      (err)  => onLoadError(err)
-    );
-  };
-  reader.readAsDataURL(file);
-}
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const loader = new GLTFLoader();
+          loader.load(
+            e.target.result,
+            (gltf) => onModelLoad(gltf, config),
+            (xhr) => onProgress(xhr),
+            (err) => onLoadError(err),
+          );
+        };
+        reader.readAsDataURL(file);
+      }
 
-// ── A: error overlay picker (CORS fallback) ──────────────────
-const picker   = document.getElementById('glbFilePicker');
-const dropZone = document.getElementById('dropZone');
+      // ── A: error overlay picker (CORS fallback) ──────────────────
+      const picker = document.getElementById("glbFilePicker");
+      const dropZone = document.getElementById("dropZone");
 
-dropZone.addEventListener('click', () => picker.click());
-picker.addEventListener('change', () => {
-  const config = MODEL_REGISTRY[activeModelKey] || MODEL_REGISTRY['drop'];
-  loadFromFile(picker.files[0], config);
-});
-dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('dragover');
-  const config = MODEL_REGISTRY[activeModelKey] || MODEL_REGISTRY['drop'];
-  loadFromFile(e.dataTransfer.files[0], config);
-});
+      dropZone.addEventListener("click", () => picker.click());
+      picker.addEventListener("change", () => {
+        const config = MODEL_REGISTRY[activeModelKey] || MODEL_REGISTRY["drop"];
+        loadFromFile(picker.files[0], config);
+      });
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+      dropZone.addEventListener("dragleave", () =>
+        dropZone.classList.remove("dragover"),
+      );
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        const config = MODEL_REGISTRY[activeModelKey] || MODEL_REGISTRY["drop"];
+        loadFromFile(e.dataTransfer.files[0], config);
+      });
 
-// ── B: always-on sidebar drop zone ───────────────────────────
-const anyPicker   = document.getElementById('glbAnyPicker');
-const dropAnyZone = document.getElementById('dropAny');
+      // ── B: always-on sidebar drop zone ───────────────────────────
+      const anyPicker = document.getElementById("glbAnyPicker");
+      const dropAnyZone = document.getElementById("dropAny");
 
-function loadAnyGlb(file) {
-  if (!file) return;
-  // Build a dynamic config: no clip remaps, no extras, auto-scale.
-  const config = {
-    path:      '',   // unused for file-based loads
-    label:     file.name,
-    scale:     1.0,  // fitCameraToModel will reframe regardless
-    clipNames: {},
-    extraClips: [],
-    autoScale: true, // hint to fitCameraToModel to normalise
-  };
-  activeModelKey = 'drop';
-  // Update the model selector to show "custom" feedback.
-  const sel = document.getElementById('modelSelect');
-  // Add or reuse a "custom" option.
-  let customOpt = sel.querySelector('option[value="drop"]');
-  if (!customOpt) {
-    customOpt = document.createElement('option');
-    customOpt.value = 'drop';
-    sel.appendChild(customOpt);
-  }
-  customOpt.textContent = `↳ ${file.name}`;
-  sel.value = 'drop';
+      function loadAnyGlb(file) {
+        if (!file) return;
+        // Build a dynamic config: no clip remaps, no extras, auto-scale.
+        const config = {
+          path: "", // unused for file-based loads
+          label: file.name,
+          scale: 1.0, // fitCameraToModel will reframe regardless
+          clipNames: {},
+          extraClips: [],
+          autoScale: true, // hint to fitCameraToModel to normalise
+        };
+        activeModelKey = "drop";
+        // Update the model selector to show "custom" feedback.
+        const sel = document.getElementById("modelSelect");
+        // Add or reuse a "custom" option.
+        let customOpt = sel.querySelector('option[value="drop"]');
+        if (!customOpt) {
+          customOpt = document.createElement("option");
+          customOpt.value = "drop";
+          sel.appendChild(customOpt);
+        }
+        customOpt.textContent = `↳ ${file.name}`;
+        sel.value = "drop";
 
-  loadFromFile(file, config);
-}
+        loadFromFile(file, config);
+      }
 
-dropAnyZone.addEventListener('click', () => anyPicker.click());
-anyPicker.addEventListener('change', () => loadAnyGlb(anyPicker.files[0]));
-dropAnyZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropAnyZone.style.borderColor = 'var(--green)'; dropAnyZone.style.background = 'rgba(52,211,153,0.1)'; });
-dropAnyZone.addEventListener('dragleave', ()  => { dropAnyZone.style.borderColor = ''; dropAnyZone.style.background = ''; });
-dropAnyZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropAnyZone.style.borderColor = '';
-  dropAnyZone.style.background  = '';
-  loadAnyGlb(e.dataTransfer.files[0]);
-});
+      dropAnyZone.addEventListener("click", () => anyPicker.click());
+      anyPicker.addEventListener("change", () =>
+        loadAnyGlb(anyPicker.files[0]),
+      );
+      dropAnyZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropAnyZone.style.borderColor = "var(--green)";
+        dropAnyZone.style.background = "rgba(52,211,153,0.1)";
+      });
+      dropAnyZone.addEventListener("dragleave", () => {
+        dropAnyZone.style.borderColor = "";
+        dropAnyZone.style.background = "";
+      });
+      dropAnyZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropAnyZone.style.borderColor = "";
+        dropAnyZone.style.background = "";
+        loadAnyGlb(e.dataTransfer.files[0]);
+      });
 
-// Canvas drop — loads as arbitrary GLB.
-canvasWrap.addEventListener('dragover', (e) => e.preventDefault());
-canvasWrap.addEventListener('drop', (e) => { e.preventDefault(); loadAnyGlb(e.dataTransfer.files[0]); });
+      // Canvas drop — loads as arbitrary GLB.
+      canvasWrap.addEventListener("dragover", (e) => e.preventDefault());
+      canvasWrap.addEventListener("drop", (e) => {
+        e.preventDefault();
+        loadAnyGlb(e.dataTransfer.files[0]);
+      });
 
-// ─────────────────────────────────────────────────────────────
-// STEP 21: Startup
-// ─────────────────────────────────────────────────────────────
-window.addEventListener('resize', setRendererSize);
-setRendererSize();
-animate();
-loadModel('fox');
-
-</script>
-</body>
+      // ─────────────────────────────────────────────────────────────
+      // STEP 21: Startup
+      // ─────────────────────────────────────────────────────────────
+      window.addEventListener("resize", setRendererSize);
+      setRendererSize();
+      animate();
+      loadModel("fox");
+    </script>
+  </body>
 </html>
