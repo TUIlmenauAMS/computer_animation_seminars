@@ -1726,15 +1726,24 @@
           }
         });
 
-        // Add the character to the scene first.
         scene.add(characterRoot);
+        characterRoot.updateMatrixWorld(true);
 
-        // ── Build the skeleton overlay ────────────────────────────────
-        // THREE.SkeletonHelper is added as a child of characterRoot so it
-        // inherits the model's scale automatically. This is the same pattern
-        // used in Demo 2 (04_ca_skeleton.html) and is the correct approach
-        // for scaled models like Fox (scale 0.01): bones live in the scaled
-        // hierarchy, so the helper must live there too.
+        // ── Diagnostic: log the full node tree ───────────────────────
+        console.log("── Node tree ─────────────────────────────────────");
+        characterRoot.traverse((o) => {
+          const p = o.position;
+          const s = o.scale;
+          console.log(
+            `${"  ".repeat(o._depth || 0)}[${o.type}] "${o.name}" ` +
+            `pos(${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}) ` +
+            `scale(${s.x.toFixed(3)},${s.y.toFixed(3)},${s.z.toFixed(3)})` +
+            (o.isBone ? " BONE" : "") +
+            (o.isSkinnedMesh ? " SKINNEDMESH" : "")
+          );
+        });
+        console.log("─────────────────────────────────────────────────");
+
         skeletonHelper = new THREE.SkeletonHelper(characterRoot);
         skeletonHelper.visible = skeletonVisible;
         scene.add(skeletonHelper);
