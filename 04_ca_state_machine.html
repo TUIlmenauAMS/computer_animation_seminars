@@ -1729,7 +1729,12 @@
         scene.add(characterRoot);
         characterRoot.updateMatrixWorld(true);
 
-        // ── Diagnostic: log the full node tree ───────────────────────
+        // ── THREE.JS CONCEPT: inspecting the glTF scene graph ───────────
+        //   A glTF file is a hierarchy of nodes. GLTFLoader maps that hierarchy
+        //   to a tree of Object3D instances rooted at gltf.scene. Logging the
+        //   tree here lets you see exactly which nodes carry the geometry
+        //   (SkinnedMesh), which are bones, and how scale is distributed across
+        //   the hierarchy — essential when debugging skinning or animation issues.
         console.log("── Node tree ─────────────────────────────────────");
         characterRoot.traverse((o) => {
           const p = o.position;
@@ -1744,61 +1749,57 @@
         });
         console.log("─────────────────────────────────────────────────");
 
-        // THREE.SkeletonHelper must be passed a root whose matrixWorld matches
-        // the coordinate space the bones live in. Passing characterRoot (the
-        // gltf.scene Group) works mathematically, but breaks for the Fox GLB
-        // because the Fox has two sibling scene roots: the mesh node and the
-        // skeleton root node. Their world positions can differ from what
-        // SkeletonHelper expects when it inverts characterRoot.matrixWorld.
+        // ── THREE.JS CONCEPT: SkeletonHelper and coordinate spaces ──────
         //
-        // The robust fix: find the first SkinnedMesh and pass it directly.
-        // SkeletonHelper's getBoneList() traverses the object's children for
-        // bones, but since we're passing the SkinnedMesh, it finds 0 bones
-        // that way — HOWEVER, Three.js r152+ also checks isSkinnedMesh and
-        // uses skinnedMesh.skeleton.bones directly. For older Three.js, we
-        // instead find the root bone (skeleton root joint) and pass that, since
-        // the skeleton root's matrixWorld is the natural reference frame for
-        // all descendant bones (they are all children of it).
+        // THREE.SkeletonHelper draws a line segment between every bone and
+        // its parent, giving a visual representation of the skeleton hierarchy
+        // at runtime. Understanding how it computes those positions requires
+        // understanding Three.js coordinate spaces.
         //
-        // Strategy: find the first SkinnedMesh, get its skeleton's root bone
-        // (the bone with no bone parent), and pass that as the helper root.
-        let skinnedMesh = null;
-        characterRoot.traverse((child) => {
-          if (child.isSkinnedMesh && !skinnedMesh) skinnedMesh = child;
-        });
-
-        // Find the root bone: the bone in the skeleton whose parent is not a bone.
-        let rootBone = null;
-        if (skinnedMesh) {
-          for (const bone of skinnedMesh.skeleton.bones) {
-            if (!bone.parent || !bone.parent.isBone) {
-              rootBone = bone;
-              break;
-            }
-          }
-        }
-
-        // THREE.SkeletonHelper explanation:
+        // Every Object3D in Three.js has two matrices:
+        //   matrix        — local transform relative to the parent
+        //   matrixWorld   — accumulated transform from the scene root to this
+        //                   object; what the GPU actually uses when rendering
         //
-        // The standard SkeletonHelper sets this.matrix = root.matrixWorld (live
-        // reference) and stores geometry in root-local space. With this scene's
-        // update loop, characterRoot.matrixWorld ends up applied twice to the
-        // helper (once via the live matrix, once via the scene graph walk), so
-        // the helper renders in the wrong place.
+        // For a Bone, bone.matrixWorld gives the bone's position and orientation
+        // in world space — which is exactly what we want for drawing the skeleton.
         //
-        // Fix used here: override updateMatrixWorld() to write bone world positions
-        // directly into the geometry (skipping the root.matrixWorld⁻¹ multiply),
-        // and keep this.matrixWorld as identity so no extra transform is applied.
-        // bone.matrixWorld already includes characterRoot's scale (0.01 for Fox),
-        // so the skeleton renders at the correct size and position for all models.
+        // The standard SkeletonHelper stores geometry vertices in root-local space
+        // (root.matrixWorld⁻¹ × bone.matrixWorld) and relies on the scene graph
+        // to re-apply root.matrixWorld at render time, recovering bone.matrixWorld.
+        // That round-trip works cleanly when the helper is a direct child of the
+        // scene, but it depends on matrixAutoUpdate being false and the live
+        // matrix reference staying intact — assumptions that can break depending
+        // on how the scene graph is updated.
+        //
+        // The approach used here is simpler and more explicit: override
+        // updateMatrixWorld() to write each bone's true world-space position
+        // directly into the geometry buffer every frame, using getWorldPosition().
+        // The helper's own matrixWorld is kept as the identity matrix so the GPU
+        // applies no further transform to those positions — what is written to
+        // the buffer is exactly what is drawn on screen.
+        //
+        // This approach works correctly regardless of the model's scale. The Fox
+        // GLB uses a scale of 0.01 (its rig was authored in centimetres), applied
+        // to characterRoot. That scale is already accumulated into every bone's
+        // matrixWorld, so getWorldPosition() returns metre-scale positions without
+        // any manual scale conversion.
         skeletonHelper = new THREE.SkeletonHelper(characterRoot);
-        skeletonHelper.matrix = new THREE.Matrix4();    // identity — no extra transform
-        skeletonHelper.matrixWorld = new THREE.Matrix4(); // identity
+        skeletonHelper.matrix = new THREE.Matrix4();      // identity — helper has no transform of its own
+        skeletonHelper.matrixWorld = new THREE.Matrix4(); // identity — positions written to geometry are already in world space
 
-        // Override updateMatrixWorld to write true world-space positions directly.
-        // The base class writes root-local positions; with identity matrixWorld that
-        // undoes the root transform and the Fox skeleton renders at 100× scale.
-        // Here we write bone.matrixWorld positions directly — scale already included.
+        // THREE.JS CONCEPT: overriding updateMatrixWorld()
+        //   Three.js calls updateMatrixWorld() on every object in the scene graph
+        //   each frame, before rendering. The default implementation recomputes
+        //   this.matrixWorld from the parent chain and then calls the same method
+        //   on all children. By overriding it here we intercept that per-frame
+        //   update and use it to refresh the skeleton geometry instead.
+        //
+        //   The geometry holds one line segment per bone-parent pair, stored as
+        //   two consecutive vertices: the parent bone's position followed by the
+        //   child bone's position. geometry.drawRange.count tells the renderer
+        //   how many vertices to draw, which lets us skip bones with no parent
+        //   (the root bone) without leaving stale data in the buffer.
         skeletonHelper.updateMatrixWorld = function (force) {
           const bones = this.bones;
           const geometry = this.geometry;
@@ -1808,7 +1809,6 @@
           for (let i = 0; i < bones.length; i++) {
             const bone = bones[i];
             if (bone.parent && bone.parent.isBone) {
-              // Line from parent bone to this bone.
               bone.parent.getWorldPosition(_bonePos);
               position.setXYZ(j, _bonePos.x, _bonePos.y, _bonePos.z);
               j++;
@@ -1819,7 +1819,6 @@
           }
           geometry.drawRange.count = j;
           position.needsUpdate = true;
-          // matrixWorld stays identity — no THREE.Object3D.updateMatrixWorld call needed.
         };
 
         skeletonHelper.visible = skeletonVisible;
@@ -1831,7 +1830,12 @@
         // ── Create the AnimationMixer ────────────────────────────
         mixer = new THREE.AnimationMixer(characterRoot);
 
-        // Expose to DevTools so students can inspect at runtime.
+        // THREE.JS CONCEPT: runtime inspection via the browser console
+        //   Assigning mixer and gltf to the window object makes them available
+        //   as global variables in the browser's DevTools console. You can type
+        //   `mixer` or `gltf` directly in the console to inspect their state,
+        //   list all animation clips, read action weights, or call mixer.update()
+        //   manually. This is a standard debugging technique for Three.js scenes.
         window.mixer = mixer;
         window.gltf = gltf;
 
