@@ -1884,29 +1884,34 @@ class CurveEditorWidget(QWidget):
         return False
 
     def _is_near_selected_dot(self, screen_pos) -> bool:
-        """Return True if screen_pos is within 20 px of the selected dot."""
+        """Return True if screen_pos is within 20 px of the selected dot.
+
+        PyQtGraph coordinate chain:
+          data coords  →  ViewBox.mapViewToScene()  →  scene coords
+          scene coords →  PlotWidget.mapFromScene() →  widget (viewport) coords
+
+        self._plot is a PlotWidget (a QGraphicsView subclass), so it *does*
+        have mapFromScene().  The viewport() child is a plain QWidget and does
+        NOT have that method — that was the original bug.
+        """
         if self._values is None or self._times is None:
             return False
         if self._sel_key >= len(self._times):
             return False
         if self._sel_comp >= self._values.shape[1]:
             return False
-        # Map the dot's data coordinates to view coordinates
-        vb   = self._plot.getPlotItem().getViewBox()
-        pt   = vb.mapFromItemToView(vb, pg.Point(
-            float(self._times[self._sel_key]),
-            float(self._values[self._sel_key, self._sel_comp])
-        ))
-        # mapFromItemToView gives scene coords; map to widget coords
+
+        # 1. Data → scene coords via the ViewBox
+        vb       = self._plot.getPlotItem().getViewBox()
         scene_pt = vb.mapViewToScene(pg.Point(
             float(self._times[self._sel_key]),
             float(self._values[self._sel_key, self._sel_comp])
         ))
-        widget_pt = self._plot.viewport().mapFromScene(
-            scene_pt.toPoint() if hasattr(scene_pt, 'toPoint') else
-            __import__('PySide6.QtCore', fromlist=['QPoint']).QPoint(
-                int(scene_pt.x()), int(scene_pt.y()))
-        )
+
+        # 2. Scene → widget coords via the PlotWidget (QGraphicsView)
+        from PySide6.QtCore import QPointF
+        widget_pt = self._plot.mapFromScene(QPointF(scene_pt.x(), scene_pt.y()))
+
         dx = screen_pos.x() - widget_pt.x()
         dy = screen_pos.y() - widget_pt.y()
         return math.hypot(dx, dy) < 20.0
@@ -2474,6 +2479,8 @@ class GltfCurveEditor(QMainWindow):
         # Curve editor below the viewport
         self._curve_editor = CurveEditorWidget()
         self._curve_editor.set_modified_callback(self._on_keyframe_modified)
+        # Wire live callback so the 3-D viewport updates while dragging a dot
+        self._curve_editor.set_live_callback(self._on_keyframe_live)
         center_layout.addWidget(self._curve_editor, stretch=3)
 
         h_split.addWidget(center_widget)
@@ -2486,6 +2493,9 @@ class GltfCurveEditor(QMainWindow):
         right_scroll.setStyleSheet(f"border: none; background: {PALETTE['bg']};")
 
         self._inspector = KeyframeInspectorWidget()
+        # Wire inspector so table edits propagate to the curve editor and viewport
+        self._inspector.set_modified_callback(self._on_keyframe_modified)
+        self._inspector.set_live_callback(self._on_keyframe_live)
         right_scroll.setWidget(self._inspector)
         h_split.addWidget(right_scroll)
 
@@ -2742,6 +2752,8 @@ class GltfCurveEditor(QMainWindow):
         times, values = read_channel_data(self._gltf, anim_index, channel_index)
         if values.ndim == 1:
             values = values[:, np.newaxis]
+        # Tell the inspector which channel it owns (needed for its callbacks)
+        self._inspector.set_channel_indices(anim_index, channel_index)
         self._inspector.load_channel(times, values, target_path)
 
         duration = float(times[-1]) if len(times) > 0 else 0.0
@@ -2757,8 +2769,25 @@ class GltfCurveEditor(QMainWindow):
         )
 
     # -------------------------------------------------------------------------
-    # Keyframe modification callback
+    # Keyframe modification callbacks
     # -------------------------------------------------------------------------
+
+    def _on_keyframe_live(self, anim_index: int, channel_index: int,
+                          new_values: np.ndarray) -> None:
+        """Called on every mouse-move during a drag so the viewport updates live.
+
+        We write the values straight into the glTF blob so the viewport's
+        set_playback_time() re-samples the animation with the new data.
+        We do NOT mark the file dirty or refresh the inspector table here —
+        that only happens on the final commit (_on_keyframe_modified).
+        """
+        if self._gltf is None:
+            return
+        write_channel_values(self._gltf, anim_index, channel_index, new_values)
+        # Refresh the curve editor's scatter/line without touching the table
+        self._curve_editor.refresh_values()
+        # Redraw the 3-D viewport at the current playback time
+        self._viewport.set_playback_time(self._playback_time)
 
     def _on_keyframe_modified(self, anim_index: int, channel_index: int,
                                new_values: np.ndarray) -> None:
@@ -2767,8 +2796,15 @@ class GltfCurveEditor(QMainWindow):
         write_channel_values(self._gltf, anim_index, channel_index, new_values)
         self._dirty = True
         times, values = read_channel_data(self._gltf, anim_index, channel_index)
+        if values.ndim == 1:
+            values = values[:, np.newaxis]
         channel = self._gltf.animations[anim_index].channels[channel_index]
+        # Refresh inspector table from the committed values
         self._inspector.load_channel(times, values, channel.target.path)
+        # Refresh curve editor lines/dots in case the commit came from the table
+        self._curve_editor.refresh_values()
+        # Redraw viewport at current time
+        self._viewport.set_playback_time(self._playback_time)
         self._status.showMessage(
             "✎  Keyframe modified — unsaved changes  ·  Ctrl+S to export the modified .glb"
         )
