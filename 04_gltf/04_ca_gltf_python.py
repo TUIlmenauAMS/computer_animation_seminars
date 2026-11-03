@@ -724,33 +724,44 @@ in vec2 vTexCoord;
 
 uniform vec3  uLightPos;
 uniform vec3  uLightColor;
-uniform vec4  uBaseColor;      // glTF pbrMetallicRoughness.baseColorFactor
+uniform vec4  uBaseColor;      // glTF pbrMetallicRoughness.baseColorFactor (linear)
 uniform float uAmbient;
 uniform bool  uHasTexture;
-uniform sampler2D uAlbedo;
+uniform sampler2D uAlbedo;     // bound as GL_SRGB8_ALPHA8 — GPU linearises automatically
 
 out vec4 FragColor;
 
 void main() {
-    // Sample albedo — either from texture or the material base colour
+    // ── Albedo ────────────────────────────────────────────────────────────────
+    // uBaseColor is already linear (glTF spec §3.9.3).
+    // The texture sampler is sRGB-encoded; because we uploaded it as
+    // GL_SRGB8_ALPHA8 the hardware linearises it on read — no manual pow(2.2).
     vec4 albedo = uBaseColor;
     if (uHasTexture) {
-        albedo *= texture(uAlbedo, vTexCoord);
+        albedo *= texture(uAlbedo, vTexCoord);   // already linear after sRGB decode
     }
 
-    // Phong shading
+    // ── Blinn-Phong lighting (all in linear space) ────────────────────────────
     vec3 norm     = normalize(vNormal);
     vec3 lightDir = normalize(uLightPos - vFragPos);
-    float diff    = max(dot(norm, lightDir), 0.0);
+    float NdotL   = max(dot(norm, lightDir), 0.0);
 
-    // Specular (Blinn-Phong)
+    // View direction: vFragPos is in world space and camera is at the view origin
+    // after the view transform, so we approximate view dir from the fragment pos.
     vec3 viewDir  = normalize(-vFragPos);
     vec3 halfDir  = normalize(lightDir + viewDir);
-    float spec    = pow(max(dot(norm, halfDir), 0.0), 32.0) * 0.3;
+    float NdotH   = max(dot(norm, halfDir), 0.0);
+    // Specular: attenuated so it doesn't blow out coloured surfaces
+    float spec    = pow(NdotH, 32.0) * 0.25;
 
-    vec3 diffuse  = diff * uLightColor;
-    vec3 ambient  = uAmbient * uLightColor;
-    vec3 result   = (ambient + diffuse) * albedo.rgb + spec * uLightColor;
+    vec3 ambient  = uAmbient * albedo.rgb;
+    vec3 diffuse  = NdotL   * albedo.rgb * uLightColor;
+    vec3 specular = spec     * uLightColor;          // white highlight on top
+
+    vec3 result   = ambient + diffuse + specular;
+
+    // ── Approximate gamma encode for display (no sRGB framebuffer guaranteed) ─
+    result        = pow(clamp(result, 0.0, 1.0), vec3(1.0 / 2.2));
     FragColor     = vec4(result, albedo.a);
 }
 """
@@ -1074,7 +1085,8 @@ class ModelViewportWidget(QOpenGLWidget):
         self._mesh_count = len(indices)
 
         # ── Material: base colour + optional texture ──────────────────────────
-        self._base_color = np.array([0.8, 0.8, 0.8, 1.0], dtype=np.float32)
+        # glTF default baseColorFactor is [1, 1, 1, 1] (white, fully opaque).
+        self._base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self._has_tex    = False
         mat_idx = prim.material
         if mat_idx is not None and gltf.materials and mat_idx < len(gltf.materials):
@@ -1082,12 +1094,17 @@ class ModelViewportWidget(QOpenGLWidget):
             pbr = getattr(mat, "pbrMetallicRoughness", None)
             if pbr is not None:
                 bcf = getattr(pbr, "baseColorFactor", None)
-                if bcf is not None:
-                    self._base_color = np.array(bcf, dtype=np.float32)
+                if bcf is not None and len(bcf) >= 3:
+                    # glTF spec: baseColorFactor is in linear space
+                    self._base_color = np.array(
+                        [bcf[0], bcf[1], bcf[2], bcf[3] if len(bcf) > 3 else 1.0],
+                        dtype=np.float32
+                    )
                 tex_info = getattr(pbr, "baseColorTexture", None)
                 if tex_info is not None:
-                    tex_src_idx = tex_info.index
-                    self._upload_texture(gltf, tex_src_idx)
+                    tex_src_idx = getattr(tex_info, "index", None)
+                    if tex_src_idx is not None:
+                        self._upload_texture(gltf, tex_src_idx)
 
         # ── Camera / bbox auto-fit ────────────────────────────────────────────
         mn, mx = positions.min(axis=0), positions.max(axis=0)
@@ -1146,39 +1163,71 @@ class ModelViewportWidget(QOpenGLWidget):
                 break
 
     def _upload_texture(self, gltf: "GLTF2", tex_index: int) -> None:
-        """Decode and upload the glTF texture at tex_index to self._tex_id."""
-        import io
+        """Decode and upload the glTF texture at tex_index to self._tex_id.
+
+        Handles three image storage cases:
+          1. bufferView  — image bytes embedded in the GLB binary chunk (most common)
+          2. data: URI   — base-64 encoded image in the JSON (some exporters)
+          3. external URI — file on disk relative to the .glb (skipped for .glb)
+
+        Uses GL_SRGB8_ALPHA8 as the internal format so OpenGL linearises the
+        sRGB texture samples before Phong lighting — without this, albedo colours
+        look too dark and desaturated because the shader multiplies already-gamma-
+        encoded values in linear space.
+        """
+        import io, base64
         try:
             from PIL import Image as PILImage
         except ImportError:
-            # Pillow not available — skip texture, use base colour only
+            print("[Viewport] Pillow not installed — textures disabled. "
+                  "Run: pip install pillow")
             return
         try:
+            if not gltf.textures or tex_index >= len(gltf.textures):
+                return
             tex   = gltf.textures[tex_index]
             img_i = tex.source
             if img_i is None:
                 return
+            if not gltf.images or img_i >= len(gltf.images):
+                return
             img_def = gltf.images[img_i]
 
-            # Images may be embedded in the binary blob or referenced by URI
-            if img_def.bufferView is not None:
-                bv    = gltf.bufferViews[img_def.bufferView]
-                blob  = gltf.binary_blob()
-                start = bv.byteOffset or 0
-                data  = blob[start: start + bv.byteLength]
-                pil   = PILImage.open(io.BytesIO(data)).convert("RGBA")
-            elif img_def.uri and not img_def.uri.startswith("data:"):
-                # External file — resolve relative to the glb (best-effort)
-                return
-            else:
-                return  # data: URI — skip for now
+            raw_bytes: bytes | None = None
 
+            # Case 1: image bytes live in the GLB binary chunk
+            if img_def.bufferView is not None:
+                bv        = gltf.bufferViews[img_def.bufferView]
+                blob      = gltf.binary_blob()
+                start     = bv.byteOffset or 0
+                raw_bytes = bytes(blob[start: start + bv.byteLength])
+
+            # Case 2: data: URI  (e.g. "data:image/png;base64,iVBOR…")
+            elif img_def.uri and img_def.uri.startswith("data:"):
+                header, b64 = img_def.uri.split(",", 1)
+                raw_bytes   = base64.b64decode(b64)
+
+            # Case 3: external file reference — not useful inside a .glb
+            else:
+                print(f"[Viewport] External image URI '{img_def.uri}' "
+                      "— skipped (only embedded textures supported).")
+                return
+
+            if raw_bytes is None:
+                return
+
+            pil      = PILImage.open(io.BytesIO(raw_bytes)).convert("RGBA")
             img_data = np.array(pil, dtype=np.uint8)
             h, w     = img_data.shape[:2]
 
             GL.glBindTexture(GL.GL_TEXTURE_2D, self._tex_id)
-            GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, w, h, 0,
-                            GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
+            # GL_SRGB8_ALPHA8: GPU linearises sRGB→linear before texturing,
+            # matching glTF's requirement that baseColorTexture is sRGB-encoded.
+            GL.glTexImage2D(GL.GL_TEXTURE_2D, 0,
+                            GL.GL_SRGB8_ALPHA8,        # internal (linearise)
+                            w, h, 0,
+                            GL.GL_RGBA,                # source format
+                            GL.GL_UNSIGNED_BYTE, img_data)
             GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
                                GL.GL_LINEAR_MIPMAP_LINEAR)
@@ -1190,6 +1239,7 @@ class ModelViewportWidget(QOpenGLWidget):
                                GL.GL_REPEAT)
             GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
             self._has_tex = True
+            print(f"[Viewport] Texture {tex_index} uploaded ({w}×{h} px, sRGB)")
         except Exception:
             traceback.print_exc()
 
@@ -1224,12 +1274,16 @@ class ModelViewportWidget(QOpenGLWidget):
             [0.5, 0.8, 0.6], dtype=np.float32)
         GL.glUniform3f(_u("uLightPos"),   *light)
         GL.glUniform3f(_u("uLightColor"), 1.0, 1.0, 1.0)
-        GL.glUniform1f(_u("uAmbient"),    0.30)
+        # Ambient: 0.15 preserves colour saturation — 0.30 washed everything out
+        GL.glUniform1f(_u("uAmbient"),    0.15)
 
-        # Material: pass the glTF base colour factor (read from the material)
+        # Material: pass the glTF base colour factor (linear, as per glTF spec)
         bc = self._base_color
-        GL.glUniform4f(_u("uBaseColor"), float(bc[0]), float(bc[1]),
-                       float(bc[2]), float(bc[3]))
+        r  = float(bc[0]) if len(bc) > 0 else 0.8
+        g  = float(bc[1]) if len(bc) > 1 else 0.8
+        b  = float(bc[2]) if len(bc) > 2 else 0.8
+        a  = float(bc[3]) if len(bc) > 3 else 1.0
+        GL.glUniform4f(_u("uBaseColor"), r, g, b, a)
 
         # Albedo texture (slot 0)
         if self._has_tex:
@@ -1886,13 +1940,13 @@ class CurveEditorWidget(QWidget):
     def _is_near_selected_dot(self, screen_pos) -> bool:
         """Return True if screen_pos is within 20 px of the selected dot.
 
-        PyQtGraph coordinate chain:
+        Coordinate chain:
           data coords  →  ViewBox.mapViewToScene()  →  scene coords
-          scene coords →  PlotWidget.mapFromScene() →  widget (viewport) coords
+          scene coords →  PlotWidget.mapFromScene() →  viewport pixel coords
 
-        self._plot is a PlotWidget (a QGraphicsView subclass), so it *does*
-        have mapFromScene().  The viewport() child is a plain QWidget and does
-        NOT have that method — that was the original bug.
+        self._plot is a PlotWidget (a QGraphicsView subclass), so it has
+        mapFromScene(). The .viewport() child is a plain QWidget and does NOT
+        have that method — that was the original crash.
         """
         if self._values is None or self._times is None:
             return False
@@ -1901,15 +1955,13 @@ class CurveEditorWidget(QWidget):
         if self._sel_comp >= self._values.shape[1]:
             return False
 
-        # 1. Data → scene coords via the ViewBox
+        from PySide6.QtCore import QPointF
         vb       = self._plot.getPlotItem().getViewBox()
         scene_pt = vb.mapViewToScene(pg.Point(
             float(self._times[self._sel_key]),
             float(self._values[self._sel_key, self._sel_comp])
         ))
-
-        # 2. Scene → widget coords via the PlotWidget (QGraphicsView)
-        from PySide6.QtCore import QPointF
+        # mapFromScene lives on the QGraphicsView (PlotWidget), not on viewport()
         widget_pt = self._plot.mapFromScene(QPointF(scene_pt.x(), scene_pt.y()))
 
         dx = screen_pos.x() - widget_pt.x()
@@ -2479,7 +2531,6 @@ class GltfCurveEditor(QMainWindow):
         # Curve editor below the viewport
         self._curve_editor = CurveEditorWidget()
         self._curve_editor.set_modified_callback(self._on_keyframe_modified)
-        # Wire live callback so the 3-D viewport updates while dragging a dot
         self._curve_editor.set_live_callback(self._on_keyframe_live)
         center_layout.addWidget(self._curve_editor, stretch=3)
 
@@ -2493,7 +2544,6 @@ class GltfCurveEditor(QMainWindow):
         right_scroll.setStyleSheet(f"border: none; background: {PALETTE['bg']};")
 
         self._inspector = KeyframeInspectorWidget()
-        # Wire inspector so table edits propagate to the curve editor and viewport
         self._inspector.set_modified_callback(self._on_keyframe_modified)
         self._inspector.set_live_callback(self._on_keyframe_live)
         right_scroll.setWidget(self._inspector)
@@ -2752,7 +2802,6 @@ class GltfCurveEditor(QMainWindow):
         times, values = read_channel_data(self._gltf, anim_index, channel_index)
         if values.ndim == 1:
             values = values[:, np.newaxis]
-        # Tell the inspector which channel it owns (needed for its callbacks)
         self._inspector.set_channel_indices(anim_index, channel_index)
         self._inspector.load_channel(times, values, target_path)
 
@@ -2774,19 +2823,16 @@ class GltfCurveEditor(QMainWindow):
 
     def _on_keyframe_live(self, anim_index: int, channel_index: int,
                           new_values: np.ndarray) -> None:
-        """Called on every mouse-move during a drag so the viewport updates live.
+        """Called on every mouse-move during a curve-editor drag or a table cell edit.
 
-        We write the values straight into the glTF blob so the viewport's
-        set_playback_time() re-samples the animation with the new data.
-        We do NOT mark the file dirty or refresh the inspector table here —
-        that only happens on the final commit (_on_keyframe_modified).
+        Writes the new values straight into the glTF blob so the viewport's
+        set_playback_time() re-samples the animation with the updated data.
+        Does NOT mark the file dirty — that only happens on final commit.
         """
         if self._gltf is None:
             return
         write_channel_values(self._gltf, anim_index, channel_index, new_values)
-        # Refresh the curve editor's scatter/line without touching the table
         self._curve_editor.refresh_values()
-        # Redraw the 3-D viewport at the current playback time
         self._viewport.set_playback_time(self._playback_time)
 
     def _on_keyframe_modified(self, anim_index: int, channel_index: int,
@@ -2799,11 +2845,9 @@ class GltfCurveEditor(QMainWindow):
         if values.ndim == 1:
             values = values[:, np.newaxis]
         channel = self._gltf.animations[anim_index].channels[channel_index]
-        # Refresh inspector table from the committed values
+        self._inspector.set_channel_indices(anim_index, channel_index)
         self._inspector.load_channel(times, values, channel.target.path)
-        # Refresh curve editor lines/dots in case the commit came from the table
         self._curve_editor.refresh_values()
-        # Redraw viewport at current time
         self._viewport.set_playback_time(self._playback_time)
         self._status.showMessage(
             "✎  Keyframe modified — unsaved changes  ·  Ctrl+S to export the modified .glb"
