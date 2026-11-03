@@ -90,7 +90,7 @@ from PySide6.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
-    QWidget
+    QWidget,
 )
 from OpenGL import GL
 
@@ -1126,8 +1126,21 @@ class ModelViewportWidget(QOpenGLWidget):
         self._line_prog.release()
 
     def _draw_empty_hint(self) -> None:
-        """When no model is loaded, the viewport just stays dark (hint in status bar)."""
-        pass
+        """Draw a centred hint when no model is loaded yet."""
+        from PySide6.QtGui import QPainter, QFont as _QFont, QColor as _QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(),
+                         _QColor(int(PALETTE["bg"][1:3], 16),
+                                 int(PALETTE["bg"][3:5], 16),
+                                 int(PALETTE["bg"][5:7], 16)))
+        font = _QFont("Segoe UI", 14)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(_QColor(PALETTE["muted"]))
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                         "3-D Viewport\n\nOpen a .glb file to see the model here\n"
+                         "(Ctrl+O or the blue button)")
 
 
 # =============================================================================
@@ -1144,55 +1157,77 @@ class HelpPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("help_panel")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(0)
 
-        title = QLabel("How to use this demo")
-        title.setStyleSheet(
-            f"color: {PALETTE['accent']}; font-weight: 700; font-size: 13px;"
-        )
-        layout.addWidget(title)
-
-        steps = [
-            ("1  Open a model",
-             "Ctrl+O or the blue button — load any .glb file that contains animations."),
-            ("2  Browse the scene",
-             "Click a node in the Scene Tree (left). Bone nodes 🦴 hold most channels."),
-            ("3  Inspect curves",
-             "Click a channel (translation / rotation / scale) to draw its F-curves.\n"
-             "X=red  Y=green  Z=blue  W=yellow.  Toggle components with the checkboxes."),
-            ("4  Play & edit",
-             "Space or ▶ to play — the 3-D model animates in the viewport above.\n"
-             "Click a dot on any curve to edit that keyframe value directly.\n"
-             "Ctrl+S exports the modified .glb."),
-            ("Viewport controls",
-             "Drag to orbit · Scroll to zoom."),
-        ]
-
-        for hdr, body in steps:
-            h = QLabel(hdr)
-            h.setStyleSheet(
-                f"color: {PALETTE['text']}; font-weight: 600; font-size: 12px; "
-                "margin-top: 4px;"
-            )
-            layout.addWidget(h)
-            b = QLabel(body)
-            b.setStyleSheet(
-                f"color: {PALETTE['muted']}; font-size: 11px; padding-left: 12px;"
-            )
-            b.setWordWrap(True)
-            layout.addWidget(b)
-
-        div = QFrame()
-        div.setFrameShape(QFrame.Shape.HLine)
-        div.setStyleSheet(f"color: {PALETTE['border']};")
-        layout.addWidget(div)
-
-        close_lbl = QLabel("Press ? or click  ✕ Help  to hide this panel.")
-        close_lbl.setStyleSheet(
-            f"color: {PALETTE['muted']}; font-size: 10px; font-style: italic;"
-        )
-        layout.addWidget(close_lbl)
+        # Use a single HTML QLabel — avoids Windows font-fallback strikethrough
+        # that occurs when mixing font-weight / font-size across sibling QLabels.
+        html = f"""
+        <table cellspacing="0" cellpadding="0" width="100%">
+          <tr><td colspan="2" style="padding-bottom:8px;">
+            <span style="color:{PALETTE['accent']};font-size:13px;font-weight:bold;">
+              How to use this demo
+            </span>
+          </td></tr>
+          <tr>
+            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+                       padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
+              1 &nbsp;Open a model
+            </td>
+            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+              Ctrl+O or the blue button — load any .glb file that contains animations.
+            </td>
+          </tr>
+          <tr>
+            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+                       padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
+              2 &nbsp;Browse the scene
+            </td>
+            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+              Click a node in the Scene Tree (left). Bone nodes hold most channels.
+            </td>
+          </tr>
+          <tr>
+            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+                       padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
+              3 &nbsp;Inspect curves
+            </td>
+            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+              Click a channel (translation / rotation / scale) to draw its F-curves.
+              X=red &nbsp;Y=green &nbsp;Z=blue &nbsp;W=yellow. Toggle with checkboxes.
+            </td>
+          </tr>
+          <tr>
+            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+                       padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
+              4 &nbsp;Play &amp; edit
+            </td>
+            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+              Space or &#9654; to play — model animates in the viewport above.<br>
+              Click a dot on any curve to edit that keyframe value directly.<br>
+              Ctrl+S exports the modified .glb.
+            </td>
+          </tr>
+          <tr>
+            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+                       padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
+              Viewport
+            </td>
+            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+              Drag to orbit &middot; Scroll to zoom.
+            </td>
+          </tr>
+          <tr><td colspan="2" style="padding-top:8px;">
+            <span style="color:{PALETTE['muted']};font-size:10px;font-style:italic;">
+              Press ? or click &#10005; Help to hide this panel.
+            </span>
+          </td></tr>
+        </table>
+        """
+        lbl = QLabel(html)
+        lbl.setWordWrap(True)
+        lbl.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(lbl)
 
 
 # =============================================================================
@@ -1230,6 +1265,12 @@ class CurveEditorWidget(QWidget):
         self._channel_label.setStyleSheet(f"color: {PALETTE['muted']}; font-size: 12px;")
         hl.addWidget(self._channel_label)
         hl.addStretch()
+
+        edit_tip = QLabel("Scroll to zoom · Click a dot to edit its value")
+        edit_tip.setStyleSheet(
+            f"color: {PALETTE['muted']}; font-size: 10px; font-style: italic; padding-right: 8px;"
+        )
+        hl.addWidget(edit_tip)
 
         self._toggles: list[QCheckBox] = []
         for i, (lbl, col) in enumerate(zip(["X", "Y", "Z", "W"], CURVE_COLORS)):
@@ -1310,9 +1351,9 @@ class CurveEditorWidget(QWidget):
 
             scatter = pg.ScatterPlotItem(
                 x=times, y=self._values[:, i],
-                size=9,
+                size=11,
                 pen=pg.mkPen(color=color[:3], width=1),
-                brush=pg.mkBrush(color=(*color[:3], 180)),
+                brush=pg.mkBrush(color=(*color[:3], 200)),
                 hoverable=True,
                 hoverPen=pg.mkPen("w", width=2),
                 hoverBrush=pg.mkBrush("w"),
@@ -1664,7 +1705,7 @@ class GltfCurveEditor(QMainWindow):
         self._playback_time:        float        = 0.0
         self._is_playing:           bool         = False
         self._dirty:                bool         = False
-        self._help_visible:         bool         = True
+        self._help_visible:         bool         = False
 
         self._build_toolbar()
         self._build_central()
@@ -1674,6 +1715,10 @@ class GltfCurveEditor(QMainWindow):
 
         self.setStyleSheet(APP_STYLESHEET)
         self._show_empty_state()
+        # Keep help hidden by default so the 3-D viewport is immediately visible
+        self._help_panel.setVisible(False)
+        self._help_btn.setChecked(False)
+        self._help_btn.setText("? Help")
 
     # -------------------------------------------------------------------------
     # UI construction
@@ -1853,9 +1898,10 @@ class GltfCurveEditor(QMainWindow):
         self._status = QStatusBar()
         self.setStatusBar(self._status)
         self._status.showMessage(
-            "Open a .glb file to begin — Ctrl+O  ·  "
-            "Then click a node → pick a channel → Space to play  ·  "
-            "Drag viewport to orbit, scroll to zoom"
+            "Step 1: Open a .glb file (Ctrl+O or blue button)  ·  "
+            "Step 2: Click a bone in the Scene Tree  ·  "
+            "Step 3: Click a channel (rotation / translation / scale)  ·  "
+            "Step 4: Press Space to play  ·  Drag the 3-D viewport to orbit"
         )
 
     def _build_timer(self) -> None:
