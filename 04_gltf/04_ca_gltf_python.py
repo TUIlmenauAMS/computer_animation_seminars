@@ -16,7 +16,7 @@
 #   NumPy      — All keyframe data lives as float32 typed arrays.
 #
 # Run this demo:
-#   cd seminar_04
+#   cd 04_gltf
 #   uv sync                              (first time — creates .venv, installs deps)
 #   uv run python 04_ca_gltf_python.py
 #
@@ -333,11 +333,22 @@ def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
         for VEC2/VEC3/VEC4/MAT*.
     """
     accessor = gltf.accessors[accessor_index]
-    # pygltflib's get_data_from_accessor handles the bufferView offset / stride
-    # calculation for us and returns raw bytes.
-    raw: bytes = gltf.get_data_from_accessor(accessor_index)
+    # Walk accessor → bufferView → buffer to extract the raw bytes.
+    # pygltflib stores the entire binary blob in gltf.binary_blob(); each
+    # bufferView slice it into named regions, and the accessor adds a further
+    # byteOffset within that region.
+    buffer_view = gltf.bufferViews[accessor.bufferView]
+    blob: bytes = gltf.binary_blob()
+    view_start = buffer_view.byteOffset or 0
+    acc_start  = view_start + (accessor.byteOffset or 0)
+    dtype, item_size = COMPONENT_DTYPE.get(accessor.componentType, (np.dtype("float32"), 4))
+    n_comp = ACCESSOR_NUM_COMPONENTS.get(accessor.type, 1)
+    byte_stride = buffer_view.byteStride or (item_size * n_comp)
+    raw: bytes = b"".join(
+        blob[acc_start + i * byte_stride : acc_start + i * byte_stride + item_size * n_comp]
+        for i in range(accessor.count)
+    )
 
-    _, _ = COMPONENT_DTYPE.get(accessor.componentType, (np.float32, 4))
     dtype, _ = COMPONENT_DTYPE.get(accessor.componentType, (np.dtype("float32"), 4))
     n_comp = ACCESSOR_NUM_COMPONENTS.get(accessor.type, 1)
 
@@ -639,6 +650,7 @@ class CurveEditorWidget(QWidget):
         self._channel_index: int = -1
         self._gltf_ref: GLTF2 | None = None
         self._on_modified_cb: callable | None = None
+        self._current_target_path_labels: list[str] = ["X", "Y", "Z", "W"]
 
     def set_modified_callback(self, cb: callable) -> None:
         """Register a callback invoked when the user edits a keyframe point.
@@ -674,10 +686,13 @@ class CurveEditorWidget(QWidget):
         self._times = times
         self._values = values if values.ndim > 1 else values[:, np.newaxis]
 
+        # Store labels so _on_scatter_clicked can show the right component name
+        labels = COMPONENT_LABELS.get(target_path, ["V0", "V1", "V2", "V3"])
+        self._current_target_path_labels = labels
+
         # Header
         duration = float(times[-1]) if len(times) > 0 else 0.0
         n_keys = len(times)
-        labels = COMPONENT_LABELS.get(target_path, ["V0", "V1", "V2", "V3"])
         self._channel_label.setText(
             f"{node_name}  ·  {target_path}  ·  {anim_name}  ·  "
             f"{n_keys} keyframes  ·  {duration:.3f}s"
@@ -772,28 +787,51 @@ class CurveEditorWidget(QWidget):
 
         ANIMATION CONCEPT: Direct keyframe editing on the curve is the primary
         workflow in Maya's Graph Editor and Blender's F-Curve Editor. The user
-        selects a keyframe point and modifies its value — exactly what we do here.
-        The change is written directly into the glTF binary blob in memory; calling
-        File → Export saves the modified file to disk.
+        selects a keyframe point and types a new value into an inline dialog —
+        exactly the same interaction as double-clicking a keyframe in Maya.
+        The change is written directly into the glTF binary blob in memory;
+        File → Export (Ctrl+S) saves the modified file to disk.
+
+        PIPELINE CONCEPT: The round-trip here is the core pipeline pattern —
+        read binary → decode to float32 NumPy array → mutate in Python →
+        re-encode to bytes → write back to blob. The same pattern applies to
+        any binary asset format: textures, mesh LODs, collision geometry.
 
         Args:
             scatter: The scatter item that was clicked.
             points: List of SpotItem objects under the cursor (may be multiple
                     if keyframes overlap in time).
         """
+        from PySide6.QtWidgets import QInputDialog  # local import — only needed here
+
         if not points or self._values is None or self._gltf_ref is None:
             return
 
         point = points[0]
         component_index, keyframe_index = point.data()
 
-        # Prompt: we flip the sign of the value as a simple demonstration.
-        # In a production tool this would open an inline value editor.
         original = float(self._values[keyframe_index, component_index])
-        new_val = -original  # mirror the value
+        t = float(self._times[keyframe_index])
+
+        # Determine the component label for the dialog title
+        # (we store the current target_path on load so we can look it up)
+        comp_label = getattr(self, "_current_target_path_labels", ["X", "Y", "Z", "W"])
+        label = comp_label[component_index] if component_index < len(comp_label) else f"V{component_index}"
+
+        new_val, ok = QInputDialog.getDouble(
+            self,
+            "Edit Keyframe",
+            f"t = {t:.4f} s   |   component {label}\n\nNew value:",
+            value=original,
+            min=-1e6,
+            max=1e6,
+            decimals=6,
+        )
+        if not ok:
+            return  # user cancelled — leave unchanged
 
         # Mutate in-place
-        self._values[keyframe_index, component_index] = new_val
+        self._values[keyframe_index, component_index] = np.float32(new_val)
 
         # Write back to glTF binary blob
         if self._on_modified_cb:
@@ -1155,7 +1193,7 @@ class GltfCurveEditor(QMainWindow):
     def __init__(self) -> None:
         """Initialise the main window with an empty state."""
         super().__init__()
-        self.setWindowTitle("glTF Animation Curve Editor — Seminar 04")
+        self.setWindowTitle("glTF Animation Curve Editor — CA Demo 5")
         self.resize(1400, 860)
 
         self._gltf: GLTF2 | None = None
@@ -1306,7 +1344,7 @@ class GltfCurveEditor(QMainWindow):
         self.setStatusBar(self._status)
         self._status.showMessage(
             "Open a .glb file to begin — Ctrl+O  |  Space: play/pause  |  "
-            "Click a bone to inspect its animation curves"
+            "Click a node in the scene tree → select a channel → click a keyframe point to edit its value"
         )
 
     def _build_timer(self) -> None:
@@ -1497,7 +1535,7 @@ class GltfCurveEditor(QMainWindow):
         self._status.showMessage(
             f"'{node_name}'  ·  {target_path}  ·  {anim_name}  ·  "
             f"{len(times)} keyframes  ·  {duration:.3f}s  ·  "
-            f"Click ▶ to play  |  Click a keyframe point to mirror its value"
+            f"Click ▶ to play  |  Click a keyframe point to edit its value"
         )
 
     # -------------------------------------------------------------------------
@@ -1527,7 +1565,7 @@ class GltfCurveEditor(QMainWindow):
         self._inspector.load_channel(times, values, channel.target.path)
 
         self._status.showMessage(
-            "Keyframe modified — unsaved changes. Use Ctrl+S to export."
+            "✎  Keyframe modified — unsaved changes  ·  Ctrl+S to export the modified .glb"
         )
 
     # -------------------------------------------------------------------------

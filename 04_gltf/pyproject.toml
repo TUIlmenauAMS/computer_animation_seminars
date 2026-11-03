@@ -1,0 +1,64 @@
+# =============================================================================
+# Computeranimation — Seminar 04
+# Demo 5: glTF Animation Curve Editor
+# =============================================================================
+#
+# Dependency stack (all pinned to exact versions for reproducibility):
+#
+#   PySide6    Qt6 Python bindings — the UI framework used by Maya, Blender,
+#              Houdini and Nuke. Provides QMainWindow, QTreeWidget, QSplitter,
+#              QFileDialog, QInputDialog, QSlider, QTimer, and the full Qt
+#              signal/slot system.
+#
+#   PyQtGraph  GPU-accelerated plot library built on PySide6 + PyOpenGL.
+#              Used in scientific instruments, trading terminals and real-time
+#              dashboards. Provides PlotWidget, PlotDataItem, ScatterPlotItem,
+#              and InfiniteLine for the animation curve editor panel.
+#
+#   pygltflib  Pure-Python glTF 2.0 reader/writer. Parses the JSON descriptor
+#              and exposes the binary blob so we can read/write accessors
+#              directly with NumPy.
+#
+#   NumPy      All keyframe data is stored and manipulated as float32 typed
+#              arrays. np.frombuffer decodes the raw binary blob; struct.pack
+#              re-encodes modified values back to bytes.
+#
+# Run:
+#   cd 04_gltf
+#   uv sync                     # first time — creates .venv and installs deps
+#   uv run python 04_ca_gltf_python.py
+#
+# Requires Python 3.11 or later (PySide6 6.x drops 3.10 support on some
+# platforms; 3.11 is safe on Windows, macOS and Linux).
+# =============================================================================
+
+[project]
+name        = "ca-seminar04-gltf"
+version     = "1.0.0"
+description = "CA Demo 5 — glTF Animation Curve Editor"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Qt6 Python bindings — full desktop UI framework
+    # Changelog: https://doc.qt.io/qt-6/whatsnew66.html
+    "PySide6==6.7.2",
+
+    # GPU-accelerated plots built on Qt
+    # Changelog: https://pyqtgraph.readthedocs.io/en/latest/changelog.html
+    "pyqtgraph==0.13.7",
+
+    # Pure-Python glTF 2.0 reader / writer
+    # Changelog: https://github.com/KhronosGroup/glTF-Sample-Models
+    "pygltflib==1.16.2",
+
+    # Numerical arrays — float32 typed keyframe data
+    # Changelog: https://numpy.org/doc/stable/release.html
+    "numpy==1.26.4",
+]
+
+[tool.uv]
+# This is a script-only project — no package to build or install.
+# uv manages the venv and deps without a build backend.
+# .venv is created in the project root on first `uv sync`; do not commit it.
+package = false
+managed = true
