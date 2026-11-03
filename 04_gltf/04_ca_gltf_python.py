@@ -63,7 +63,7 @@ from pathlib import Path
 import numpy as np
 import pyqtgraph as pg
 from pygltflib import GLTF2
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import (
     QAction, QColor, QFont, QMatrix4x4, QPixmap, QVector3D,
 )
@@ -682,6 +682,7 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec4 aJoints;
 layout(location = 3) in vec4 aWeights;
+layout(location = 4) in vec2 aTexCoord;
 
 uniform mat4 uModel;
 uniform mat4 uView;
@@ -691,6 +692,7 @@ uniform bool uSkinned;
 
 out vec3 vNormal;
 out vec3 vFragPos;
+out vec2 vTexCoord;
 
 void main() {
     vec4 pos4 = vec4(aPos, 1.0);
@@ -710,6 +712,7 @@ void main() {
     gl_Position   = uProj * uView * worldPos;
     vFragPos      = worldPos.xyz;
     vNormal       = normalize(mat3(transpose(inverse(uModel))) * norm);
+    vTexCoord     = aTexCoord;
 }
 """
 
@@ -717,23 +720,38 @@ _FRAG_SRC = """
 #version 330 core
 in vec3 vNormal;
 in vec3 vFragPos;
+in vec2 vTexCoord;
 
-uniform vec3 uLightPos;
-uniform vec3 uLightColor;
-uniform vec3 uObjectColor;
+uniform vec3  uLightPos;
+uniform vec3  uLightColor;
+uniform vec4  uBaseColor;      // glTF pbrMetallicRoughness.baseColorFactor
 uniform float uAmbient;
+uniform bool  uHasTexture;
+uniform sampler2D uAlbedo;
 
 out vec4 FragColor;
 
 void main() {
+    // Sample albedo — either from texture or the material base colour
+    vec4 albedo = uBaseColor;
+    if (uHasTexture) {
+        albedo *= texture(uAlbedo, vTexCoord);
+    }
+
     // Phong shading
     vec3 norm     = normalize(vNormal);
     vec3 lightDir = normalize(uLightPos - vFragPos);
     float diff    = max(dot(norm, lightDir), 0.0);
+
+    // Specular (Blinn-Phong)
+    vec3 viewDir  = normalize(-vFragPos);
+    vec3 halfDir  = normalize(lightDir + viewDir);
+    float spec    = pow(max(dot(norm, halfDir), 0.0), 32.0) * 0.3;
+
     vec3 diffuse  = diff * uLightColor;
     vec3 ambient  = uAmbient * uLightColor;
-    vec3 result   = (ambient + diffuse) * uObjectColor;
-    FragColor     = vec4(result, 1.0);
+    vec3 result   = (ambient + diffuse) * albedo.rgb + spec * uLightColor;
+    FragColor     = vec4(result, albedo.a);
 }
 """
 
@@ -769,27 +787,38 @@ class ModelViewportWidget(QOpenGLWidget):
     by the JOINTS_0 / WEIGHTS_0 accessors in the glTF primitive.
     """
 
+    # Signal emitted when user clicks a bone joint in the viewport.
+    # Carries the glTF node index of the nearest joint.
+    bone_selected = Signal(int)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._gltf:         GLTF2 | None = None
-        self._anim_index:   int          = -1
-        self._playback_t:   float        = 0.0
-        self._mesh_vao:     int          = 0
-        self._mesh_vbo:     int          = 0
-        self._mesh_ebo:     int          = 0
-        self._mesh_count:   int          = 0
-        self._skin_index:   int          = -1
-        self._is_skinned:   bool         = False
-        self._prog:         QOpenGLShaderProgram | None = None
-        self._line_prog:    QOpenGLShaderProgram | None = None
-        self._line_vao:     int          = 0
-        self._line_vbo:     int          = 0
-        self._orbit_yaw:    float        = 30.0
-        self._orbit_pitch:  float        = 15.0
-        self._orbit_dist:   float        = 3.0
-        self._last_mouse    = None
-        self._bbox_center   = np.zeros(3, dtype=np.float32)
-        self._bbox_scale    = 1.0
+        self._gltf:          GLTF2 | None = None
+        self._anim_index:    int          = -1
+        self._playback_t:    float        = 0.0
+        self._mesh_vao:      int          = 0
+        self._mesh_vbo:      int          = 0
+        self._mesh_ebo:      int          = 0
+        self._mesh_count:    int          = 0
+        self._skin_index:    int          = -1
+        self._is_skinned:    bool         = False
+        self._prog:          QOpenGLShaderProgram | None = None
+        self._line_prog:     QOpenGLShaderProgram | None = None
+        self._line_vao:      int          = 0
+        self._line_vbo:      int          = 0
+        self._orbit_yaw:     float        = 30.0
+        self._orbit_pitch:   float        = 15.0
+        self._orbit_dist:    float        = 3.0
+        self._last_mouse                  = None
+        self._bbox_center    = np.zeros(3, dtype=np.float32)
+        self._bbox_scale:    float        = 1.0
+        self._show_skeleton: bool         = True       # toggled by toolbar button
+        self._selected_joint: int         = -1         # highlighted joint node index
+        self._tex_id:        int          = 0          # OpenGL texture object (0 = none)
+        self._has_tex:       bool         = False
+        self._base_color     = np.array([0.8, 0.8, 0.8, 1.0], dtype=np.float32)
+        # World-space joint positions for picking (populated each frame)
+        self._joint_world_pos: dict[int, np.ndarray] = {}
         self.setMinimumSize(320, 240)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
@@ -814,6 +843,16 @@ class ModelViewportWidget(QOpenGLWidget):
 
     def set_anim_index(self, idx: int) -> None:
         self._anim_index = idx
+        self.update()
+
+    def set_skeleton_visible(self, visible: bool) -> None:
+        """Toggle skeleton overlay on/off."""
+        self._show_skeleton = visible
+        self.update()
+
+    def set_selected_joint(self, node_index: int) -> None:
+        """Highlight a joint by node index (called when tree selection changes)."""
+        self._selected_joint = node_index
         self.update()
 
     # ------------------------------------------------------------------
@@ -864,6 +903,9 @@ class ModelViewportWidget(QOpenGLWidget):
         self._mesh_ebo = int(vbos[1])
         self._line_vbo = int(vbos[2])
 
+        # Allocate one texture slot; filled by _upload_texture()
+        self._tex_id = int(GL.glGenTextures(1))
+
     def resizeGL(self, w: int, h: int) -> None:
         GL.glViewport(0, 0, w, h)
 
@@ -873,20 +915,32 @@ class ModelViewportWidget(QOpenGLWidget):
             self._draw_empty_hint()
             return
         self._draw_mesh()
-        self._draw_skeleton()
+        if self._show_skeleton:
+            self._draw_skeleton()
 
     # ------------------------------------------------------------------
     # Mouse orbit
     # ------------------------------------------------------------------
 
+    def mouseDoubleClickEvent(self, event) -> None:
+        """Consume double-clicks so they don't reach the window title bar
+        and accidentally toggle the maximized state."""
+        event.accept()
+
     def mousePressEvent(self, event) -> None:
         self._last_mouse = event.position()
+        # Bone picking: only on left-click with no drag
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._try_pick_bone(event.position())
 
     def mouseMoveEvent(self, event) -> None:
         if self._last_mouse is None:
             return
         dx = event.position().x() - self._last_mouse.x()
         dy = event.position().y() - self._last_mouse.y()
+        # If there's real drag, cancel any pending pick so orbit takes priority
+        if abs(dx) > 2 or abs(dy) > 2:
+            self._last_mouse = None   # will be reset below
         self._orbit_yaw   += dx * 0.4
         self._orbit_pitch  = max(-89, min(89, self._orbit_pitch + dy * 0.4))
         self._last_mouse   = event.position()
@@ -960,25 +1014,27 @@ class ModelViewportWidget(QOpenGLWidget):
         return model, view, proj
 
     def _upload_mesh(self) -> None:
-        """Extract position / normal / joints / weights from the first mesh primitive."""
+        """Extract position / normal / joints / weights / texcoord from the first mesh
+        primitive, read the material base colour and optional albedo texture, then
+        upload everything to the GPU."""
         gltf = self._gltf
         if not gltf or not gltf.meshes:
             return
 
-        mesh      = gltf.meshes[0]
-        prim      = mesh.primitives[0]
-        attrs     = prim.attributes
+        mesh  = gltf.meshes[0]
+        prim  = mesh.primitives[0]
+        attrs = prim.attributes
 
         # Positions (required)
-        pos_idx   = getattr(attrs, "POSITION", None)
+        pos_idx = getattr(attrs, "POSITION", None)
         if pos_idx is None:
             return
-        positions = read_accessor(gltf, pos_idx).astype(np.float32)   # (N,3)
+        positions = read_accessor(gltf, pos_idx).astype(np.float32)
         if positions.ndim == 1:
             positions = positions.reshape(-1, 3)
 
         # Normals (compute flat normals if absent)
-        norm_idx  = getattr(attrs, "NORMAL", None)
+        norm_idx = getattr(attrs, "NORMAL", None)
         if norm_idx is not None:
             normals = read_accessor(gltf, norm_idx).astype(np.float32)
             if normals.ndim == 1:
@@ -987,9 +1043,18 @@ class ModelViewportWidget(QOpenGLWidget):
             normals = np.zeros_like(positions)
             normals[:, 2] = 1.0
 
+        # Texture coordinates
+        tc_idx = getattr(attrs, "TEXCOORD_0", None)
+        if tc_idx is not None:
+            texcoords = read_accessor(gltf, tc_idx).astype(np.float32)
+            if texcoords.ndim == 1:
+                texcoords = texcoords.reshape(-1, 2)
+        else:
+            texcoords = np.zeros((len(positions), 2), dtype=np.float32)
+
         # Joints / weights for skinning
-        j0_idx  = getattr(attrs, "JOINTS_0",  None)
-        w0_idx  = getattr(attrs, "WEIGHTS_0", None)
+        j0_idx = getattr(attrs, "JOINTS_0",  None)
+        w0_idx = getattr(attrs, "WEIGHTS_0", None)
         if j0_idx is not None and w0_idx is not None:
             joints  = read_accessor(gltf, j0_idx).astype(np.float32)
             weights = read_accessor(gltf, w0_idx).astype(np.float32)
@@ -1008,27 +1073,41 @@ class ModelViewportWidget(QOpenGLWidget):
             indices = np.arange(len(positions), dtype=np.uint32)
         self._mesh_count = len(indices)
 
-        # Normalise mesh to unit-box centred at origin
-        mn, mx         = positions.min(axis=0), positions.max(axis=0)
-        self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
-        extent         = float(np.max(mx - mn)) or 1.0
-        self._bbox_scale = 1.0 / extent
-        # Auto-fit: place the camera far enough to see the whole mesh.
-        # 1.2 * extent gives comfortable framing; the _mvp() near/far scale
-        # relative to orbit_dist so there's no clipping at any size.
-        self._orbit_dist = extent * 1.2
+        # ── Material: base colour + optional texture ──────────────────────────
+        self._base_color = np.array([0.8, 0.8, 0.8, 1.0], dtype=np.float32)
+        self._has_tex    = False
+        mat_idx = prim.material
+        if mat_idx is not None and gltf.materials and mat_idx < len(gltf.materials):
+            mat = gltf.materials[mat_idx]
+            pbr = getattr(mat, "pbrMetallicRoughness", None)
+            if pbr is not None:
+                bcf = getattr(pbr, "baseColorFactor", None)
+                if bcf is not None:
+                    self._base_color = np.array(bcf, dtype=np.float32)
+                tex_info = getattr(pbr, "baseColorTexture", None)
+                if tex_info is not None:
+                    tex_src_idx = tex_info.index
+                    self._upload_texture(gltf, tex_src_idx)
 
-        # Interleave: pos(3) | normal(3) | joints(4) | weights(4) = 14 floats / vertex
-        n_verts   = len(positions)
-        interleaved = np.zeros((n_verts, 14), dtype=np.float32)
-        interleaved[:, 0:3]  = positions
-        interleaved[:, 3:6]  = normals
-        interleaved[:, 6:10] = joints
+        # ── Camera / bbox auto-fit ────────────────────────────────────────────
+        mn, mx = positions.min(axis=0), positions.max(axis=0)
+        self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
+        extent = float(np.max(mx - mn)) or 1.0
+        self._bbox_scale  = 1.0 / extent
+        # Place camera 1.4× the mesh extent away for comfortable framing.
+        self._orbit_dist  = extent * 1.4
+
+        # ── Interleave: pos(3)|normal(3)|joints(4)|weights(4)|texcoord(2) = 16 floats ──
+        n_verts     = len(positions)
+        interleaved = np.zeros((n_verts, 16), dtype=np.float32)
+        interleaved[:, 0:3]   = positions
+        interleaved[:, 3:6]   = normals
+        interleaved[:, 6:10]  = joints
         interleaved[:, 10:14] = weights
+        interleaved[:, 14:16] = texcoords
         vertex_data = interleaved.flatten()
 
-        # Upload to GPU
-        stride = 14 * 4   # bytes
+        stride = 16 * 4   # bytes
 
         GL.glBindVertexArray(self._mesh_vao)
 
@@ -1053,6 +1132,9 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glEnableVertexAttribArray(3)
         GL.glVertexAttribPointer(3, 4, GL.GL_FLOAT, GL.GL_FALSE, stride,
                                  GL.ctypes.c_void_p(40))
+        GL.glEnableVertexAttribArray(4)
+        GL.glVertexAttribPointer(4, 2, GL.GL_FLOAT, GL.GL_FALSE, stride,
+                                 GL.ctypes.c_void_p(56))
 
         GL.glBindVertexArray(0)
 
@@ -1062,6 +1144,54 @@ class ModelViewportWidget(QOpenGLWidget):
             if node.mesh == 0 and node.skin is not None:
                 self._skin_index = node.skin
                 break
+
+    def _upload_texture(self, gltf: "GLTF2", tex_index: int) -> None:
+        """Decode and upload the glTF texture at tex_index to self._tex_id."""
+        import io
+        try:
+            from PIL import Image as PILImage
+        except ImportError:
+            # Pillow not available — skip texture, use base colour only
+            return
+        try:
+            tex   = gltf.textures[tex_index]
+            img_i = tex.source
+            if img_i is None:
+                return
+            img_def = gltf.images[img_i]
+
+            # Images may be embedded in the binary blob or referenced by URI
+            if img_def.bufferView is not None:
+                bv    = gltf.bufferViews[img_def.bufferView]
+                blob  = gltf.binary_blob()
+                start = bv.byteOffset or 0
+                data  = blob[start: start + bv.byteLength]
+                pil   = PILImage.open(io.BytesIO(data)).convert("RGBA")
+            elif img_def.uri and not img_def.uri.startswith("data:"):
+                # External file — resolve relative to the glb (best-effort)
+                return
+            else:
+                return  # data: URI — skip for now
+
+            img_data = np.array(pil, dtype=np.uint8)
+            h, w     = img_data.shape[:2]
+
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self._tex_id)
+            GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, w, h, 0,
+                            GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
+            GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
+                               GL.GL_LINEAR_MIPMAP_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER,
+                               GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S,
+                               GL.GL_REPEAT)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
+                               GL.GL_REPEAT)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+            self._has_tex = True
+        except Exception:
+            traceback.print_exc()
 
     def _upload_skeleton_vbo(self) -> None:
         """Allocate skeleton line VBO (filled dynamically each frame)."""
@@ -1092,10 +1222,24 @@ class ModelViewportWidget(QOpenGLWidget):
         # the model from a sensible angle regardless of mesh size.
         light = self._bbox_center + self._orbit_dist * np.array(
             [0.5, 0.8, 0.6], dtype=np.float32)
-        GL.glUniform3f(_u("uLightPos"),    *light)
-        GL.glUniform3f(_u("uLightColor"),  1.0, 1.0, 1.0)
-        GL.glUniform3f(_u("uObjectColor"), 0.55, 0.65, 0.75)
-        GL.glUniform1f(_u("uAmbient"),     0.35)
+        GL.glUniform3f(_u("uLightPos"),   *light)
+        GL.glUniform3f(_u("uLightColor"), 1.0, 1.0, 1.0)
+        GL.glUniform1f(_u("uAmbient"),    0.30)
+
+        # Material: pass the glTF base colour factor (read from the material)
+        bc = self._base_color
+        GL.glUniform4f(_u("uBaseColor"), float(bc[0]), float(bc[1]),
+                       float(bc[2]), float(bc[3]))
+
+        # Albedo texture (slot 0)
+        if self._has_tex:
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self._tex_id)
+            GL.glUniform1i(_u("uAlbedo"),     0)
+            GL.glUniform1i(_u("uHasTexture"), 1)
+        else:
+            GL.glUniform1i(_u("uHasTexture"), 0)
+
         GL.glUniform1i(_u("uSkinned"),
                        1 if self._is_skinned and self._skin_index >= 0 else 0)
 
@@ -1119,10 +1263,18 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glDrawElements(GL.GL_TRIANGLES, self._mesh_count,
                           GL.GL_UNSIGNED_INT, None)
         GL.glBindVertexArray(0)
+        if self._has_tex:
+            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
         self._prog.release()
 
     def _draw_skeleton(self) -> None:
-        """Draw parent→child bone lines in accent colour."""
+        """Draw parent→child bone lines and joint dots in the skeleton overlay.
+
+        FIX: glLineWidth(2.0) is illegal in OpenGL Core Profile 3.3 and raises
+        GL_INVALID_VALUE (err 1281).  Core Profile only permits width 1.0.
+        We therefore use width 1.0 and compensate with bright colour + alpha.
+        Joint positions are stored in self._joint_world_pos for bone picking.
+        """
         if self._line_prog is None or self._gltf is None:
             return
         gltf = self._gltf
@@ -1130,6 +1282,9 @@ class ModelViewportWidget(QOpenGLWidget):
             world_pos = compute_world_positions(gltf, self._anim_index, self._playback_t)
         except Exception:
             return
+
+        # Store for bone-picking in mouse events
+        self._joint_world_pos = world_pos
 
         segments: list[float] = []
         for ni, node in enumerate(gltf.nodes or []):
@@ -1147,9 +1302,10 @@ class ModelViewportWidget(QOpenGLWidget):
             return
 
         arr = np.array(segments, dtype=np.float32)
+        max_bytes = 256 * 2 * 3 * 4
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._line_vbo)
         GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0,
-                           min(arr.nbytes, 256 * 2 * 3 * 4), arr)
+                           min(arr.nbytes, max_bytes), arr)
 
         model, view, proj = self._mvp()
         mvp = proj @ view @ model
@@ -1158,14 +1314,87 @@ class ModelViewportWidget(QOpenGLWidget):
         loc_mvp   = GL.glGetUniformLocation(self._line_prog.programId(), "uMVP")
         loc_color = GL.glGetUniformLocation(self._line_prog.programId(), "uColor")
         GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
-        GL.glUniform3f(loc_color, 0.310, 0.612, 0.976)   # accent blue
-        GL.glLineWidth(2.0)
 
+        # FIX: glLineWidth > 1.0 is not allowed in Core Profile (raises GL error 1281).
+        # Use exactly 1.0 — the only guaranteed value.
+        GL.glLineWidth(1.0)
+
+        # Draw bone lines in accent blue
+        GL.glUniform3f(loc_color, 0.310, 0.780, 0.976)
         GL.glBindVertexArray(self._line_vao)
         n_verts = min(len(segments) // 3, 256 * 2)
         GL.glDrawArrays(GL.GL_LINES, 0, n_verts)
+
+        # Draw joint dots: upload each joint position as a 1-vertex point
+        # and draw it as GL_POINTS (size set by gl_PointSize in the shader is
+        # not available without setting it in GLSL, so we draw a tiny cross
+        # instead by pushing 6 extra vertices per joint — 3 axis segments).
+        # Simpler approach: collect all joint world-pos and draw as GL_POINTS
+        # using a separate small upload. GL_POINTS size is set to 6 via
+        # glPointSize (allowed in Core Profile unlike glLineWidth).
+        joint_pts: list[float] = []
+        selected_pt: list[float] = []
+        for ni, pos in world_pos.items():
+            if ni == self._selected_joint:
+                selected_pt.extend(pos.tolist())
+            else:
+                joint_pts.extend(pos.tolist())
+
+        # Regular joints — white dots, size 5
+        if joint_pts:
+            pts_arr = np.array(joint_pts, dtype=np.float32)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0,
+                               min(pts_arr.nbytes, max_bytes), pts_arr)
+            GL.glUniform3f(loc_color, 0.9, 0.9, 0.9)
+            GL.glPointSize(5.0)
+            GL.glDrawArrays(GL.GL_POINTS, 0, len(joint_pts) // 3)
+
+        # Selected joint — orange dot, larger
+        if selected_pt:
+            sel_arr = np.array(selected_pt, dtype=np.float32)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0,
+                               min(sel_arr.nbytes, max_bytes), sel_arr)
+            GL.glUniform3f(loc_color, 1.0, 0.576, 0.235)   # orange
+            GL.glPointSize(10.0)
+            GL.glDrawArrays(GL.GL_POINTS, 0, 1)
+
+        GL.glPointSize(1.0)
         GL.glBindVertexArray(0)
         self._line_prog.release()
+
+    def _try_pick_bone(self, screen_pos) -> None:
+        """Ray-sphere bone picking: find the nearest joint to the click position.
+
+        Projects each joint world position to NDC, then picks the closest one
+        within a pixel-radius threshold and emits bone_selected(node_index).
+        """
+        if not self._joint_world_pos or self._gltf is None:
+            return
+        model, view, proj = self._mvp()
+        mvp = proj @ view @ model
+        w, h = max(1, self.width()), max(1, self.height())
+        sx, sy = float(screen_pos.x()), float(screen_pos.y())
+
+        best_ni   = -1
+        best_dist = 20.0   # max pixel radius for a hit
+
+        for ni, wpos in self._joint_world_pos.items():
+            p4  = mvp @ np.array([*wpos, 1.0], dtype=np.float32)
+            if p4[3] <= 0:
+                continue
+            ndc_x =  p4[0] / p4[3]
+            ndc_y = -p4[1] / p4[3]   # flip Y: NDC up = screen up
+            px = (ndc_x * 0.5 + 0.5) * w
+            py = (ndc_y * 0.5 + 0.5) * h
+            d  = math.hypot(px - sx, py - sy)
+            if d < best_dist:
+                best_dist = d
+                best_ni   = ni
+
+        if best_ni >= 0:
+            self._selected_joint = best_ni
+            self.bone_selected.emit(best_ni)
+            self.update()
 
     def _draw_empty_hint(self) -> None:
         """Draw a centred hint when no model is loaded yet."""
@@ -1256,7 +1485,9 @@ class HelpPanel(QWidget):
               Viewport
             </td>
             <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
-              Drag to orbit &middot; Scroll to zoom (works at any scale).
+              Drag to orbit &middot; Scroll to zoom (works at any scale).<br>
+              <b>Click a joint dot</b> on the skeleton to select that bone in the Scene Tree.<br>
+              <b>🦴 Skeleton</b> button (or <b>K</b>) toggles the skeleton overlay on/off.
             </td>
           </tr>
           <tr><td colspan="2" style="padding-top:8px;">
@@ -1462,7 +1693,10 @@ class CurveEditorWidget(QWidget):
             if isinstance(arg, (list, np.ndarray)) and len(arg) > 0:
                 points = arg
                 break
-        if not points or self._values is None or self._gltf_ref is None:
+        if (points is None
+                or (hasattr(points, "__len__") and len(points) == 0)
+                or self._values is None
+                or self._gltf_ref is None):
             return
 
         point = points[0]
@@ -1750,7 +1984,9 @@ class GltfCurveEditor(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("glTF Animation Curve Editor — Computeranimation Seminar 04")
-        self.resize(1500, 920)
+        # Window is shown maximized via showMaximized() in main().
+        # Set a sensible minimum so the layout doesn't collapse if restored.
+        self.setMinimumSize(1100, 700)
 
         self._gltf:                 GLTF2 | None = None
         self._gltf_path:            Path  | None = None
@@ -1761,6 +1997,7 @@ class GltfCurveEditor(QMainWindow):
         self._is_playing:           bool         = False
         self._dirty:                bool         = False
         self._help_visible:         bool         = False
+        self._skel_btn:             QPushButton  = QPushButton()   # replaced in _build_toolbar
 
         self._build_toolbar()
         self._build_central()
@@ -1850,11 +2087,23 @@ class GltfCurveEditor(QMainWindow):
         export_btn.clicked.connect(self._on_export)
         toolbar.addWidget(export_btn)
 
+        toolbar.addSeparator()
+
+        # ── Skeleton toggle ───────────────────────────────────────────────────
+        skel_btn = QPushButton("🦴 Skeleton")
+        skel_btn.setCheckable(True)
+        skel_btn.setChecked(True)
+        skel_btn.setToolTip("Toggle skeleton overlay  (K)")
+        skel_btn.clicked.connect(self._toggle_skeleton)
+        toolbar.addWidget(skel_btn)
+        self._skel_btn = skel_btn
+
         # Keyboard shortcuts
         for shortcut, slot in [("Ctrl+O", self._on_open),
                                 ("Ctrl+S", self._on_export),
                                 ("Space",  self._toggle_playback),
-                                ("?",      self._toggle_help)]:
+                                ("?",      self._toggle_help),
+                                ("K",      self._toggle_skeleton)]:
             act = QAction(self)
             act.setShortcut(shortcut)
             act.triggered.connect(slot)
@@ -1913,6 +2162,7 @@ class GltfCurveEditor(QMainWindow):
 
         # 3-D viewport
         self._viewport = ModelViewportWidget()
+        self._viewport.bone_selected.connect(self._on_bone_selected_in_viewport)
         center_layout.addWidget(self._viewport, stretch=2)
 
         # Thin divider
@@ -1954,9 +2204,9 @@ class GltfCurveEditor(QMainWindow):
         self.setStatusBar(self._status)
         self._status.showMessage(
             "Step 1: Open a .glb file (Ctrl+O or blue button)  ·  "
-            "Step 2: Click a bone in the Scene Tree  ·  "
+            "Step 2: Click a bone in the Scene Tree (or click a joint dot in the viewport)  ·  "
             "Step 3: Click a channel (rotation / translation / scale)  ·  "
-            "Step 4: Press Space to play  ·  Drag the 3-D viewport to orbit"
+            "Step 4: Press Space to play  ·  🦴 Skeleton button or K to toggle skeleton"
         )
 
     def _build_timer(self) -> None:
@@ -1979,6 +2229,37 @@ class GltfCurveEditor(QMainWindow):
         self._help_panel.setVisible(self._help_visible)
         self._help_btn.setChecked(self._help_visible)
         self._help_btn.setText("✕ Help" if self._help_visible else "? Help")
+
+    def _toggle_skeleton(self) -> None:
+        """Toggle the skeleton overlay in the 3-D viewport (toolbar button or K)."""
+        visible = self._skel_btn.isChecked()
+        self._viewport.set_skeleton_visible(visible)
+        self._skel_btn.setText("🦴 Skeleton" if visible else "○ Skeleton")
+
+    def _on_bone_selected_in_viewport(self, node_index: int) -> None:
+        """Called when the user clicks a joint dot in the 3-D viewport.
+
+        Finds the matching item in the Scene Tree and selects it, which also
+        fires _on_node_selected so the channel list and curve editor update.
+        """
+        def _find(parent) -> "QTreeWidgetItem | None":
+            count = (self._scene_tree.topLevelItemCount()
+                     if parent is None else parent.childCount())
+            for i in range(count):
+                item = (self._scene_tree.topLevelItem(i)
+                        if parent is None else parent.child(i))
+                if item.data(0, Qt.ItemDataRole.UserRole) == node_index:
+                    return item
+                found = _find(item)
+                if found is not None:
+                    return found
+            return None
+
+        target = _find(None)
+        if target is not None:
+            self._scene_tree.setCurrentItem(target)
+            self._scene_tree.scrollToItem(target)
+            self._on_node_selected(target, 0)
 
     # -------------------------------------------------------------------------
     # File I/O
@@ -2126,6 +2407,8 @@ class GltfCurveEditor(QMainWindow):
         node_index: int | None = item.data(0, Qt.ItemDataRole.UserRole)
         if node_index is None or self._gltf is None:
             return
+        # Highlight the matching joint in the 3-D viewport
+        self._viewport.set_selected_joint(node_index)
         channels = get_animation_channels_for_node(self._gltf, node_index)
         self._channel_list.load_channels(channels)
         if not channels:
@@ -2277,7 +2560,7 @@ def main() -> None:
     app.setOrganizationName("TU Ilmenau — AMS Group")
 
     window = GltfCurveEditor()
-    window.show()
+    window.showMaximized()
     sys.exit(app.exec())
 
 
