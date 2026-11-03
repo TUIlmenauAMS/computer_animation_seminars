@@ -1509,12 +1509,14 @@ class HelpPanel(QWidget):
 
 class CurveEditorWidget(QWidget):
     """
-    PyQtGraph-backed animation curve editor panel.
+    PyQtGraph-backed animation curve editor panel with drag-to-edit keyframes.
 
-    THREE.JS CONCEPT: This is the Python equivalent of visualising Three.js's
-    AnimationMixer internals.  In Three.js you call mixer.clipAction(clip).play()
-    and the engine interpolates curves invisibly.  Here we expose those same
-    curves (time → value per component) so you can see and edit them.
+    EDITING UX (matches Maya Graph Editor / Blender F-Curve Editor):
+      • Click a coloured dot  →  select it (turns white, status bar shows value).
+      • Drag selected dot UP/DOWN  →  value changes live; curve and 3-D viewport
+        update on every mouse-move so you see the animation change in real time.
+      • Release mouse  →  value is committed to the glTF binary blob.
+      • Escape while dragging  →  reverts to the value at drag-start.
 
     ANIMATION CONCEPT: Maya's Graph Editor and Blender's F-Curve Editor show
     exactly this: time on X, animated value on Y, one coloured line per channel
@@ -1529,7 +1531,7 @@ class CurveEditorWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Header
+        # ── Header bar ────────────────────────────────────────────────────────
         header = QWidget()
         header.setStyleSheet(f"background-color: {PALETTE['surface']};")
         hl = QHBoxLayout(header)
@@ -1539,11 +1541,11 @@ class CurveEditorWidget(QWidget):
         hl.addWidget(self._channel_label)
         hl.addStretch()
 
-        edit_tip = QLabel("Scroll to zoom · Click a dot to edit its value")
-        edit_tip.setStyleSheet(
+        self._edit_tip = QLabel("Click a dot to select  ·  Drag up/down to edit  ·  Scroll to zoom")
+        self._edit_tip.setStyleSheet(
             f"color: {PALETTE['muted']}; font-size: 10px; font-style: italic; padding-right: 8px;"
         )
-        hl.addWidget(edit_tip)
+        hl.addWidget(self._edit_tip)
 
         self._toggles: list[QCheckBox] = []
         for i, (lbl, col) in enumerate(zip(["X", "Y", "Z", "W"], CURVE_COLORS)):
@@ -1565,6 +1567,7 @@ class CurveEditorWidget(QWidget):
         div.setStyleSheet(f"background-color: {PALETTE['border']}; max-height: 1px;")
         layout.addWidget(div)
 
+        # ── PyQtGraph plot ────────────────────────────────────────────────────
         self._plot = pg.PlotWidget()
         self._plot.setMenuEnabled(False)
         self._plot.showGrid(x=True, y=True, alpha=0.15)
@@ -1575,27 +1578,55 @@ class CurveEditorWidget(QWidget):
         self._plot.getAxis("bottom").setTextPen(pg.mkPen(color=PALETTE["muted"]))
         self._plot.getAxis("left").setTextPen(pg.mkPen(color=PALETTE["muted"]))
         self._plot.setBackground(PALETTE["surface"])
+
+        # Install event filter on the viewport so we can intercept mouse events
+        # for drag-editing without fighting PyQtGraph's own pan/zoom handlers.
+        self._plot.viewport().installEventFilter(self)
         layout.addWidget(self._plot, stretch=1)
 
-        self._curves: list[pg.PlotDataItem]     = []
+        # ── State ─────────────────────────────────────────────────────────────
+        self._curves: list[pg.PlotDataItem]          = []
         self._scatter_items: list[pg.ScatterPlotItem] = []
-        self._playhead: pg.InfiniteLine | None   = None
-        self._times:  np.ndarray | None          = None
-        self._values: np.ndarray | None          = None
-        self._anim_index:    int                 = -1
-        self._channel_index: int                 = -1
-        self._gltf_ref: GLTF2 | None             = None
-        self._on_modified_cb: callable | None    = None
-        self._current_target_path_labels: list[str] = ["X", "Y", "Z", "W"]
+        self._playhead: pg.InfiniteLine | None        = None
+        self._times:  np.ndarray | None               = None
+        self._values: np.ndarray | None               = None
+        self._anim_index:    int                      = -1
+        self._channel_index: int                      = -1
+        self._gltf_ref: GLTF2 | None                 = None
+        self._on_modified_cb: callable | None         = None
+        self._on_live_cb:     callable | None         = None   # fires during drag
+        self._current_target_path_labels: list[str]  = ["X", "Y", "Z", "W"]
+
+        # Drag state
+        self._drag_comp:   int   = -1    # component index being dragged
+        self._drag_key:    int   = -1    # keyframe index being dragged
+        self._drag_orig:   float = 0.0   # value at drag-start (for Escape revert)
+        self._drag_start_y: float | None = None   # screen Y at mouse-down
+        self._drag_start_scene_y: float = 0.0     # plot-space Y at mouse-down
+
+        # Selection highlight: one selected dot drawn as an extra scatter item
+        self._sel_scatter: pg.ScatterPlotItem | None = None
+        self._sel_comp:    int   = -1
+        self._sel_key:     int   = -1
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     def set_modified_callback(self, cb: callable) -> None:
+        """Called on mouse-release (commit) with (anim_index, channel_index, values)."""
         self._on_modified_cb = cb
+
+    def set_live_callback(self, cb: callable) -> None:
+        """Called on every mouse-move during a drag with the same signature.
+        Use this to drive the 3-D viewport live while the user drags."""
+        self._on_live_cb = cb
 
     def load_channel(self, gltf: GLTF2, anim_index: int, channel_index: int,
                      node_name: str, target_path: str, anim_name: str) -> None:
         self._gltf_ref      = gltf
         self._anim_index    = anim_index
         self._channel_index = channel_index
+        self._sel_comp      = -1
+        self._sel_key       = -1
 
         times, values = read_channel_data(gltf, anim_index, channel_index)
         self._times  = times
@@ -1624,18 +1655,18 @@ class CurveEditorWidget(QWidget):
 
             scatter = pg.ScatterPlotItem(
                 x=times, y=self._values[:, i],
-                size=11,
+                size=10,
                 pen=pg.mkPen(color=color[:3], width=1),
                 brush=pg.mkBrush(color=(*color[:3], 200)),
                 hoverable=True,
                 hoverPen=pg.mkPen("w", width=2),
-                hoverBrush=pg.mkBrush("w"),
-                tip=lambda x, y, data: f"t={x:.3f}  v={y:.4f}",
+                hoverBrush=pg.mkBrush(color=(*color[:3], 255)),
             )
             scatter.setData(
                 x=times, y=self._values[:, i],
                 data=[(i, j) for j in range(len(times))]
             )
+            # sigClicked handles selection (not editing — editing is via eventFilter drag)
             scatter.sigClicked.connect(self._on_scatter_clicked)
             self._plot.addItem(scatter)
             self._scatter_items.append(scatter)
@@ -1657,11 +1688,26 @@ class CurveEditorWidget(QWidget):
         if self._playhead is not None:
             self._playhead.setPos(t)
 
+    def refresh_values(self) -> None:
+        """Re-read _values into all curves and scatter items (called after table edit)."""
+        if self._values is None or self._times is None:
+            return
+        for i, (curve, scatter) in enumerate(
+                zip(self._curves, self._scatter_items)):
+            if i < self._values.shape[1]:
+                curve.setData(self._times, self._values[:, i])
+                scatter.setData(
+                    x=self._times, y=self._values[:, i],
+                    data=[(i, j) for j in range(len(self._times))]
+                )
+        self._refresh_selection_dot()
+
     def _clear_plot(self) -> None:
         self._plot.clear()
         self._curves.clear()
         self._scatter_items.clear()
-        self._playhead = None
+        self._playhead    = None
+        self._sel_scatter = None
 
     def clear(self) -> None:
         self._clear_plot()
@@ -1676,18 +1722,14 @@ class CurveEditorWidget(QWidget):
         if component_index < len(self._scatter_items):
             self._scatter_items[component_index].setVisible(visible)
 
+    # ── Selection ─────────────────────────────────────────────────────────────
+
     def _on_scatter_clicked(self, *args) -> None:
-        """Handle a click on a keyframe dot.
+        """Click on a keyframe dot → select it.  No dialog, no edit — just select.
+        Dragging (via eventFilter) is what actually edits the value.
 
-        PyQtGraph's ScatterPlotItem.sigClicked signature changed across
-        versions:
-          0.12.x  →  (scatter, points)
-          0.13+   →  (scatter, points, ev)   [or (ev, points) on some builds]
-        Accept *args and extract the list of SpotItem objects regardless.
+        PyQtGraph sigClicked: (scatter, points[, ev]) — accept *args.
         """
-        from PySide6.QtWidgets import QInputDialog
-
-        # Find the list of clicked SpotItem objects among the arguments.
         points = None
         for arg in args:
             if isinstance(arg, (list, np.ndarray)) and len(arg) > 0:
@@ -1695,34 +1737,184 @@ class CurveEditorWidget(QWidget):
                 break
         if (points is None
                 or (hasattr(points, "__len__") and len(points) == 0)
-                or self._values is None
-                or self._gltf_ref is None):
+                or self._values is None):
             return
 
         point = points[0]
         data  = point.data()
         if data is None:
             return
-        component_index, keyframe_index = data
-        original  = float(self._values[keyframe_index, component_index])
-        t         = float(self._times[keyframe_index])
-        comp_label = self._current_target_path_labels
-        label      = (comp_label[component_index]
-                      if component_index < len(comp_label)
-                      else f"V{component_index}")
-        new_val, ok = QInputDialog.getDouble(
-            self,
-            "Edit Keyframe",
-            f"t = {t:.4f} s   |   component {label}\n\nNew value:",
-            value=original, min=-1e6, max=1e6, decimals=6,
+        comp, key = data
+        self._sel_comp = comp
+        self._sel_key  = key
+        self._refresh_selection_dot()
+
+        val = float(self._values[key, comp])
+        t   = float(self._times[key])
+        lbl = (self._current_target_path_labels[comp]
+               if comp < len(self._current_target_path_labels) else f"V{comp}")
+        self._edit_tip.setText(
+            f"Selected  t={t:.4f}s  {lbl}={val:.5f}  ·  Drag UP/DOWN to edit  ·  Scroll to zoom"
         )
-        if not ok:
+        self._edit_tip.setStyleSheet(
+            f"color: {PALETTE['accent']}; font-size: 10px; font-style: italic; padding-right: 8px;"
+        )
+
+    def _refresh_selection_dot(self) -> None:
+        """Redraw the white selection highlight dot over the selected keyframe."""
+        if self._sel_scatter is not None:
+            try:
+                self._plot.removeItem(self._sel_scatter)
+            except Exception:
+                pass
+            self._sel_scatter = None
+
+        if (self._sel_comp < 0 or self._sel_key < 0
+                or self._values is None or self._times is None):
             return
-        self._values[keyframe_index, component_index] = np.float32(new_val)
-        if self._on_modified_cb:
-            self._on_modified_cb(self._anim_index, self._channel_index,
-                                 self._values)
-        comp = component_index
+        if self._sel_comp >= self._values.shape[1]:
+            return
+        if self._sel_key >= len(self._times):
+            return
+
+        x = float(self._times[self._sel_key])
+        y = float(self._values[self._sel_key, self._sel_comp])
+        self._sel_scatter = pg.ScatterPlotItem(
+            x=[x], y=[y],
+            size=16,
+            pen=pg.mkPen("w", width=2),
+            brush=pg.mkBrush(255, 255, 255, 60),
+            symbol="o",
+        )
+        self._plot.addItem(self._sel_scatter)
+
+    # ── Drag-to-edit via event filter ─────────────────────────────────────────
+
+    def eventFilter(self, obj, event) -> bool:  # type: ignore[override]
+        """Intercept mouse press/move/release on the plot viewport for drag editing.
+
+        We only handle the drag when a keyframe is selected AND the user presses
+        left-button on the plot.  Pan/zoom still works because we only consume
+        the event when a drag has actually started on a selected dot.
+        """
+        from PySide6.QtCore import QEvent
+        from PySide6.QtGui  import QMouseEvent
+
+        if obj is not self._plot.viewport():
+            return False
+
+        t = event.type()
+
+        if t == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.LeftButton and self._sel_comp >= 0:
+                # Check whether the press is close enough to the selected dot
+                if self._is_near_selected_dot(event.position()):
+                    self._drag_comp   = self._sel_comp
+                    self._drag_key    = self._sel_key
+                    self._drag_orig   = float(
+                        self._values[self._drag_key, self._drag_comp])
+                    self._drag_start_y = float(event.position().y())
+                    self._drag_start_scene_y = self._drag_orig
+                    return True   # consume — prevent pan
+            return False
+
+        if t == QEvent.Type.MouseMove:
+            if self._drag_start_y is not None and self._values is not None:
+                dy_px = float(event.position().y()) - self._drag_start_y
+                # Map pixel delta to value delta using the current plot Y range
+                view_rect = self._plot.viewRect()
+                h_px = max(1, self._plot.viewport().height())
+                px_per_unit = h_px / max(1e-9, view_rect.height())
+                # Dragging UP (negative dy_px) should increase value
+                delta_val = -dy_px / px_per_unit
+                new_val   = np.float32(self._drag_start_scene_y + delta_val)
+                self._values[self._drag_key, self._drag_comp] = new_val
+                self._update_curve_display(self._drag_comp)
+                self._refresh_selection_dot()
+                # Update tip label live
+                lbl = (self._current_target_path_labels[self._drag_comp]
+                       if self._drag_comp < len(self._current_target_path_labels)
+                       else f"V{self._drag_comp}")
+                self._edit_tip.setText(
+                    f"Editing  t={float(self._times[self._drag_key]):.4f}s  "
+                    f"{lbl}={float(new_val):.5f}  ·  Release to commit  ·  Esc to revert"
+                )
+                # Fire live callback so the viewport updates
+                if self._on_live_cb is not None:
+                    self._on_live_cb(
+                        self._anim_index, self._channel_index, self._values)
+                return True
+            return False
+
+        if t == QEvent.Type.MouseButtonRelease:
+            if self._drag_start_y is not None:
+                # Commit the edit to the glTF blob
+                if self._on_modified_cb is not None and self._values is not None:
+                    self._on_modified_cb(
+                        self._anim_index, self._channel_index, self._values)
+                self._drag_start_y = None
+                self._drag_comp    = -1
+                self._drag_key     = -1
+                self._edit_tip.setStyleSheet(
+                    f"color: {PALETTE['accent']}; font-size: 10px;"
+                    "font-style: italic; padding-right: 8px;"
+                )
+                return True
+            return False
+
+        if t == QEvent.Type.KeyPress:
+            if (event.key() == Qt.Key.Key_Escape
+                    and self._drag_start_y is not None
+                    and self._values is not None):
+                # Revert to the value at drag-start
+                self._values[self._drag_key, self._drag_comp] = np.float32(
+                    self._drag_orig)
+                self._update_curve_display(self._drag_comp)
+                self._refresh_selection_dot()
+                if self._on_live_cb is not None:
+                    self._on_live_cb(
+                        self._anim_index, self._channel_index, self._values)
+                self._drag_start_y = None
+                self._edit_tip.setText(
+                    "Drag reverted  ·  Click a dot to select  ·  Drag up/down to edit"
+                )
+                return True
+            return False
+
+        return False
+
+    def _is_near_selected_dot(self, screen_pos) -> bool:
+        """Return True if screen_pos is within 20 px of the selected dot."""
+        if self._values is None or self._times is None:
+            return False
+        if self._sel_key >= len(self._times):
+            return False
+        if self._sel_comp >= self._values.shape[1]:
+            return False
+        # Map the dot's data coordinates to view coordinates
+        vb   = self._plot.getPlotItem().getViewBox()
+        pt   = vb.mapFromItemToView(vb, pg.Point(
+            float(self._times[self._sel_key]),
+            float(self._values[self._sel_key, self._sel_comp])
+        ))
+        # mapFromItemToView gives scene coords; map to widget coords
+        scene_pt = vb.mapViewToScene(pg.Point(
+            float(self._times[self._sel_key]),
+            float(self._values[self._sel_key, self._sel_comp])
+        ))
+        widget_pt = self._plot.viewport().mapFromScene(
+            scene_pt.toPoint() if hasattr(scene_pt, 'toPoint') else
+            __import__('PySide6.QtCore', fromlist=['QPoint']).QPoint(
+                int(scene_pt.x()), int(scene_pt.y()))
+        )
+        dx = screen_pos.x() - widget_pt.x()
+        dy = screen_pos.y() - widget_pt.y()
+        return math.hypot(dx, dy) < 20.0
+
+    def _update_curve_display(self, comp: int) -> None:
+        """Redraw one curve and its scatter after a value change."""
+        if self._values is None or self._times is None:
+            return
         if comp < len(self._curves):
             self._curves[comp].setData(self._times, self._values[:, comp])
         if comp < len(self._scatter_items):
@@ -1737,7 +1929,14 @@ class CurveEditorWidget(QWidget):
 # =============================================================================
 
 class KeyframeInspectorWidget(QWidget):
-    """Spreadsheet view: exact numeric values per keyframe for the selected channel."""
+    """Spreadsheet view: exact numeric values per keyframe for the selected channel.
+
+    Value cells (columns 1-4) are directly editable — double-click a cell to
+    type a new number.  On commit (Enter / Tab / click away) the value is
+    validated, written into the shared _values array, and the modified_callback
+    is fired so the curve editor and 3-D viewport update immediately.
+    Time column (column 0) is read-only.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1745,7 +1944,7 @@ class KeyframeInspectorWidget(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
-        hdr = QLabel("KEYFRAME TABLE")
+        hdr = QLabel("KEYFRAME TABLE  —  double-click a value cell to edit")
         hdr.setObjectName("section_header")
         layout.addWidget(hdr)
 
@@ -1754,8 +1953,10 @@ class KeyframeInspectorWidget(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.verticalHeader().setDefaultSectionSize(22)
         self._table.verticalHeader().setVisible(False)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        # Allow double-click to open an editor on value columns (not Time)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.DoubleClicked)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.itemChanged.connect(self._on_item_changed)
         layout.addWidget(self._table, stretch=1)
 
         self._stats_label = QLabel("")
@@ -1766,34 +1967,80 @@ class KeyframeInspectorWidget(QWidget):
         self._stats_label.setWordWrap(True)
         layout.addWidget(self._stats_label)
 
+        # Shared data references (set by load_channel)
+        self._times:   np.ndarray | None = None
+        self._values:  np.ndarray | None = None
+        self._n_comp:  int               = 0
+        self._target_path: str           = ""
+        self._loading: bool              = False   # suppress itemChanged during fill
+        self._modified_cb: callable | None = None
+        self._live_cb:     callable | None = None
+        self._anim_index:    int = -1
+        self._channel_index: int = -1
+
+    def set_modified_callback(self, cb: callable) -> None:
+        self._modified_cb = cb
+
+    def set_live_callback(self, cb: callable) -> None:
+        self._live_cb = cb
+
+    def set_channel_indices(self, anim_index: int, channel_index: int) -> None:
+        self._anim_index    = anim_index
+        self._channel_index = channel_index
+
     def load_channel(self, times: np.ndarray, values: np.ndarray,
                      target_path: str) -> None:
-        if values.ndim == 1:
-            values = values[:, np.newaxis]
-        n_keys, n_comp = values.shape
-        self._table.setRowCount(n_keys)
-        labels     = COMPONENT_LABELS.get(target_path, ["V0", "V1", "V2", "V3"])
-        col_headers = ["Time"] + labels[:n_comp]
-        while len(col_headers) < 5:
-            col_headers.append("—")
-        self._table.setHorizontalHeaderLabels(col_headers)
+        self._loading = True
+        try:
+            if values.ndim == 1:
+                values = values[:, np.newaxis]
+            self._times       = times
+            self._values      = values   # shared array — edits go directly here
+            self._n_comp      = values.shape[1]
+            self._target_path = target_path
 
+            n_keys, n_comp = values.shape
+            self._table.setRowCount(n_keys)
+            labels = COMPONENT_LABELS.get(target_path, ["V0", "V1", "V2", "V3"])
+            col_headers = ["Time"] + labels[:n_comp]
+            while len(col_headers) < 5:
+                col_headers.append("—")
+            self._table.setHorizontalHeaderLabels(col_headers)
+
+            self._fill_table(times, values, n_comp, labels)
+            self._update_stats(times, values, n_comp, labels)
+        finally:
+            self._loading = False
+
+    def _fill_table(self, times, values, n_comp, labels) -> None:
+        n_keys = len(times)
         for row in range(n_keys):
+            # Time — read-only
             t_item = QTableWidgetItem(f"{times[row]:.4f}")
             t_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             t_item.setForeground(QColor(PALETTE["muted"]))
+            t_item.setFlags(t_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(row, 0, t_item)
+
+            # Value cells — editable
             for col in range(n_comp):
-                item = QTableWidgetItem(f"{values[row, col]:.5f}")
+                item = QTableWidgetItem(f"{values[row, col]:.6f}")
                 item.setTextAlignment(
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                 )
                 if values[row, col] < 0:
                     item.setForeground(QColor(PALETTE["orange"]))
+                else:
+                    item.setForeground(QColor(PALETTE["text"]))
                 self._table.setItem(row, col + 1, item)
             for col in range(n_comp, 4):
-                self._table.setItem(row, col + 1, QTableWidgetItem(""))
+                placeholder = QTableWidgetItem("—")
+                placeholder.setFlags(placeholder.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                placeholder.setForeground(QColor(PALETTE["muted"]))
+                self._table.setItem(row, col + 1, placeholder)
 
+    def _update_stats(self, times, values, n_comp, labels) -> None:
+        n_keys = len(times)
         stats_parts = []
         for col in range(n_comp):
             lbl  = labels[col] if col < len(labels) else f"V{col}"
@@ -1804,14 +2051,68 @@ class KeyframeInspectorWidget(QWidget):
             f"{n_keys} keyframes  ·  {duration:.3f}s\n" + "  ".join(stats_parts)
         )
 
+    def refresh_from_values(self) -> None:
+        """Repopulate cells from the shared _values array (called after drag edit)."""
+        if self._values is None or self._times is None:
+            return
+        self._loading = True
+        try:
+            labels = COMPONENT_LABELS.get(self._target_path, ["V0", "V1", "V2", "V3"])
+            self._fill_table(self._times, self._values, self._n_comp, labels)
+            self._update_stats(self._times, self._values, self._n_comp, labels)
+        finally:
+            self._loading = False
+
+    def _on_item_changed(self, item: QTableWidgetItem) -> None:
+        """Validate and commit a cell edit from the table."""
+        if self._loading or self._values is None or self._times is None:
+            return
+        row = item.row()
+        col = item.column()
+        if col == 0 or col > self._n_comp:
+            return   # time column or empty placeholder — ignore
+        comp = col - 1
+        try:
+            new_val = float(item.text().replace(",", "."))
+        except ValueError:
+            # Invalid text — revert the cell to the current value
+            self._loading = True
+            item.setText(f"{float(self._values[row, comp]):.6f}")
+            self._loading = False
+            return
+
+        self._values[row, comp] = np.float32(new_val)
+
+        # Recolour the cell
+        self._loading = True
+        if new_val < 0:
+            item.setForeground(QColor(PALETTE["orange"]))
+        else:
+            item.setForeground(QColor(PALETTE["text"]))
+        self._loading = False
+
+        # Fire live first (updates curve editor and viewport immediately)
+        if self._live_cb is not None:
+            self._live_cb(self._anim_index, self._channel_index, self._values)
+        # Then commit to glTF blob
+        if self._modified_cb is not None:
+            self._modified_cb(self._anim_index, self._channel_index, self._values)
+
+        labels = COMPONENT_LABELS.get(self._target_path, ["V0", "V1", "V2", "V3"])
+        self._update_stats(self._times, self._values, self._n_comp, labels)
+
     def highlight_row(self, keyframe_index: int) -> None:
         if 0 <= keyframe_index < self._table.rowCount():
             self._table.selectRow(keyframe_index)
             self._table.scrollToItem(self._table.item(keyframe_index, 0))
 
     def clear(self) -> None:
+        self._loading = True
         self._table.setRowCount(0)
+        self._loading = False
         self._stats_label.setText("")
+        self._times  = None
+        self._values = None
 
 
 # =============================================================================
