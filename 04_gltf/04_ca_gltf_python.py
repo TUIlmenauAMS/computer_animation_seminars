@@ -57,6 +57,7 @@ from __future__ import annotations
 import math
 import struct
 import sys
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -92,6 +93,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PySide6.QtGui import QSurfaceFormat
 from OpenGL import GL
 
 # =============================================================================
@@ -777,6 +779,7 @@ class ModelViewportWidget(QOpenGLWidget):
         self._mesh_ebo:     int          = 0
         self._mesh_count:   int          = 0
         self._skin_index:   int          = -1
+        self._is_skinned:   bool         = False
         self._prog:         QOpenGLShaderProgram | None = None
         self._line_prog:    QOpenGLShaderProgram | None = None
         self._line_vao:     int          = 0
@@ -827,17 +830,31 @@ class ModelViewportWidget(QOpenGLWidget):
             1.0,
         )
 
-        # Mesh shader
+        # Mesh shader — log compile/link errors so blank viewport is diagnosable
         self._prog = QOpenGLShaderProgram(self)
-        self._prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex,   _VERT_SRC)
-        self._prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _FRAG_SRC)
-        self._prog.link()
+        ok = self._prog.addShaderFromSourceCode(
+            QOpenGLShader.ShaderTypeBit.Vertex, _VERT_SRC)
+        if not ok:
+            print(f"[Viewport] Vertex shader compile error:\n{self._prog.log()}")
+        ok = self._prog.addShaderFromSourceCode(
+            QOpenGLShader.ShaderTypeBit.Fragment, _FRAG_SRC)
+        if not ok:
+            print(f"[Viewport] Fragment shader compile error:\n{self._prog.log()}")
+        if not self._prog.link():
+            print(f"[Viewport] Mesh shader link error:\n{self._prog.log()}")
 
         # Skeleton line shader
         self._line_prog = QOpenGLShaderProgram(self)
-        self._line_prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex,   _LINE_VERT)
-        self._line_prog.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, _LINE_FRAG)
-        self._line_prog.link()
+        ok = self._line_prog.addShaderFromSourceCode(
+            QOpenGLShader.ShaderTypeBit.Vertex, _LINE_VERT)
+        if not ok:
+            print(f"[Viewport] Line vertex shader error:\n{self._line_prog.log()}")
+        ok = self._line_prog.addShaderFromSourceCode(
+            QOpenGLShader.ShaderTypeBit.Fragment, _LINE_FRAG)
+        if not ok:
+            print(f"[Viewport] Line fragment shader error:\n{self._line_prog.log()}")
+        if not self._line_prog.link():
+            print(f"[Viewport] Line shader link error:\n{self._line_prog.log()}")
 
         # Allocate VAO / VBO placeholders
         vaos = GL.glGenVertexArrays(2)
@@ -877,7 +894,11 @@ class ModelViewportWidget(QOpenGLWidget):
 
     def wheelEvent(self, event) -> None:
         delta = event.angleDelta().y()
-        self._orbit_dist = max(0.5, self._orbit_dist - delta * 0.005)
+        # FIX: proportional zoom so large and small models both feel responsive.
+        # One standard wheel notch (delta = 120) scales distance by ~0.9 (zoom in)
+        # or ~1.11 (zoom out).
+        self._orbit_dist *= 0.999 ** delta
+        self._orbit_dist = max(0.01, self._orbit_dist)
         self.update()
 
     # ------------------------------------------------------------------
@@ -885,20 +906,35 @@ class ModelViewportWidget(QOpenGLWidget):
     # ------------------------------------------------------------------
 
     def _mvp(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Return (model, view, proj) as 4×4 float32 ndarrays."""
+        """Return (model, view, proj) as row-major 4×4 float32 ndarrays.
+
+        All three are uploaded with GL_TRUE (transpose), which makes OpenGL
+        treat each numpy array as row-major — matching standard math notation
+        M @ v rather than v @ M.
+        """
         w, h   = max(1, self.width()), max(1, self.height())
         aspect = w / h
 
-        # Projection (perspective)
+        # FIX: scale near/far with the current orbit distance so that large
+        # meshes (Fox.glb is ~150 units tall) are never clipped.
+        near = max(0.001, self._orbit_dist * 0.005)
+        far  = self._orbit_dist * 200.0
+
+        # Projection (perspective) — row-major form:
+        #   Row 0: [f/a   0    0              0            ]
+        #   Row 1: [  0   f    0              0            ]
+        #   Row 2: [  0   0   (f+n)/(n-f)   2fn/(n-f)    ]  ← proj[2,3]
+        #   Row 3: [  0   0   -1             0            ]  ← proj[3,2]
         fov    = math.radians(45.0)
-        near, far = 0.01, 200.0
         f      = 1.0 / math.tan(fov / 2)
         proj   = np.zeros((4, 4), dtype=np.float32)
         proj[0, 0] = f / aspect
         proj[1, 1] = f
         proj[2, 2] = (far + near) / (near - far)
-        proj[2, 3] = -1.0
-        proj[3, 2] = (2 * far * near) / (near - far)
+        # FIX: these two entries were swapped in the original, sending every
+        # vertex outside the clip volume (nothing visible).
+        proj[2, 3] = (2 * far * near) / (near - far)   # was -1.0  ← BUG
+        proj[3, 2] = -1.0                               # was 2fn/(n-f) ← BUG
 
         # View (orbit camera)
         yaw   = math.radians(self._orbit_yaw)
@@ -977,7 +1013,10 @@ class ModelViewportWidget(QOpenGLWidget):
         self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
         extent         = float(np.max(mx - mn)) or 1.0
         self._bbox_scale = 1.0 / extent
-        self._orbit_dist = 2.0 / self._bbox_scale * 0.6  # auto-fit
+        # Auto-fit: place the camera far enough to see the whole mesh.
+        # 1.2 * extent gives comfortable framing; the _mvp() near/far scale
+        # relative to orbit_dist so there's no clipping at any size.
+        self._orbit_dist = extent * 1.2
 
         # Interleave: pos(3) | normal(3) | joints(4) | weights(4) = 14 floats / vertex
         n_verts   = len(positions)
@@ -1019,11 +1058,9 @@ class ModelViewportWidget(QOpenGLWidget):
 
         # Pick skin index for this mesh
         self._skin_index = -1
-        node_idx = None
         for ni, node in enumerate(gltf.nodes or []):
             if node.mesh == 0 and node.skin is not None:
                 self._skin_index = node.skin
-                node_idx = ni
                 break
 
     def _upload_skeleton_vbo(self) -> None:
@@ -1051,13 +1088,16 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glUniformMatrix4fv(_u("uView"),  1, GL.GL_TRUE, view)
         GL.glUniformMatrix4fv(_u("uProj"),  1, GL.GL_TRUE, proj)
 
-        # Light slightly above and to the right
-        light = self._bbox_center + np.array([2, 4, 3], dtype=np.float32)
+        # Light: scale position with orbit distance so it always illuminates
+        # the model from a sensible angle regardless of mesh size.
+        light = self._bbox_center + self._orbit_dist * np.array(
+            [0.5, 0.8, 0.6], dtype=np.float32)
         GL.glUniform3f(_u("uLightPos"),    *light)
         GL.glUniform3f(_u("uLightColor"),  1.0, 1.0, 1.0)
         GL.glUniform3f(_u("uObjectColor"), 0.55, 0.65, 0.75)
         GL.glUniform1f(_u("uAmbient"),     0.35)
-        GL.glUniform1i(_u("uSkinned"), 1 if self._is_skinned and self._skin_index >= 0 else 0)
+        GL.glUniform1i(_u("uSkinned"),
+                       1 if self._is_skinned and self._skin_index >= 0 else 0)
 
         # Upload joint matrices
         if self._is_skinned and self._skin_index >= 0 and self._gltf is not None:
@@ -1071,7 +1111,9 @@ class ModelViewportWidget(QOpenGLWidget):
                 loc  = GL.glGetUniformLocation(self._prog.programId(), "uJoints[0]")
                 GL.glUniformMatrix4fv(loc, n, GL.GL_TRUE, flat)
             except Exception:
-                pass
+                # Print once so shader / skinning problems are diagnosable,
+                # then continue — the mesh will render in rest pose.
+                traceback.print_exc()
 
         GL.glBindVertexArray(self._mesh_vao)
         GL.glDrawElements(GL.GL_TRIANGLES, self._mesh_count,
@@ -1160,8 +1202,6 @@ class HelpPanel(QWidget):
         layout.setContentsMargins(16, 10, 16, 10)
         layout.setSpacing(0)
 
-        # Use a single HTML QLabel — avoids Windows font-fallback strikethrough
-        # that occurs when mixing font-weight / font-size across sibling QLabels.
         html = f"""
         <table cellspacing="0" cellpadding="0" width="100%">
           <tr><td colspan="2" style="padding-bottom:8px;">
@@ -1176,6 +1216,7 @@ class HelpPanel(QWidget):
             </td>
             <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
               Ctrl+O or the blue button — load any .glb file that contains animations.
+              The first animated bone is selected automatically.
             </td>
           </tr>
           <tr>
@@ -1184,7 +1225,8 @@ class HelpPanel(QWidget):
               2 &nbsp;Browse the scene
             </td>
             <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
-              Click a node in the Scene Tree (left). Bone nodes hold most channels.
+              Click any bone in the Scene Tree (left). Its animation channels appear
+              below, and the first channel is selected automatically.
             </td>
           </tr>
           <tr>
@@ -1204,8 +1246,8 @@ class HelpPanel(QWidget):
             </td>
             <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
               Space or &#9654; to play — model animates in the viewport above.<br>
-              Click a dot on any curve to edit that keyframe value directly.<br>
-              Ctrl+S exports the modified .glb.
+              <b>Click a coloured dot</b> on any curve to edit that keyframe value.
+              A dialog will ask for the new number. Ctrl+S exports the modified .glb.
             </td>
           </tr>
           <tr>
@@ -1214,7 +1256,7 @@ class HelpPanel(QWidget):
               Viewport
             </td>
             <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
-              Drag to orbit &middot; Scroll to zoom.
+              Drag to orbit &middot; Scroll to zoom (works at any scale).
             </td>
           </tr>
           <tr><td colspan="2" style="padding-top:8px;">
@@ -1261,7 +1303,7 @@ class CurveEditorWidget(QWidget):
         header.setStyleSheet(f"background-color: {PALETTE['surface']};")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(12, 6, 12, 6)
-        self._channel_label = QLabel("No node selected")
+        self._channel_label = QLabel("No channel selected — click a bone, then a channel")
         self._channel_label.setStyleSheet(f"color: {PALETTE['muted']}; font-size: 12px;")
         hl.addWidget(self._channel_label)
         hl.addStretch()
@@ -1392,7 +1434,7 @@ class CurveEditorWidget(QWidget):
 
     def clear(self) -> None:
         self._clear_plot()
-        self._channel_label.setText("No node selected")
+        self._channel_label.setText("No channel selected — click a bone, then a channel")
         self._times  = None
         self._values = None
 
@@ -1403,19 +1445,37 @@ class CurveEditorWidget(QWidget):
         if component_index < len(self._scatter_items):
             self._scatter_items[component_index].setVisible(visible)
 
-    def _on_scatter_clicked(self, scatter: pg.ScatterPlotItem,
-                            points: list) -> None:
+    def _on_scatter_clicked(self, *args) -> None:
+        """Handle a click on a keyframe dot.
+
+        PyQtGraph's ScatterPlotItem.sigClicked signature changed across
+        versions:
+          0.12.x  →  (scatter, points)
+          0.13+   →  (scatter, points, ev)   [or (ev, points) on some builds]
+        Accept *args and extract the list of SpotItem objects regardless.
+        """
         from PySide6.QtWidgets import QInputDialog
+
+        # Find the list of clicked SpotItem objects among the arguments.
+        points = None
+        for arg in args:
+            if isinstance(arg, (list, np.ndarray)) and len(arg) > 0:
+                points = arg
+                break
         if not points or self._values is None or self._gltf_ref is None:
             return
-        point                    = points[0]
-        component_index, keyframe_index = point.data()
-        original                 = float(self._values[keyframe_index, component_index])
-        t                        = float(self._times[keyframe_index])
-        comp_label               = self._current_target_path_labels
-        label                    = (comp_label[component_index]
-                                    if component_index < len(comp_label)
-                                    else f"V{component_index}")
+
+        point = points[0]
+        data  = point.data()
+        if data is None:
+            return
+        component_index, keyframe_index = data
+        original  = float(self._values[keyframe_index, component_index])
+        t         = float(self._times[keyframe_index])
+        comp_label = self._current_target_path_labels
+        label      = (comp_label[component_index]
+                      if component_index < len(comp_label)
+                      else f"V{component_index}")
         new_val, ok = QInputDialog.getDouble(
             self,
             "Edit Keyframe",
@@ -1685,11 +1745,6 @@ class GltfCurveEditor(QMainWindow):
       ├───────────────┴───────────────────────────────┴──────────────────────┤
       │  Transport:  ▶  ■  ⟳   Speed ───  Scrubber ──────────  0.000 s      │
       └──────────────────────────────────────────────────────────────────────┘
-
-    PIPELINE CONCEPT: This is a minimal professional animation pipeline tool.
-    Real equivalents: Maya Graph Editor + Outliner, Blender NLA + Dope Sheet,
-    MotionBuilder FCurve Editor.  All share the same layout: hierarchy on the
-    left, curve editor centre, inspector right, transport at the bottom.
     """
 
     def __init__(self) -> None:
@@ -1729,7 +1784,7 @@ class GltfCurveEditor(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        # ── Logo + author (matches 03_ca_hello_pyside6 template) ──────────────
+        # ── Logo + author ─────────────────────────────────────────────────────
         logo_widget = QWidget()
         logo_layout = QVBoxLayout(logo_widget)
         logo_layout.setContentsMargins(0, 0, 8, 0)
@@ -1966,9 +2021,12 @@ class GltfCurveEditor(QMainWindow):
         self._status.showMessage(
             f"{path.name}  ·  {n_nodes} nodes  ·  {n_meshes} meshes  ·  "
             f"{n_skins} skins  ·  {n_anims} animations  ·  "
-            f"Click a node in the Scene Tree to inspect its channels  ·  "
-            f"Drag viewport to orbit"
+            f"Model loaded — auto-selecting first animated bone…"
         )
+
+        # Auto-select the first bone that has animation channels so the user
+        # immediately sees curves without having to click through the tree.
+        self._auto_select_first_animated_node()
 
     def _on_export(self) -> None:
         if self._gltf is None:
@@ -2013,6 +2071,54 @@ class GltfCurveEditor(QMainWindow):
         self._scene_tree.expandAll()
 
     # -------------------------------------------------------------------------
+    # Auto-selection helper
+    # -------------------------------------------------------------------------
+
+    def _auto_select_first_animated_node(self) -> None:
+        """Find the first node that has animation channels and select it.
+
+        This runs after loading so the user immediately sees curves and the
+        keyframe table filled in, without having to click through the tree.
+        """
+        if self._gltf is None:
+            return
+
+        # Find the node index of the first animated channel.
+        first_node_idx: int | None = None
+        for anim in (self._gltf.animations or []):
+            for channel in (anim.channels or []):
+                if channel.target.node is not None:
+                    first_node_idx = channel.target.node
+                    break
+            if first_node_idx is not None:
+                break
+
+        if first_node_idx is None:
+            return  # No animated nodes at all
+
+        # Walk the QTreeWidget looking for the item whose UserRole == first_node_idx.
+        def _find(parent: QTreeWidgetItem | None) -> QTreeWidgetItem | None:
+            count = (self._scene_tree.topLevelItemCount()
+                     if parent is None else parent.childCount())
+            for i in range(count):
+                item = (self._scene_tree.topLevelItem(i)
+                        if parent is None else parent.child(i))
+                if item.data(0, Qt.ItemDataRole.UserRole) == first_node_idx:
+                    return item
+                found = _find(item)
+                if found is not None:
+                    return found
+            return None
+
+        target_item = _find(None)
+        if target_item is None:
+            return
+
+        self._scene_tree.setCurrentItem(target_item)
+        self._scene_tree.scrollToItem(target_item)
+        self._on_node_selected(target_item, 0)
+
+    # -------------------------------------------------------------------------
     # Selection handlers
     # -------------------------------------------------------------------------
 
@@ -2029,6 +2135,7 @@ class GltfCurveEditor(QMainWindow):
                 f"Node '{get_node_name(self._gltf, node_index)}' has no animation channels."
             )
         else:
+            # Auto-select the first channel so the curve editor fills immediately.
             self._on_channel_selected(*channels[0])
 
     def _on_channel_selected(self, anim_index: int, channel_index: int,
@@ -2062,7 +2169,7 @@ class GltfCurveEditor(QMainWindow):
         self._status.showMessage(
             f"'{node_name}'  ·  {target_path}  ·  {anim_name}  ·  "
             f"{len(times)} keyframes  ·  {duration:.3f}s  ·  "
-            f"Space to play  |  Click a keyframe dot to edit its value"
+            f"Space to play  |  Click a coloured keyframe dot on the curve to edit its value"
         )
 
     # -------------------------------------------------------------------------
@@ -2123,7 +2230,7 @@ class GltfCurveEditor(QMainWindow):
         self._transport.update_time(self._playback_time, self._current_duration)
         self._curve_editor.set_playhead(self._playback_time)
 
-        # ── Drive the 3-D viewport ──────────────────────────────────────────
+        # Drive the 3-D viewport
         self._viewport.set_playback_time(self._playback_time)
 
         # Highlight nearest keyframe in the inspector table
@@ -2152,6 +2259,17 @@ class GltfCurveEditor(QMainWindow):
 
 def main() -> None:
     """Create the QApplication, apply the dark stylesheet, and enter the event loop."""
+    # FIX: Set the OpenGL surface format BEFORE creating QApplication.
+    # Without this, on macOS the context defaults to 2.1 (no Core Profile),
+    # and on some Linux drivers the depth buffer may be missing — both produce
+    # a completely blank viewport with no error message.
+    fmt = QSurfaceFormat()
+    fmt.setVersion(3, 3)
+    fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
+    fmt.setDepthBufferSize(24)
+    fmt.setSamples(4)  # 4× MSAA for smoother edges
+    QSurfaceFormat.setDefaultFormat(fmt)
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setApplicationName("glTF Animation Curve Editor")
