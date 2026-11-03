@@ -54,6 +54,11 @@ dependencies = [
     # Numerical arrays — float32 typed keyframe data
     # Changelog: https://numpy.org/doc/stable/release.html
     "numpy==1.26.4",
+
+    # OpenGL Python bindings — required by the 3-D viewport (Phong shading,
+    # skeleton rendering). PySide6's QOpenGLWidget calls into these at runtime.
+    # Changelog: https://pyopengl.sourceforge.net/
+    "PyOpenGL==3.1.7",
 ]
 
 [tool.uv]

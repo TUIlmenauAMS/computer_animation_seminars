@@ -13,6 +13,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "numpy" },
     { name = "pygltflib" },
+    { name = "pyopengl" },
     { name = "pyqtgraph" },
     { name = "pyside6" },
 ]
@@ -21,6 +22,7 @@ dependencies = [
 requires-dist = [
     { name = "numpy", specifier = "==1.26.4" },
     { name = "pygltflib", specifier = "==1.16.2" },
+    { name = "pyopengl", specifier = "==3.1.7" },
     { name = "pyqtgraph", specifier = "==0.13.7" },
     { name = "pyside6", specifier = "==6.7.2" },
 ]
@@ -132,6 +134,15 @@ dependencies = [
     { name = "deprecated", version = "3.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/38/d7/0b8e35cb3ff69dd981e358e72e0a5632f847d4bd61876be04518cb4e075a/pygltflib-1.16.2.tar.gz", hash = "sha256:4f9481f5841b0b8fb7b271b0414b394b503405260a6ee0cf2c330a5420d19b64", size = 42550, upload-time = "2024-03-01T04:05:09.05Z" }
+
+[[package]]
+name = "pyopengl"
+version = "3.1.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/b6/970868d44b619292f1f54501923c69c9bd0ab1d2d44cf02590eac2706f4f/PyOpenGL-3.1.7.tar.gz", hash = "sha256:eef31a3888e6984fd4d8e6c9961b184c9813ca82604d37fe3da80eb000a76c86", size = 1896446, upload-time = "2023-05-23T13:17:04.907Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/48/00e31747821d3fc56faddd00a4725454d1e694a8b67d715cf20f531506a5/PyOpenGL-3.1.7-py3-none-any.whl", hash = "sha256:a6ab19cf290df6101aaf7470843a9c46207789855746399d0af92521a0a92b7a", size = 2416834, upload-time = "2023-05-23T13:17:01.293Z" },
+]
 
 [[package]]
 name = "pyqtgraph"
