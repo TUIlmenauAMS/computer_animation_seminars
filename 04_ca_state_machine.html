@@ -1778,69 +1778,50 @@
           }
         }
 
-        // THREE.SkeletonHelper explanation and fix:
+        // THREE.SkeletonHelper explanation:
         //
-        // SkeletonHelper sets:
-        //   this.matrix = root.matrixWorld        (live reference, not a copy)
-        //   this.matrixAutoUpdate = false
+        // The standard SkeletonHelper sets this.matrix = root.matrixWorld (live
+        // reference) and stores geometry in root-local space. With this scene's
+        // update loop, characterRoot.matrixWorld ends up applied twice to the
+        // helper (once via the live matrix, once via the scene graph walk), so
+        // the helper renders in the wrong place.
         //
-        // In updateMatrixWorld(), it stores bone positions as:
-        //   geometry[i] = root.matrixWorld⁻¹ × bone.matrixWorld   (root-local space)
-        //
-        // Then super.updateMatrixWorld() computes:
-        //   this.matrixWorld = parent.matrixWorld × this.matrix
-        //                    = scene.matrixWorld  × root.matrixWorld
-        //                    = identity           × root.matrixWorld
-        //                    = root.matrixWorld
-        //
-        // So final rendered position = root.matrixWorld × (root.matrixWorld⁻¹ × bone.matrixWorld)
-        //                            = bone.matrixWorld   ← CORRECT in theory
-        //
-        // BUT: the debug output showed bone world positions at (-3, 3, -3) and
-        // helper geometry world positions at (-6, 6, -6) — exactly 2× the bones.
-        //
-        // The real issue: OrbitControls moves the camera, not the scene. But
-        // characterRoot was placed at world origin. The bones show (-3,3,-3)
-        // because controls.target was set to (0,0.8,0) initially but then
-        // fitCameraToModel reset it to the bounding box center. With scale 0.01,
-        // the bounding box is tiny (~1m) so the camera moves close in, but
-        // something shifts characterRoot's matrixWorld to (-3,3,-3).
-        //
-        // Actually the debug shows helper.matrix === characterRoot.matrixWorld (true),
-        // meaning the live reference is intact. The double at (-6,6,-6) means
-        // matrixWorld of the helper = characterRoot.matrixWorld applied twice.
-        // This happens because `characterRoot` has been moved to (-3,3,-3)
-        // (perhaps by fitCameraToModel or controls), so:
-        //   geometry stores bone positions in root-local (cm), e.g. (0,41,-24)
-        //   matrixWorld = root.matrixWorld = translate(-3,3,-3)×scale(0.01)
-        //   rendered pos = translate(-3,3,-3)×scale(0.01) × (0,41,-24)
-        //                = (-3 + 0*0.01, 3 + 41*0.01, -3 + -24*0.01) = (-3, 3.41, -3.24) ← correct!
-        // But the debug says (-6,6,-6) for a zero-position vertex...
-        // A zero-position vertex: translate(-3,3,-3)×scale(0.01) × (0,0,0) = (-3,3,-3) ← should be (-3,3,-3)
-        // But the debug shows (-6,6,-6)! That means matrixWorld is translating by (-6,6,-6), not (-3,3,-3).
-        //
-        // CONCLUSION: characterRoot.matrixWorld IS being applied twice to the helper.
-        // This is a Three.js quirk: when the helper is added to the scene AND
-        // scene.updateMatrixWorld() is called, it computes:
-        //   helper.matrixWorld = scene.matrixWorld × helper.matrix
-        //                      = identity × characterRoot.matrixWorld
-        // But then the renderer ALSO multiplies geometry by matrixWorld when drawing.
-        // For regular objects, geometry is in LOCAL space and matrixWorld brings it to world.
-        // The helper geometry is ALREADY in world space (bone world positions),
-        // so the matrixWorld transform is one too many.
-        //
-        // THE FIX: after constructing the helper, replace its matrix with the
-        // identity matrix so matrixWorld stays identity and the geometry positions
-        // (which are already correct world-space positions) render without any
-        // additional transform applied.
+        // Fix used here: override updateMatrixWorld() to write bone world positions
+        // directly into the geometry (skipping the root.matrixWorld⁻¹ multiply),
+        // and keep this.matrixWorld as identity so no extra transform is applied.
+        // bone.matrixWorld already includes characterRoot's scale (0.01 for Fox),
+        // so the skeleton renders at the correct size and position for all models.
         skeletonHelper = new THREE.SkeletonHelper(characterRoot);
-        // Override the matrix that SkeletonHelper set to characterRoot.matrixWorld.
-        // The helper's geometry updateMatrixWorld() writes bone positions in
-        // root-local space, which after multiplication by root.matrixWorld gives
-        // world positions — but those are the geometry values we want rendered
-        // with NO additional transform. Setting matrix to identity achieves this.
-        skeletonHelper.matrix = new THREE.Matrix4(); // identity — don't re-apply any transform
-        skeletonHelper.matrixWorld = new THREE.Matrix4(); // identity in world too
+        skeletonHelper.matrix = new THREE.Matrix4();    // identity — no extra transform
+        skeletonHelper.matrixWorld = new THREE.Matrix4(); // identity
+
+        // Override updateMatrixWorld to write true world-space positions directly.
+        // The base class writes root-local positions; with identity matrixWorld that
+        // undoes the root transform and the Fox skeleton renders at 100× scale.
+        // Here we write bone.matrixWorld positions directly — scale already included.
+        skeletonHelper.updateMatrixWorld = function (force) {
+          const bones = this.bones;
+          const geometry = this.geometry;
+          const position = geometry.attributes.position;
+          const _bonePos = new THREE.Vector3();
+          let j = 0;
+          for (let i = 0; i < bones.length; i++) {
+            const bone = bones[i];
+            if (bone.parent && bone.parent.isBone) {
+              // Line from parent bone to this bone.
+              bone.parent.getWorldPosition(_bonePos);
+              position.setXYZ(j, _bonePos.x, _bonePos.y, _bonePos.z);
+              j++;
+              bone.getWorldPosition(_bonePos);
+              position.setXYZ(j, _bonePos.x, _bonePos.y, _bonePos.z);
+              j++;
+            }
+          }
+          geometry.drawRange.count = j;
+          position.needsUpdate = true;
+          // matrixWorld stays identity — no THREE.Object3D.updateMatrixWorld call needed.
+        };
+
         skeletonHelper.visible = skeletonVisible;
         scene.add(skeletonHelper);
 
