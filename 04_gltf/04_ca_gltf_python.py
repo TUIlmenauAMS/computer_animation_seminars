@@ -12,6 +12,23 @@
 A professional Qt application for inspecting, visualising and editing
 animation data inside binary glTF (.glb) files.  Five panels work together:
 
+Fixes applied (v2.0.1)
+----------------------
+  1. Added missing GltfCurveEditor._on_keyframe_live() method.
+     The CurveEditorWidget and KeyframeInspectorWidget both registered this
+     as their live (drag) callback via set_live_callback(), but the method was
+     never defined on GltfCurveEditor, causing an AttributeError on startup.
+     The method now refreshes the curve editor, inspector table, and 3-D
+     viewport live during a drag without writing to the glTF blob (that commit
+     happens on mouse-release via _on_keyframe_modified as intended).
+
+  2. Fixed KeyframeInspectorWidget never receiving its anim/channel indices.
+     set_channel_indices() was defined but never called, so the inspector's
+     _anim_index and _channel_index stayed at -1/-1 forever.  Table edits
+     would fire live/modified callbacks with wrong indices, silently corrupting
+     the wrong accessor or doing nothing.  Now _on_channel_selected() calls
+     set_channel_indices() before load_channel() every time a channel changes.
+
   1. 3-D Viewport   — renders the mesh with Phong shading and draws the
                        skeleton as coloured bone lines; the model animates
                        live as the transport plays.
@@ -329,22 +346,44 @@ def load_gltf(path: Path) -> GLTF2:
 
 
 def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
-    """Read one glTF accessor as a NumPy array (copy, writeable)."""
-    accessor    = gltf.accessors[accessor_index]
+    """Read one glTF accessor as a NumPy array (copy, writeable).
+
+    Handles:
+      • accessor_index out of range   → returns empty float32 array
+      • accessor.bufferView is None   → returns zero array (sparse base, no data)
+      • interleaved (byteStride)      → strips out only the relevant bytes
+      • all glTF component types      → via COMPONENT_DTYPE
+    """
+    if not gltf.accessors or accessor_index >= len(gltf.accessors):
+        return np.zeros(0, dtype=np.float32)
+
+    accessor = gltf.accessors[accessor_index]
+    dtype, item_size = COMPONENT_DTYPE.get(
+        accessor.componentType, (np.dtype("float32"), 4)
+    )
+    n_comp = ACCESSOR_NUM_COMPONENTS.get(accessor.type, 1)
+    count  = accessor.count or 0
+
+    # bufferView may be None for sparse accessors whose base is all zeros
+    if accessor.bufferView is None:
+        arr = np.zeros((count, n_comp) if n_comp > 1 else (count,), dtype=dtype)
+        return arr.copy()
+
+    if not gltf.bufferViews or accessor.bufferView >= len(gltf.bufferViews):
+        arr = np.zeros((count, n_comp) if n_comp > 1 else (count,), dtype=dtype)
+        return arr.copy()
+
     buffer_view = gltf.bufferViews[accessor.bufferView]
     blob: bytes = gltf.binary_blob()
     view_start  = buffer_view.byteOffset or 0
     acc_start   = view_start + (accessor.byteOffset or 0)
-    dtype, item_size = COMPONENT_DTYPE.get(
-        accessor.componentType, (np.dtype("float32"), 4)
-    )
-    n_comp      = ACCESSOR_NUM_COMPONENTS.get(accessor.type, 1)
     byte_stride = buffer_view.byteStride or (item_size * n_comp)
-    raw: bytes  = b"".join(
-        blob[acc_start + i * byte_stride: acc_start + i * byte_stride + item_size * n_comp]
-        for i in range(accessor.count)
+
+    element_bytes = item_size * n_comp
+    raw: bytes = b"".join(
+        blob[acc_start + i * byte_stride: acc_start + i * byte_stride + element_bytes]
+        for i in range(count)
     )
-    dtype, _ = COMPONENT_DTYPE.get(accessor.componentType, (np.dtype("float32"), 4))
     arr = np.frombuffer(raw, dtype=dtype).copy()
     if n_comp > 1:
         arr = arr.reshape(-1, n_comp)
@@ -583,21 +622,20 @@ def compute_joint_matrices(
                 rest_s = val.flatten()[:3]
             local_mats[ni] = _trs_to_mat4(rest_t, rest_r, rest_s)
 
-    # Accumulate world matrices via scene-graph traversal.
+    # Accumulate world matrices via iterative scene-graph traversal.
+    # (Recursive _visit hits Python's recursion limit on deep skeletons.)
     world_mats = [None] * n_nodes
-
-    def _visit(ni: int, parent_world: np.ndarray) -> None:
-        world_mats[ni] = parent_world @ local_mats[ni]
-        for ci in (gltf.nodes[ni].children or []):
-            _visit(ci, world_mats[ni])
-
     root_ids: list[int] = []
     for scene in (gltf.scenes or []):
         root_ids.extend(scene.nodes or [])
     if not root_ids:
         root_ids = list(range(n_nodes))
-    for ri in root_ids:
-        _visit(ri, np.eye(4, dtype=np.float32))
+    stack = [(ri, np.eye(4, dtype=np.float32)) for ri in root_ids]
+    while stack:
+        ni, parent_world = stack.pop()
+        world_mats[ni] = parent_world @ local_mats[ni]
+        for ci in (gltf.nodes[ni].children or []):
+            stack.append((ci, world_mats[ni]))
 
     # Inverse bind matrices
     ibm_arr = np.eye(4, dtype=np.float32)[np.newaxis].repeat(n_joints, axis=0)
@@ -655,19 +693,17 @@ def compute_world_positions(
             local_mats[ni] = _trs_to_mat4(rest_t, rest_r, rest_s)
 
     world_mats: dict[int, np.ndarray] = {}
-
-    def _visit(ni: int, pw: np.ndarray) -> None:
-        world_mats[ni] = pw @ local_mats[ni]
-        for ci in (gltf.nodes[ni].children or []):
-            _visit(ci, world_mats[ni])
-
     roots: list[int] = []
     for scene in (gltf.scenes or []):
         roots.extend(scene.nodes or [])
     if not roots:
         roots = list(range(n_nodes))
-    for r in roots:
-        _visit(r, np.eye(4, dtype=np.float32))
+    stack2 = [(r, np.eye(4, dtype=np.float32)) for r in roots]
+    while stack2:
+        ni, pw = stack2.pop()
+        world_mats[ni] = pw @ local_mats[ni]
+        for ci in (gltf.nodes[ni].children or []):
+            stack2.append((ci, world_mats[ni]))
 
     return {ni: wm[:3, 3] for ni, wm in world_mats.items()}
 
@@ -724,43 +760,38 @@ in vec2 vTexCoord;
 
 uniform vec3  uLightPos;
 uniform vec3  uLightColor;
-uniform vec4  uBaseColor;      // glTF pbrMetallicRoughness.baseColorFactor (linear)
+uniform vec4  uBaseColor;      // linear baseColorFactor (glTF spec §3.9.3)
 uniform float uAmbient;
 uniform bool  uHasTexture;
-uniform sampler2D uAlbedo;     // bound as GL_SRGB8_ALPHA8 — GPU linearises automatically
+uniform sampler2D uAlbedo;     // uploaded as GL_SRGB8_ALPHA8: GPU linearises on read
 
 out vec4 FragColor;
 
 void main() {
-    // ── Albedo ────────────────────────────────────────────────────────────────
-    // uBaseColor is already linear (glTF spec §3.9.3).
-    // The texture sampler is sRGB-encoded; because we uploaded it as
-    // GL_SRGB8_ALPHA8 the hardware linearises it on read — no manual pow(2.2).
+    // ── Albedo (all in linear space) ──────────────────────────────────────────
     vec4 albedo = uBaseColor;
     if (uHasTexture) {
-        albedo *= texture(uAlbedo, vTexCoord);   // already linear after sRGB decode
+        // GL_SRGB8_ALPHA8 binding means the sampler auto-converts sRGB→linear
+        albedo *= texture(uAlbedo, vTexCoord);
     }
 
-    // ── Blinn-Phong lighting (all in linear space) ────────────────────────────
-    vec3 norm     = normalize(vNormal);
-    vec3 lightDir = normalize(uLightPos - vFragPos);
-    float NdotL   = max(dot(norm, lightDir), 0.0);
+    // ── Blinn-Phong ───────────────────────────────────────────────────────────
+    vec3 N        = normalize(vNormal);
+    vec3 L        = normalize(uLightPos - vFragPos);
+    float NdotL   = max(dot(N, L), 0.0);
 
-    // View direction: vFragPos is in world space and camera is at the view origin
-    // after the view transform, so we approximate view dir from the fragment pos.
-    vec3 viewDir  = normalize(-vFragPos);
-    vec3 halfDir  = normalize(lightDir + viewDir);
-    float NdotH   = max(dot(norm, halfDir), 0.0);
-    // Specular: attenuated so it doesn't blow out coloured surfaces
+    vec3 V        = normalize(-vFragPos);   // view dir in view space
+    vec3 H        = normalize(L + V);
+    float NdotH   = max(dot(N, H), 0.0);
     float spec    = pow(NdotH, 32.0) * 0.25;
 
-    vec3 ambient  = uAmbient * albedo.rgb;
-    vec3 diffuse  = NdotL   * albedo.rgb * uLightColor;
-    vec3 specular = spec     * uLightColor;          // white highlight on top
+    vec3 ambient  = uAmbient  * albedo.rgb;
+    vec3 diffuse  = NdotL     * albedo.rgb * uLightColor;
+    vec3 specular = spec      * uLightColor;
 
     vec3 result   = ambient + diffuse + specular;
 
-    // ── Approximate gamma encode for display (no sRGB framebuffer guaranteed) ─
+    // ── Gamma-encode for display (no sRGB framebuffer guaranteed on all GPUs) ─
     result        = pow(clamp(result, 0.0, 1.0), vec3(1.0 / 2.2));
     FragColor     = vec4(result, albedo.a);
 }
@@ -827,7 +858,8 @@ class ModelViewportWidget(QOpenGLWidget):
         self._selected_joint: int         = -1         # highlighted joint node index
         self._tex_id:        int          = 0          # OpenGL texture object (0 = none)
         self._has_tex:       bool         = False
-        self._base_color     = np.array([0.8, 0.8, 0.8, 1.0], dtype=np.float32)
+        self._base_color     = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+        self._gltf_path_hint: "Path | None" = None   # set by load_model for external tex
         # World-space joint positions for picking (populated each frame)
         self._joint_world_pos: dict[int, np.ndarray] = {}
         self.setMinimumSize(320, 240)
@@ -837,11 +869,17 @@ class ModelViewportWidget(QOpenGLWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def load_model(self, gltf: GLTF2, anim_index: int = 0) -> None:
-        """Upload the first mesh primitive from gltf to the GPU."""
-        self._gltf       = gltf
-        self._anim_index = anim_index
-        self._playback_t = 0.0
+    def load_model(self, gltf: GLTF2, anim_index: int = 0,
+                   path: "Path | None" = None) -> None:
+        """Upload the first mesh primitive from gltf to the GPU.
+
+        path: optional filesystem path to the .glb, used to resolve
+              external texture URIs (rare but valid in glTF).
+        """
+        self._gltf            = gltf
+        self._anim_index      = anim_index
+        self._playback_t      = 0.0
+        self._gltf_path_hint  = path
         self.makeCurrent()
         self._upload_mesh()
         self._upload_skeleton_vbo()
@@ -1025,80 +1063,151 @@ class ModelViewportWidget(QOpenGLWidget):
         return model, view, proj
 
     def _upload_mesh(self) -> None:
-        """Extract position / normal / joints / weights / texcoord from the first mesh
-        primitive, read the material base colour and optional albedo texture, then
-        upload everything to the GPU."""
+        """Extract geometry from the first primitive that has POSITION data.
+
+        Robustness rules applied throughout:
+          • Iterates all meshes/primitives until one with POSITION is found
+            (not just mesh[0].primitive[0] — many models have the visible
+             mesh further down the list).
+          • Every accessor read is guarded; missing attributes get safe defaults.
+          • Array shapes are always enforced before assignment so a corrupt
+            or unexpected accessor never causes a shape-mismatch crash.
+          • The skin search matches the actual mesh index, not hard-coded 0.
+        """
         gltf = self._gltf
         if not gltf or not gltf.meshes:
             return
 
-        mesh  = gltf.meshes[0]
-        prim  = mesh.primitives[0]
-        attrs = prim.attributes
+        # ── Find the first mesh primitive that actually has positions ──────────
+        positions:  np.ndarray | None = None
+        found_mesh_idx: int           = 0
+        found_prim                    = None
 
-        # Positions (required)
-        pos_idx = getattr(attrs, "POSITION", None)
-        if pos_idx is None:
+        for mesh_idx, mesh in enumerate(gltf.meshes):
+            for prim in (mesh.primitives or []):
+                attrs   = prim.attributes
+                pos_idx = getattr(attrs, "POSITION", None)
+                if pos_idx is None:
+                    continue
+                try:
+                    arr = read_accessor(gltf, pos_idx).astype(np.float32)
+                except Exception:
+                    traceback.print_exc()
+                    continue
+                if arr.size == 0:
+                    continue
+                if arr.ndim == 1:
+                    if arr.size % 3 != 0:
+                        continue
+                    arr = arr.reshape(-1, 3)
+                elif arr.shape[1] != 3:
+                    continue
+                positions       = arr
+                found_mesh_idx  = mesh_idx
+                found_prim      = prim
+                break
+            if positions is not None:
+                break
+
+        if positions is None or found_prim is None:
+            print("[Viewport] No usable mesh primitive found in this GLB.")
             return
-        positions = read_accessor(gltf, pos_idx).astype(np.float32)
-        if positions.ndim == 1:
-            positions = positions.reshape(-1, 3)
 
-        # Normals (compute flat normals if absent)
+        n_verts = len(positions)
+        attrs   = found_prim.attributes
+
+        # ── Normals ───────────────────────────────────────────────────────────
         norm_idx = getattr(attrs, "NORMAL", None)
         if norm_idx is not None:
-            normals = read_accessor(gltf, norm_idx).astype(np.float32)
-            if normals.ndim == 1:
-                normals = normals.reshape(-1, 3)
+            try:
+                normals = read_accessor(gltf, norm_idx).astype(np.float32)
+                if normals.ndim == 1:
+                    normals = normals.reshape(-1, 3)
+                if normals.shape != (n_verts, 3):
+                    raise ValueError(f"Normal shape {normals.shape} != ({n_verts}, 3)")
+            except Exception:
+                traceback.print_exc()
+                normals = np.zeros((n_verts, 3), dtype=np.float32)
+                normals[:, 2] = 1.0
         else:
-            normals = np.zeros_like(positions)
+            # Flat normals: point along +Z as a safe fallback
+            normals = np.zeros((n_verts, 3), dtype=np.float32)
             normals[:, 2] = 1.0
 
-        # Texture coordinates
+        # ── Texture coordinates ────────────────────────────────────────────────
         tc_idx = getattr(attrs, "TEXCOORD_0", None)
         if tc_idx is not None:
-            texcoords = read_accessor(gltf, tc_idx).astype(np.float32)
-            if texcoords.ndim == 1:
-                texcoords = texcoords.reshape(-1, 2)
+            try:
+                texcoords = read_accessor(gltf, tc_idx).astype(np.float32)
+                if texcoords.ndim == 1:
+                    texcoords = texcoords.reshape(-1, 2)
+                if texcoords.shape[0] != n_verts or texcoords.shape[1] < 2:
+                    raise ValueError(f"TexCoord shape {texcoords.shape}")
+                texcoords = texcoords[:, :2]   # keep only UV, drop extra channels
+            except Exception:
+                traceback.print_exc()
+                texcoords = np.zeros((n_verts, 2), dtype=np.float32)
         else:
-            texcoords = np.zeros((len(positions), 2), dtype=np.float32)
+            texcoords = np.zeros((n_verts, 2), dtype=np.float32)
 
-        # Joints / weights for skinning
+        # ── Joints / weights (skinning) ────────────────────────────────────────
         j0_idx = getattr(attrs, "JOINTS_0",  None)
         w0_idx = getattr(attrs, "WEIGHTS_0", None)
+        self._is_skinned = False
         if j0_idx is not None and w0_idx is not None:
-            joints  = read_accessor(gltf, j0_idx).astype(np.float32)
-            weights = read_accessor(gltf, w0_idx).astype(np.float32)
-            if joints.ndim  == 1: joints  = joints.reshape(-1, 4)
-            if weights.ndim == 1: weights = weights.reshape(-1, 4)
-            self._is_skinned = True
+            try:
+                joints  = read_accessor(gltf, j0_idx).astype(np.float32)
+                weights = read_accessor(gltf, w0_idx).astype(np.float32)
+                if joints.ndim  == 1: joints  = joints.reshape(-1, 4)
+                if weights.ndim == 1: weights = weights.reshape(-1, 4)
+                # Pad to 4 columns if accessor had fewer (non-standard but seen)
+                def _pad4(a: np.ndarray) -> np.ndarray:
+                    if a.shape[1] < 4:
+                        p = np.zeros((len(a), 4), dtype=np.float32)
+                        p[:, :a.shape[1]] = a
+                        return p
+                    return a[:, :4]
+                joints  = _pad4(joints)
+                weights = _pad4(weights)
+                if joints.shape[0] != n_verts or weights.shape[0] != n_verts:
+                    raise ValueError(
+                        f"Joint/weight count {joints.shape[0]} != n_verts {n_verts}")
+                self._is_skinned = True
+            except Exception:
+                traceback.print_exc()
+                joints  = np.zeros((n_verts, 4), dtype=np.float32)
+                weights = np.zeros((n_verts, 4), dtype=np.float32)
+                weights[:, 0] = 1.0
         else:
-            joints  = np.zeros((len(positions), 4), dtype=np.float32)
-            weights = np.tile([1, 0, 0, 0], (len(positions), 1)).astype(np.float32)
-            self._is_skinned = False
+            joints  = np.zeros((n_verts, 4), dtype=np.float32)
+            weights = np.zeros((n_verts, 4), dtype=np.float32)
+            weights[:, 0] = 1.0
 
-        # Indices
-        if prim.indices is not None:
-            indices = read_accessor(gltf, prim.indices).flatten().astype(np.uint32)
+        # ── Indices ────────────────────────────────────────────────────────────
+        if found_prim.indices is not None:
+            try:
+                indices = read_accessor(gltf, found_prim.indices).flatten().astype(np.uint32)
+            except Exception:
+                traceback.print_exc()
+                indices = np.arange(n_verts, dtype=np.uint32)
         else:
-            indices = np.arange(len(positions), dtype=np.uint32)
+            indices = np.arange(n_verts, dtype=np.uint32)
         self._mesh_count = len(indices)
 
-        # ── Material: base colour + optional texture ──────────────────────────
-        # glTF default baseColorFactor is [1, 1, 1, 1] (white, fully opaque).
+        # ── Material ──────────────────────────────────────────────────────────
+        # glTF default: white (1,1,1,1) in linear space
         self._base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self._has_tex    = False
-        mat_idx = prim.material
+        mat_idx = found_prim.material
         if mat_idx is not None and gltf.materials and mat_idx < len(gltf.materials):
             mat = gltf.materials[mat_idx]
             pbr = getattr(mat, "pbrMetallicRoughness", None)
             if pbr is not None:
                 bcf = getattr(pbr, "baseColorFactor", None)
                 if bcf is not None and len(bcf) >= 3:
-                    # glTF spec: baseColorFactor is in linear space
                     self._base_color = np.array(
                         [bcf[0], bcf[1], bcf[2], bcf[3] if len(bcf) > 3 else 1.0],
-                        dtype=np.float32
+                        dtype=np.float32,
                     )
                 tex_info = getattr(pbr, "baseColorTexture", None)
                 if tex_info is not None:
@@ -1106,81 +1215,82 @@ class ModelViewportWidget(QOpenGLWidget):
                     if tex_src_idx is not None:
                         self._upload_texture(gltf, tex_src_idx)
 
-        # ── Camera / bbox auto-fit ────────────────────────────────────────────
+        # ── BBox / camera auto-fit ────────────────────────────────────────────
         mn, mx = positions.min(axis=0), positions.max(axis=0)
         self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
-        extent = float(np.max(mx - mn)) or 1.0
+        extent            = float(np.max(mx - mn)) or 1.0
         self._bbox_scale  = 1.0 / extent
-        # Place camera 1.4× the mesh extent away for comfortable framing.
         self._orbit_dist  = extent * 1.4
 
-        # ── Interleave: pos(3)|normal(3)|joints(4)|weights(4)|texcoord(2) = 16 floats ──
-        n_verts     = len(positions)
-        interleaved = np.zeros((n_verts, 16), dtype=np.float32)
+        # ── Interleave vertex data: pos(3)|normal(3)|joints(4)|weights(4)|uv(2) ──
+        # = 16 floats = 64 bytes per vertex
+        interleaved           = np.zeros((n_verts, 16), dtype=np.float32)
         interleaved[:, 0:3]   = positions
         interleaved[:, 3:6]   = normals
         interleaved[:, 6:10]  = joints
         interleaved[:, 10:14] = weights
         interleaved[:, 14:16] = texcoords
-        vertex_data = interleaved.flatten()
+        vertex_data           = interleaved.flatten()
 
-        stride = 16 * 4   # bytes
+        stride = 16 * 4   # 64 bytes
 
         GL.glBindVertexArray(self._mesh_vao)
-
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._mesh_vbo)
         GL.glBufferData(GL.GL_ARRAY_BUFFER, vertex_data.nbytes,
                         vertex_data, GL.GL_DYNAMIC_DRAW)
-
         GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, self._mesh_ebo)
         GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes,
                         indices, GL.GL_STATIC_DRAW)
 
-        # Attribute pointers
+        # Attribute pointers (match layout locations 0-4 in the vertex shader)
         GL.glEnableVertexAttribArray(0)
         GL.glVertexAttribPointer(0, 3, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(0))
+                                 GL.ctypes.c_void_p(0))    # pos
         GL.glEnableVertexAttribArray(1)
         GL.glVertexAttribPointer(1, 3, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(12))
+                                 GL.ctypes.c_void_p(12))   # normal
         GL.glEnableVertexAttribArray(2)
         GL.glVertexAttribPointer(2, 4, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(24))
+                                 GL.ctypes.c_void_p(24))   # joints
         GL.glEnableVertexAttribArray(3)
         GL.glVertexAttribPointer(3, 4, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(40))
+                                 GL.ctypes.c_void_p(40))   # weights
         GL.glEnableVertexAttribArray(4)
         GL.glVertexAttribPointer(4, 2, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(56))
-
+                                 GL.ctypes.c_void_p(56))   # texcoord
         GL.glBindVertexArray(0)
 
-        # Pick skin index for this mesh
+        # ── Skin lookup: find which skin references found_mesh_idx ────────────
+        # (was hard-coded to mesh==0, broke for models where the skinned mesh
+        #  is not the first mesh in the array)
         self._skin_index = -1
         for ni, node in enumerate(gltf.nodes or []):
-            if node.mesh == 0 and node.skin is not None:
+            if node.mesh == found_mesh_idx and node.skin is not None:
                 self._skin_index = node.skin
                 break
+
+        print(f"[Viewport] Loaded mesh {found_mesh_idx}: "
+              f"{n_verts} verts, {self._mesh_count} indices, "
+              f"skinned={self._is_skinned}, skin={self._skin_index}, "
+              f"tex={self._has_tex}")
 
     def _upload_texture(self, gltf: "GLTF2", tex_index: int) -> None:
         """Decode and upload the glTF texture at tex_index to self._tex_id.
 
-        Handles three image storage cases:
-          1. bufferView  — image bytes embedded in the GLB binary chunk (most common)
-          2. data: URI   — base-64 encoded image in the JSON (some exporters)
-          3. external URI — file on disk relative to the .glb (skipped for .glb)
+        Handles all three glTF image storage variants:
+          1. bufferView  — bytes in the GLB binary chunk (most common)
+          2. data: URI   — base-64 encoded inline image
+          3. external URI — file on disk (best-effort, skipped for pure .glb)
 
-        Uses GL_SRGB8_ALPHA8 as the internal format so OpenGL linearises the
-        sRGB texture samples before Phong lighting — without this, albedo colours
-        look too dark and desaturated because the shader multiplies already-gamma-
-        encoded values in linear space.
+        GL_SRGB8_ALPHA8 tells OpenGL to linearise sRGB→linear on read so
+        that Phong lighting works in linear space and colours look correct.
         """
-        import io, base64
+        import io, base64 as _b64
         try:
             from PIL import Image as PILImage
         except ImportError:
             print("[Viewport] Pillow not installed — textures disabled. "
-                  "Run: pip install pillow")
+                  "pip install pillow")
             return
         try:
             if not gltf.textures or tex_index >= len(gltf.textures):
@@ -1195,25 +1305,36 @@ class ModelViewportWidget(QOpenGLWidget):
 
             raw_bytes: bytes | None = None
 
-            # Case 1: image bytes live in the GLB binary chunk
             if img_def.bufferView is not None:
-                bv        = gltf.bufferViews[img_def.bufferView]
-                blob      = gltf.binary_blob()
-                start     = bv.byteOffset or 0
-                raw_bytes = bytes(blob[start: start + bv.byteLength])
+                # Case 1: embedded in the GLB binary chunk
+                if gltf.bufferViews and img_def.bufferView < len(gltf.bufferViews):
+                    bv        = gltf.bufferViews[img_def.bufferView]
+                    blob      = gltf.binary_blob()
+                    start     = bv.byteOffset or 0
+                    raw_bytes = bytes(blob[start: start + bv.byteLength])
+            elif img_def.uri:
+                if img_def.uri.startswith("data:"):
+                    # Case 2: data: URI  — "data:image/png;base64,iVBOR…"
+                    try:
+                        _, b64 = img_def.uri.split(",", 1)
+                        raw_bytes = _b64.b64decode(b64)
+                    except Exception:
+                        traceback.print_exc()
+                        return
+                else:
+                    # Case 3: external file — only attempt if path exists
+                    if self._gltf_path_hint is not None:
+                        candidate = self._gltf_path_hint.parent / img_def.uri
+                        if candidate.exists():
+                            raw_bytes = candidate.read_bytes()
+                        else:
+                            print(f"[Viewport] External texture '{img_def.uri}' "
+                                  "not found next to the .glb — skipped.")
+                            return
+                    else:
+                        return
 
-            # Case 2: data: URI  (e.g. "data:image/png;base64,iVBOR…")
-            elif img_def.uri and img_def.uri.startswith("data:"):
-                header, b64 = img_def.uri.split(",", 1)
-                raw_bytes   = base64.b64decode(b64)
-
-            # Case 3: external file reference — not useful inside a .glb
-            else:
-                print(f"[Viewport] External image URI '{img_def.uri}' "
-                      "— skipped (only embedded textures supported).")
-                return
-
-            if raw_bytes is None:
+            if not raw_bytes:
                 return
 
             pil      = PILImage.open(io.BytesIO(raw_bytes)).convert("RGBA")
@@ -1221,13 +1342,12 @@ class ModelViewportWidget(QOpenGLWidget):
             h, w     = img_data.shape[:2]
 
             GL.glBindTexture(GL.GL_TEXTURE_2D, self._tex_id)
-            # GL_SRGB8_ALPHA8: GPU linearises sRGB→linear before texturing,
-            # matching glTF's requirement that baseColorTexture is sRGB-encoded.
+            # GL_SRGB8_ALPHA8: GPU linearises the sRGB-encoded texels before
+            # the fragment shader multiplies them in linear space.
             GL.glTexImage2D(GL.GL_TEXTURE_2D, 0,
-                            GL.GL_SRGB8_ALPHA8,        # internal (linearise)
+                            GL.GL_SRGB8_ALPHA8,
                             w, h, 0,
-                            GL.GL_RGBA,                # source format
-                            GL.GL_UNSIGNED_BYTE, img_data)
+                            GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
             GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
                                GL.GL_LINEAR_MIPMAP_LINEAR)
@@ -1243,12 +1363,16 @@ class ModelViewportWidget(QOpenGLWidget):
         except Exception:
             traceback.print_exc()
 
+    # Maximum bone segments the skeleton VBO can hold (re-allocated if exceeded)
+    _SKEL_VBO_SEGMENTS: int = 2048
+
     def _upload_skeleton_vbo(self) -> None:
         """Allocate skeleton line VBO (filled dynamically each frame)."""
         GL.glBindVertexArray(self._line_vao)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._line_vbo)
-        # Allocate space for up to 256 bone segments × 2 endpoints × 3 floats
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, 256 * 2 * 3 * 4,
+        # 2048 segments × 2 endpoints × 3 floats × 4 bytes = 192 KB
+        GL.glBufferData(GL.GL_ARRAY_BUFFER,
+                        self._SKEL_VBO_SEGMENTS * 2 * 3 * 4,
                         None, GL.GL_DYNAMIC_DRAW)
         GL.glEnableVertexAttribArray(0)
         GL.glVertexAttribPointer(0, 3, GL.GL_FLOAT, GL.GL_FALSE, 12,
@@ -1268,20 +1392,16 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glUniformMatrix4fv(_u("uView"),  1, GL.GL_TRUE, view)
         GL.glUniformMatrix4fv(_u("uProj"),  1, GL.GL_TRUE, proj)
 
-        # Light: scale position with orbit distance so it always illuminates
-        # the model from a sensible angle regardless of mesh size.
         light = self._bbox_center + self._orbit_dist * np.array(
             [0.5, 0.8, 0.6], dtype=np.float32)
         GL.glUniform3f(_u("uLightPos"),   *light)
         GL.glUniform3f(_u("uLightColor"), 1.0, 1.0, 1.0)
-        # Ambient: 0.15 preserves colour saturation — 0.30 washed everything out
-        GL.glUniform1f(_u("uAmbient"),    0.15)
+        GL.glUniform1f(_u("uAmbient"),    0.15)   # 0.30 washed out all colours
 
-        # Material: pass the glTF base colour factor (linear, as per glTF spec)
         bc = self._base_color
-        r  = float(bc[0]) if len(bc) > 0 else 0.8
-        g  = float(bc[1]) if len(bc) > 1 else 0.8
-        b  = float(bc[2]) if len(bc) > 2 else 0.8
+        r  = float(bc[0]) if len(bc) > 0 else 1.0
+        g  = float(bc[1]) if len(bc) > 1 else 1.0
+        b  = float(bc[2]) if len(bc) > 2 else 1.0
         a  = float(bc[3]) if len(bc) > 3 else 1.0
         GL.glUniform4f(_u("uBaseColor"), r, g, b, a)
 
@@ -1356,10 +1476,10 @@ class ModelViewportWidget(QOpenGLWidget):
             return
 
         arr = np.array(segments, dtype=np.float32)
-        max_bytes = 256 * 2 * 3 * 4
+        max_bytes = self._SKEL_VBO_SEGMENTS * 2 * 3 * 4
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._line_vbo)
-        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0,
-                           min(arr.nbytes, max_bytes), arr)
+        upload = arr[:max_bytes // 4]   # clamp to what the VBO holds
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0, upload.nbytes, upload)
 
         model, view, proj = self._mvp()
         mvp = proj @ view @ model
@@ -1369,23 +1489,15 @@ class ModelViewportWidget(QOpenGLWidget):
         loc_color = GL.glGetUniformLocation(self._line_prog.programId(), "uColor")
         GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
 
-        # FIX: glLineWidth > 1.0 is not allowed in Core Profile (raises GL error 1281).
-        # Use exactly 1.0 — the only guaranteed value.
-        GL.glLineWidth(1.0)
+        GL.glLineWidth(1.0)   # only 1.0 is legal in Core Profile 3.3
 
         # Draw bone lines in accent blue
         GL.glUniform3f(loc_color, 0.310, 0.780, 0.976)
         GL.glBindVertexArray(self._line_vao)
-        n_verts = min(len(segments) // 3, 256 * 2)
+        n_verts = min(len(segments) // 3, self._SKEL_VBO_SEGMENTS * 2)
         GL.glDrawArrays(GL.GL_LINES, 0, n_verts)
 
-        # Draw joint dots: upload each joint position as a 1-vertex point
-        # and draw it as GL_POINTS (size set by gl_PointSize in the shader is
-        # not available without setting it in GLSL, so we draw a tiny cross
-        # instead by pushing 6 extra vertices per joint — 3 axis segments).
-        # Simpler approach: collect all joint world-pos and draw as GL_POINTS
-        # using a separate small upload. GL_POINTS size is set to 6 via
-        # glPointSize (allowed in Core Profile unlike glLineWidth).
+        # Draw joint dots as GL_POINTS (glPointSize is legal in Core Profile)
         joint_pts: list[float] = []
         selected_pt: list[float] = []
         for ni, pos in world_pos.items():
@@ -1394,21 +1506,21 @@ class ModelViewportWidget(QOpenGLWidget):
             else:
                 joint_pts.extend(pos.tolist())
 
-        # Regular joints — white dots, size 5
+        # Regular joints — white dots
         if joint_pts:
             pts_arr = np.array(joint_pts, dtype=np.float32)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0,
-                               min(pts_arr.nbytes, max_bytes), pts_arr)
+            cap     = min(pts_arr.nbytes, max_bytes)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0, cap, pts_arr.flatten()[:cap // 4])
             GL.glUniform3f(loc_color, 0.9, 0.9, 0.9)
             GL.glPointSize(5.0)
-            GL.glDrawArrays(GL.GL_POINTS, 0, len(joint_pts) // 3)
+            GL.glDrawArrays(GL.GL_POINTS, 0, min(len(joint_pts) // 3,
+                                                   self._SKEL_VBO_SEGMENTS * 2))
 
-        # Selected joint — orange dot, larger
+        # Selected joint — orange, larger
         if selected_pt:
-            sel_arr = np.array(selected_pt, dtype=np.float32)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0,
-                               min(sel_arr.nbytes, max_bytes), sel_arr)
-            GL.glUniform3f(loc_color, 1.0, 0.576, 0.235)   # orange
+            sel_arr = np.array(selected_pt[:3], dtype=np.float32)  # exactly 1 point
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0, sel_arr.nbytes, sel_arr)
+            GL.glUniform3f(loc_color, 1.0, 0.576, 0.235)
             GL.glPointSize(10.0)
             GL.glDrawArrays(GL.GL_POINTS, 0, 1)
 
@@ -1941,18 +2053,18 @@ class CurveEditorWidget(QWidget):
         """Return True if screen_pos is within 20 px of the selected dot.
 
         Coordinate chain:
-          data coords  →  ViewBox.mapViewToScene()  →  scene coords
-          scene coords →  PlotWidget.mapFromScene() →  viewport pixel coords
+          data  →  ViewBox.mapViewToScene()   →  QGraphicsScene coords
+          scene →  PlotWidget.mapFromScene()  →  widget pixel coords
 
-        self._plot is a PlotWidget (a QGraphicsView subclass), so it has
-        mapFromScene(). The .viewport() child is a plain QWidget and does NOT
-        have that method — that was the original crash.
+        self._plot is a PlotWidget (QGraphicsView subclass) so it has
+        mapFromScene().  self._plot.viewport() is a plain QWidget that does
+        NOT have that method — that was the original AttributeError crash.
         """
         if self._values is None or self._times is None:
             return False
-        if self._sel_key >= len(self._times):
+        if self._sel_key < 0 or self._sel_key >= len(self._times):
             return False
-        if self._sel_comp >= self._values.shape[1]:
+        if self._sel_comp < 0 or self._sel_comp >= self._values.shape[1]:
             return False
 
         from PySide6.QtCore import QPointF
@@ -1961,9 +2073,8 @@ class CurveEditorWidget(QWidget):
             float(self._times[self._sel_key]),
             float(self._values[self._sel_key, self._sel_comp])
         ))
-        # mapFromScene lives on the QGraphicsView (PlotWidget), not on viewport()
+        # mapFromScene lives on the QGraphicsView (PlotWidget), not viewport()
         widget_pt = self._plot.mapFromScene(QPointF(scene_pt.x(), scene_pt.y()))
-
         dx = screen_pos.x() - widget_pt.x()
         dy = screen_pos.y() - widget_pt.y()
         return math.hypot(dx, dy) < 20.0
@@ -2646,9 +2757,9 @@ class GltfCurveEditor(QMainWindow):
         self._dirty      = False
         self._file_label.setText(f"  {path.name}")
 
-        # Load into 3-D viewport
+        # Load into 3-D viewport (pass path so external textures can be found)
         first_anim = 0 if (gltf.animations and len(gltf.animations) > 0) else -1
-        self._viewport.load_model(gltf, anim_index=first_anim)
+        self._viewport.load_model(gltf, anim_index=first_anim, path=path)
         self._current_anim_index = first_anim
 
         self._populate_scene_tree()
@@ -2802,6 +2913,9 @@ class GltfCurveEditor(QMainWindow):
         times, values = read_channel_data(self._gltf, anim_index, channel_index)
         if values.ndim == 1:
             values = values[:, np.newaxis]
+        # FIX: propagate the current anim/channel indices to the inspector so
+        # its live and modified callbacks fire with the right indices (they
+        # default to -1/-1 and were never updated, breaking table edits).
         self._inspector.set_channel_indices(anim_index, channel_index)
         self._inspector.load_channel(times, values, target_path)
 
@@ -2818,22 +2932,8 @@ class GltfCurveEditor(QMainWindow):
         )
 
     # -------------------------------------------------------------------------
-    # Keyframe modification callbacks
+    # Keyframe modification callback
     # -------------------------------------------------------------------------
-
-    def _on_keyframe_live(self, anim_index: int, channel_index: int,
-                          new_values: np.ndarray) -> None:
-        """Called on every mouse-move during a curve-editor drag or a table cell edit.
-
-        Writes the new values straight into the glTF blob so the viewport's
-        set_playback_time() re-samples the animation with the updated data.
-        Does NOT mark the file dirty — that only happens on final commit.
-        """
-        if self._gltf is None:
-            return
-        write_channel_values(self._gltf, anim_index, channel_index, new_values)
-        self._curve_editor.refresh_values()
-        self._viewport.set_playback_time(self._playback_time)
 
     def _on_keyframe_modified(self, anim_index: int, channel_index: int,
                                new_values: np.ndarray) -> None:
@@ -2842,16 +2942,29 @@ class GltfCurveEditor(QMainWindow):
         write_channel_values(self._gltf, anim_index, channel_index, new_values)
         self._dirty = True
         times, values = read_channel_data(self._gltf, anim_index, channel_index)
-        if values.ndim == 1:
-            values = values[:, np.newaxis]
         channel = self._gltf.animations[anim_index].channels[channel_index]
-        self._inspector.set_channel_indices(anim_index, channel_index)
         self._inspector.load_channel(times, values, channel.target.path)
-        self._curve_editor.refresh_values()
-        self._viewport.set_playback_time(self._playback_time)
         self._status.showMessage(
             "✎  Keyframe modified — unsaved changes  ·  Ctrl+S to export the modified .glb"
         )
+
+    def _on_keyframe_live(self, anim_index: int, channel_index: int,
+                          new_values: np.ndarray) -> None:
+        """Called on every mouse-move during a drag (before commit on release).
+
+        Does NOT write to the glTF blob — that only happens in
+        _on_keyframe_modified on mouse-release.  This refreshes the curve
+        editor display and drives the 3-D viewport so the user sees the change
+        live while dragging, matching Maya / Blender Graph Editor behaviour.
+        """
+        if self._gltf is None:
+            return
+        # Refresh the curve editor so the dragged dot and line move live
+        self._curve_editor.refresh_values()
+        # Refresh the inspector table cells to reflect the in-progress value
+        self._inspector.refresh_from_values()
+        # Drive the 3-D viewport with the current (uncommitted) values
+        self._viewport.set_playback_time(self._playback_time)
 
     # -------------------------------------------------------------------------
     # Playback

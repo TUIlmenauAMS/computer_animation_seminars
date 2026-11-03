@@ -23,6 +23,10 @@
 #              arrays. np.frombuffer decodes the raw binary blob; struct.pack
 #              re-encodes modified values back to bytes.
 #
+#   Pillow     Image decoding for glTF texture support. The 3-D viewport loads
+#              textures from embedded buffer views or data: URIs; Pillow converts
+#              them to RGBA NumPy arrays for upload via glTexImage2D.
+#
 # Run:
 #   cd 04_gltf
 #   uv sync                     # first time — creates .venv and installs deps
@@ -59,6 +63,11 @@ dependencies = [
     # skeleton rendering). PySide6's QOpenGLWidget calls into these at runtime.
     # Changelog: https://pyopengl.sourceforge.net/
     "PyOpenGL==3.1.7",
+
+    # Image decoding for glTF texture support — converts embedded PNG/JPEG
+    # buffer views and data: URIs to RGBA NumPy arrays for glTexImage2D.
+    # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/
+    "pillow==10.3.0",
 ]
 
 [tool.uv]
