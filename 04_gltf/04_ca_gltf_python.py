@@ -1,12 +1,12 @@
 # =============================================================================
-# 04_ca_gltf_python.py — glTF Animation Curve Editor  (Seminar 04, Demo 5)
+# 04_ca_gltf_python.py — glTF Animation Curve Editor  (Seminar 04, Demo 4)
 # =============================================================================
 # Author   : Renato Fera P.
 # LinkedIn : https://www.linkedin.com/in/renato-profeta/
 # Course   : Computeranimation — Chapter 04: glTF & Python Animation Tools
 # Institute: Institut für Medientechnik, Technische Universität Ilmenau
 # =============================================================================
-"""glTF Animation Curve Editor — Seminar 04, Demo 5.
+"""glTF Animation Curve Editor — Seminar 04, Demo 4.
 
 Overview
 --------
