@@ -12,22 +12,39 @@
 A professional Qt application for inspecting, visualising and editing
 animation data inside binary glTF (.glb) files.  Five panels work together:
 
-Fixes applied (v2.0.1)
+Fixes applied (v2.0.2)
 ----------------------
-  1. Added missing GltfCurveEditor._on_keyframe_live() method.
-     The CurveEditorWidget and KeyframeInspectorWidget both registered this
-     as their live (drag) callback via set_live_callback(), but the method was
-     never defined on GltfCurveEditor, causing an AttributeError on startup.
-     The method now refreshes the curve editor, inspector table, and 3-D
-     viewport live during a drag without writing to the glTF blob (that commit
-     happens on mouse-release via _on_keyframe_modified as intended).
+  Performance fixes — resolved hang when loading large .glb files
+  (e.g. Barbarian.glb: 76 animations × 123 channels, 8 831 accessors):
 
-  2. Fixed KeyframeInspectorWidget never receiving its anim/channel indices.
-     set_channel_indices() was defined but never called, so the inspector's
-     _anim_index and _channel_index stayed at -1/-1 forever.  Table edits
-     would fire live/modified callbacks with wrong indices, silently corrupting
-     the wrong accessor or doing nothing.  Now _on_channel_selected() calls
-     set_channel_indices() before load_channel() every time a channel changes.
+  FIX 1 — _get_blob() / read_accessor(): cache binary_blob() result.
+     pygltflib.binary_blob() re-decodes the full GLB binary chunk on every
+     call with no internal cache.  With Barbarian.glb this means 1.6 MB of
+     Python work per accessor read.  compute_joint_matrices() calls
+     read_channel_data() for every channel on every frame tick — 246 blob
+     decodes per frame at 60 fps.  The app hangs before the first frame is
+     drawn.  _get_blob() attaches the decoded bytes to the GLTF2 object so
+     the decode happens exactly once for the lifetime of the loaded model.
+
+  FIX 2 — build_channel_cache(): pre-read all accessor data at load time.
+     All (times, values) numpy arrays for every animation channel are read
+     once into a dict keyed by (anim_index, channel_index).
+     read_channel_data() checks this dict first; a cache hit is a free
+     Python dict lookup with no numpy allocation.  The cache is populated in
+     _on_open() immediately after load_gltf(), amortising the entire I/O
+     cost to load time (a few seconds) rather than paying it every frame.
+
+  FIX 3 — _build_anim_node_lookup(): O(n_joints) channel evaluation.
+     compute_joint_matrices() and compute_world_positions() previously
+     iterated all channels linearly to find which ones targeted each node —
+     O(n_channels) per frame.  A reverse-index dict
+     {node_index: {path: (ch_idx, times, values)}} built once per animation
+     reduces per-frame work to a single dict lookup per joint, dropping frame
+     cost from O(123) to O(41) dict lookups for Barbarian.glb.
+
+  Also applied in v2.0.1:
+  4. Added missing GltfCurveEditor._on_keyframe_live() method.
+  5. Fixed KeyframeInspectorWidget never receiving its anim/channel indices.
 
   1. 3-D Viewport   — renders the mesh with Phong shading and draws the
                        skeleton as coloured bone lines; the model animates
@@ -345,6 +362,22 @@ def load_gltf(path: Path) -> GLTF2:
     return GLTF2().load(str(path))
 
 
+def _get_blob(gltf: GLTF2) -> bytes:
+    """Return the GLB binary blob, decoding and caching it on first call.
+
+    FIX 1: pygltflib.binary_blob() re-decodes the full binary chunk from
+    scratch on every call (no internal cache).  With Barbarian.glb this
+    means 1.6 MB of Python byte-work per accessor read — 246 calls per
+    frame at 60 fps produces an instant, permanent hang before the first
+    frame is ever drawn.  We attach the result to the GLTF2 object so the
+    decode happens exactly once for the lifetime of the loaded model.
+    """
+    cache = object.__getattribute__(gltf, "__dict__")
+    if "_blob_cache" not in cache:
+        cache["_blob_cache"] = gltf.binary_blob()
+    return cache["_blob_cache"]
+
+
 def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
     """Read one glTF accessor as a NumPy array (copy, writeable).
 
@@ -374,25 +407,67 @@ def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
         return arr.copy()
 
     buffer_view = gltf.bufferViews[accessor.bufferView]
-    blob: bytes = gltf.binary_blob()
+    blob: bytes = _get_blob(gltf)          # FIX 1: cached, not re-decoded
     view_start  = buffer_view.byteOffset or 0
     acc_start   = view_start + (accessor.byteOffset or 0)
     byte_stride = buffer_view.byteStride or (item_size * n_comp)
 
     element_bytes = item_size * n_comp
-    raw: bytes = b"".join(
-        blob[acc_start + i * byte_stride: acc_start + i * byte_stride + element_bytes]
-        for i in range(count)
-    )
+    if byte_stride == element_bytes:
+        # Contiguous layout — single memoryview slice, zero extra copies
+        end = acc_start + count * element_bytes
+        raw: bytes = blob[acc_start:end]
+    else:
+        # Interleaved layout — stride-gather (rare in practice)
+        raw = b"".join(
+            blob[acc_start + i * byte_stride: acc_start + i * byte_stride + element_bytes]
+            for i in range(count)
+        )
     arr = np.frombuffer(raw, dtype=dtype).copy()
     if n_comp > 1:
         arr = arr.reshape(-1, n_comp)
     return arr
 
 
+def build_channel_cache(gltf: GLTF2) -> dict[tuple[int, int], tuple[np.ndarray, np.ndarray]]:
+    """Pre-read every animation channel into numpy arrays and return a lookup dict.
+
+    FIX 2: compute_joint_matrices() and compute_world_positions() iterate all
+    channels of the active animation on every frame tick.  Without a cache each
+    call invokes read_accessor() — even with the blob cached (Fix 1) this still
+    means 123 numpy slice + frombuffer + copy operations per frame for
+    Barbarian.glb.  Doing it once at load time and storing (times, values) arrays
+    keyed by (anim_index, channel_index) reduces per-frame cost to a single dict
+    lookup.  Total load-time cost is identical to what the original code paid
+    continuously at runtime.
+    """
+    cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
+    _get_blob(gltf)  # warm the blob cache before the loop
+    for ai, anim in enumerate(gltf.animations or []):
+        for ci, channel in enumerate(anim.channels or []):
+            sampler = anim.samplers[channel.sampler]
+            times   = read_accessor(gltf, sampler.input).flatten().astype(np.float32)
+            values  = read_accessor(gltf, sampler.output).astype(np.float32)
+            cache[(ai, ci)] = (times, values)
+    return cache
+
+
 def read_channel_data(
     gltf: GLTF2, anim_index: int, channel_index: int
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Return (times, values) for one animation channel.
+
+    If a pre-built channel cache exists on the GLTF2 object (populated by
+    build_channel_cache() at load time) the result is a free dict lookup.
+    Falls back to reading the accessor directly when no cache is present so
+    the function stays usable in isolation (e.g. unit tests, export path).
+    """
+    cache = object.__getattribute__(gltf, "__dict__").get("_channel_cache")
+    if cache is not None:
+        entry = cache.get((anim_index, channel_index))
+        if entry is not None:
+            return entry
+    # Fallback: direct accessor read (no cache available)
     anim    = gltf.animations[anim_index]
     channel = anim.channels[channel_index]
     sampler = anim.samplers[channel.sampler]
@@ -571,6 +646,41 @@ def _node_rest_mat(node) -> np.ndarray:
     return _trs_to_mat4(t, r, s)
 
 
+def _build_anim_node_lookup(
+    gltf: GLTF2, anim_index: int
+) -> dict[int, dict[str, tuple[int, np.ndarray, np.ndarray]]]:
+    """Return {node_index: {path: (channel_index, times, values)}} for one animation.
+
+    FIX 3: compute_joint_matrices() previously did a linear scan over ALL
+    channels on every frame to find which ones target a given node.  With 123
+    channels that is 123 iterations × (dict lookup + read_channel_data) per
+    frame.  Building a reverse-index once and reusing it cuts that to a single
+    dict lookup per joint per frame, dropping per-frame work from O(n_channels)
+    to O(n_joints).  The lookup is cached on the GLTF2 object under
+    _anim_node_lookup[anim_index] so it is built at most once per animation.
+    """
+    gltf_dict = object.__getattribute__(gltf, "__dict__")
+    top = gltf_dict.setdefault("_anim_node_lookup", {})
+    if anim_index in top:
+        return top[anim_index]
+
+    result: dict[int, dict[str, tuple[int, np.ndarray, np.ndarray]]] = {}
+    if anim_index >= 0 and gltf.animations and anim_index < len(gltf.animations):
+        anim = gltf.animations[anim_index]
+        for ch_idx, channel in enumerate(anim.channels or []):
+            ni = channel.target.node
+            if ni is None:
+                continue
+            path = channel.target.path
+            times, values = read_channel_data(gltf, anim_index, ch_idx)
+            if values.ndim == 1:
+                values = values[:, np.newaxis]
+            result.setdefault(ni, {})[path] = (ch_idx, times, values)
+
+    top[anim_index] = result
+    return result
+
+
 def compute_joint_matrices(
     gltf: GLTF2,
     skin_index: int,
@@ -588,6 +698,9 @@ def compute_joint_matrices(
     shader (GLSL, HLSL, Metal).
 
     Returns float32 array of shape (n_joints, 4, 4).
+
+    FIX 3: uses _build_anim_node_lookup() so channel data is found by dict
+    lookup (O(1)) rather than a linear scan of all channels (O(n_channels)).
     """
     skin        = gltf.skins[skin_index]
     joint_ids   = skin.joints or []
@@ -597,30 +710,22 @@ def compute_joint_matrices(
     n_nodes     = len(gltf.nodes or [])
     local_mats  = [_node_rest_mat(gltf.nodes[i]) for i in range(n_nodes)]
 
-    # For each channel in the target animation, override the rest pose.
-    if anim_index >= 0 and gltf.animations:
-        anim = gltf.animations[anim_index]
-        for ch_idx, channel in enumerate(anim.channels or []):
-            ni = channel.target.node
-            if ni is None:
-                continue
-            path = channel.target.path
-            times, values = read_channel_data(gltf, anim_index, ch_idx)
-            if values.ndim == 1:
-                values = values[:, np.newaxis]
+    # FIX 3: reverse-index lookup instead of linear channel scan
+    node_lookup = _build_anim_node_lookup(gltf, anim_index)
+    for ni, path_map in node_lookup.items():
+        node   = gltf.nodes[ni]
+        rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
+        rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
+        rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+        for path, (_ci, times, values) in path_map.items():
             val = _sample_channel(times, values, t, path)
-
-            node = gltf.nodes[ni]
-            rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
-            rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
-            rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
             if path == "translation":
                 rest_t = val.flatten()[:3]
             elif path == "rotation":
                 rest_r = val.flatten()[:4]
             elif path == "scale":
                 rest_s = val.flatten()[:3]
-            local_mats[ni] = _trs_to_mat4(rest_t, rest_r, rest_s)
+        local_mats[ni] = _trs_to_mat4(rest_t, rest_r, rest_s)
 
     # Accumulate world matrices via iterative scene-graph traversal.
     # (Recursive _visit hits Python's recursion limit on deep skeletons.)
@@ -665,32 +770,29 @@ def compute_world_positions(
     """
     Return world-space origin (vec3) for every node at time t.
     Used to draw the skeleton as lines in the viewport.
+
+    FIX 3: uses _build_anim_node_lookup() — same O(n_joints) path as
+    compute_joint_matrices() instead of a linear scan over all channels.
     """
     n_nodes    = len(gltf.nodes or [])
     local_mats = [_node_rest_mat(gltf.nodes[i]) for i in range(n_nodes)]
 
-    if anim_index >= 0 and gltf.animations:
-        anim = gltf.animations[anim_index]
-        for ch_idx, channel in enumerate(anim.channels or []):
-            ni   = channel.target.node
-            if ni is None:
-                continue
-            path = channel.target.path
-            times, values = read_channel_data(gltf, anim_index, ch_idx)
-            if values.ndim == 1:
-                values = values[:, np.newaxis]
-            val  = _sample_channel(times, values, t, path)
-            node = gltf.nodes[ni]
-            rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
-            rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
-            rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+    # FIX 3: reverse-index lookup instead of linear channel scan
+    node_lookup = _build_anim_node_lookup(gltf, anim_index)
+    for ni, path_map in node_lookup.items():
+        node   = gltf.nodes[ni]
+        rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
+        rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
+        rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+        for path, (_ci, times, values) in path_map.items():
+            val = _sample_channel(times, values, t, path)
             if path == "translation":
                 rest_t = val.flatten()[:3]
             elif path == "rotation":
                 rest_r = val.flatten()[:4]
             elif path == "scale":
                 rest_s = val.flatten()[:3]
-            local_mats[ni] = _trs_to_mat4(rest_t, rest_r, rest_s)
+        local_mats[ni] = _trs_to_mat4(rest_t, rest_r, rest_s)
 
     world_mats: dict[int, np.ndarray] = {}
     roots: list[int] = []
@@ -2756,6 +2858,17 @@ class GltfCurveEditor(QMainWindow):
         self._gltf_path  = path
         self._dirty      = False
         self._file_label.setText(f"  {path.name}")
+
+        # FIX 2 + FIX 3: pre-read all accessor data and build reverse-index
+        # lookups immediately after loading so per-frame animation evaluation
+        # costs only dict lookups + numpy sampling, not accessor decodes.
+        self._status.showMessage(f"Building animation cache for {path.name}…")
+        QApplication.processEvents()   # let the status bar repaint
+        channel_cache = build_channel_cache(gltf)
+        object.__getattribute__(gltf, "__dict__")["_channel_cache"] = channel_cache
+        # Pre-build node lookups for every animation (amortises first-frame cost)
+        for ai in range(len(gltf.animations or [])):
+            _build_anim_node_lookup(gltf, ai)
 
         # Load into 3-D viewport (pass path so external textures can be found)
         first_anim = 0 if (gltf.animations and len(gltf.animations) > 0) else -1
