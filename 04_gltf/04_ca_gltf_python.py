@@ -12,7 +12,7 @@
 A professional Qt application for inspecting, visualising and editing
 animation data inside binary glTF (.glb) files.  Five panels work together:
 
-Fixes applied (v2.0.2)
+Fixes applied (v2.0.3)
 ----------------------
   Performance fixes — resolved hang when loading large .glb files
   (e.g. Barbarian.glb: 76 animations × 123 channels, 8 831 accessors):
@@ -42,9 +42,22 @@ Fixes applied (v2.0.2)
      reduces per-frame work to a single dict lookup per joint, dropping frame
      cost from O(123) to O(41) dict lookups for Barbarian.glb.
 
+  FIX 4 — _upload_mesh() / _draw_mesh(): render ALL mesh parts, not just one.
+     The original code stopped at the very first mesh primitive that had a
+     POSITION accessor.  For Barbarian.glb that is mesh[0] = 'Cube.160'
+     (the left-arm fist), so only the fist was ever drawn — the body, head,
+     right arm and both legs were silently skipped.  The model has 13 meshes
+     and 6 skin-referenced nodes (ArmLeft, ArmRight, Body, Head, LegLeft,
+     LegRight).  _upload_mesh() now iterates every primitive of every mesh,
+     allocates a separate VAO/VBO/EBO per part into self._drawables, and
+     computes the unified bounding box across all parts for correct camera
+     fit.  _draw_mesh() iterates _drawables each frame, caching joint
+     matrices by skin_index so the expensive skinning computation is not
+     duplicated for parts that share a skeleton.
+
   Also applied in v2.0.1:
-  4. Added missing GltfCurveEditor._on_keyframe_live() method.
-  5. Fixed KeyframeInspectorWidget never receiving its anim/channel indices.
+  5. Added missing GltfCurveEditor._on_keyframe_live() method.
+  6. Fixed KeyframeInspectorWidget never receiving its anim/channel indices.
 
   1. 3-D Viewport   — renders the mesh with Phong shading and draws the
                        skeleton as coloured bone lines; the model animates
@@ -940,12 +953,11 @@ class ModelViewportWidget(QOpenGLWidget):
         self._gltf:          GLTF2 | None = None
         self._anim_index:    int          = -1
         self._playback_t:    float        = 0.0
-        self._mesh_vao:      int          = 0
-        self._mesh_vbo:      int          = 0
-        self._mesh_ebo:      int          = 0
-        self._mesh_count:    int          = 0
-        self._skin_index:    int          = -1
-        self._is_skinned:    bool         = False
+        # FIX 4: multi-mesh support — one entry per renderable primitive.
+        # Each dict holds: vao, vbo, ebo, index_count, skin_index,
+        #   is_skinned, has_tex, tex_id, base_color.
+        # The old single-mesh scalars (_mesh_vao, _mesh_count, …) are gone.
+        self._drawables: list[dict] = []
         self._prog:          QOpenGLShaderProgram | None = None
         self._line_prog:     QOpenGLShaderProgram | None = None
         self._line_vao:      int          = 0
@@ -958,9 +970,6 @@ class ModelViewportWidget(QOpenGLWidget):
         self._bbox_scale:    float        = 1.0
         self._show_skeleton: bool         = True       # toggled by toolbar button
         self._selected_joint: int         = -1         # highlighted joint node index
-        self._tex_id:        int          = 0          # OpenGL texture object (0 = none)
-        self._has_tex:       bool         = False
-        self._base_color     = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         self._gltf_path_hint: "Path | None" = None   # set by load_model for external tex
         # World-space joint positions for picking (populated each frame)
         self._joint_world_pos: dict[int, np.ndarray] = {}
@@ -1046,23 +1055,17 @@ class ModelViewportWidget(QOpenGLWidget):
         if not self._line_prog.link():
             print(f"[Viewport] Line shader link error:\n{self._line_prog.log()}")
 
-        # Allocate VAO / VBO placeholders
-        vaos = GL.glGenVertexArrays(2)
-        self._mesh_vao, self._line_vao = int(vaos[0]), int(vaos[1])
-        vbos = GL.glGenBuffers(3)
-        self._mesh_vbo = int(vbos[0])
-        self._mesh_ebo = int(vbos[1])
-        self._line_vbo = int(vbos[2])
-
-        # Allocate one texture slot; filled by _upload_texture()
-        self._tex_id = int(GL.glGenTextures(1))
+        # Allocate skeleton line VAO/VBO (mesh VAOs are created per-primitive
+        # in _upload_mesh so there is no fixed upper bound on their count)
+        self._line_vao = int(GL.glGenVertexArrays(1))
+        self._line_vbo = int(GL.glGenBuffers(1))
 
     def resizeGL(self, w: int, h: int) -> None:
         GL.glViewport(0, 0, w, h)
 
     def paintGL(self) -> None:
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-        if self._gltf is None or self._mesh_count == 0:
+        if self._gltf is None or not self._drawables:
             self._draw_empty_hint()
             return
         self._draw_mesh()
@@ -1164,187 +1167,42 @@ class ModelViewportWidget(QOpenGLWidget):
         model = np.eye(4, dtype=np.float32)
         return model, view, proj
 
-    def _upload_mesh(self) -> None:
-        """Extract geometry from the first primitive that has POSITION data.
+    # ── helpers used by _upload_mesh ─────────────────────────────────────────
 
-        Robustness rules applied throughout:
-          • Iterates all meshes/primitives until one with POSITION is found
-            (not just mesh[0].primitive[0] — many models have the visible
-             mesh further down the list).
-          • Every accessor read is guarded; missing attributes get safe defaults.
-          • Array shapes are always enforced before assignment so a corrupt
-            or unexpected accessor never causes a shape-mismatch crash.
-          • The skin search matches the actual mesh index, not hard-coded 0.
-        """
-        gltf = self._gltf
-        if not gltf or not gltf.meshes:
-            return
+    @staticmethod
+    def _read_positions(gltf: "GLTF2", attrs) -> "np.ndarray | None":
+        pos_idx = getattr(attrs, "POSITION", None)
+        if pos_idx is None:
+            return None
+        try:
+            arr = read_accessor(gltf, pos_idx).astype(np.float32)
+        except Exception:
+            traceback.print_exc()
+            return None
+        if arr.size == 0:
+            return None
+        if arr.ndim == 1:
+            if arr.size % 3 != 0:
+                return None
+            arr = arr.reshape(-1, 3)
+        if arr.shape[1] != 3:
+            return None
+        return arr
 
-        # ── Find the first mesh primitive that actually has positions ──────────
-        positions:  np.ndarray | None = None
-        found_mesh_idx: int           = 0
-        found_prim                    = None
-
-        for mesh_idx, mesh in enumerate(gltf.meshes):
-            for prim in (mesh.primitives or []):
-                attrs   = prim.attributes
-                pos_idx = getattr(attrs, "POSITION", None)
-                if pos_idx is None:
-                    continue
-                try:
-                    arr = read_accessor(gltf, pos_idx).astype(np.float32)
-                except Exception:
-                    traceback.print_exc()
-                    continue
-                if arr.size == 0:
-                    continue
-                if arr.ndim == 1:
-                    if arr.size % 3 != 0:
-                        continue
-                    arr = arr.reshape(-1, 3)
-                elif arr.shape[1] != 3:
-                    continue
-                positions       = arr
-                found_mesh_idx  = mesh_idx
-                found_prim      = prim
-                break
-            if positions is not None:
-                break
-
-        if positions is None or found_prim is None:
-            print("[Viewport] No usable mesh primitive found in this GLB.")
-            return
-
-        n_verts = len(positions)
-        attrs   = found_prim.attributes
-
-        # ── Normals ───────────────────────────────────────────────────────────
-        norm_idx = getattr(attrs, "NORMAL", None)
-        if norm_idx is not None:
-            try:
-                normals = read_accessor(gltf, norm_idx).astype(np.float32)
-                if normals.ndim == 1:
-                    normals = normals.reshape(-1, 3)
-                if normals.shape != (n_verts, 3):
-                    raise ValueError(f"Normal shape {normals.shape} != ({n_verts}, 3)")
-            except Exception:
-                traceback.print_exc()
-                normals = np.zeros((n_verts, 3), dtype=np.float32)
-                normals[:, 2] = 1.0
-        else:
-            # Flat normals: point along +Z as a safe fallback
-            normals = np.zeros((n_verts, 3), dtype=np.float32)
-            normals[:, 2] = 1.0
-
-        # ── Texture coordinates ────────────────────────────────────────────────
-        tc_idx = getattr(attrs, "TEXCOORD_0", None)
-        if tc_idx is not None:
-            try:
-                texcoords = read_accessor(gltf, tc_idx).astype(np.float32)
-                if texcoords.ndim == 1:
-                    texcoords = texcoords.reshape(-1, 2)
-                if texcoords.shape[0] != n_verts or texcoords.shape[1] < 2:
-                    raise ValueError(f"TexCoord shape {texcoords.shape}")
-                texcoords = texcoords[:, :2]   # keep only UV, drop extra channels
-            except Exception:
-                traceback.print_exc()
-                texcoords = np.zeros((n_verts, 2), dtype=np.float32)
-        else:
-            texcoords = np.zeros((n_verts, 2), dtype=np.float32)
-
-        # ── Joints / weights (skinning) ────────────────────────────────────────
-        j0_idx = getattr(attrs, "JOINTS_0",  None)
-        w0_idx = getattr(attrs, "WEIGHTS_0", None)
-        self._is_skinned = False
-        if j0_idx is not None and w0_idx is not None:
-            try:
-                joints  = read_accessor(gltf, j0_idx).astype(np.float32)
-                weights = read_accessor(gltf, w0_idx).astype(np.float32)
-                if joints.ndim  == 1: joints  = joints.reshape(-1, 4)
-                if weights.ndim == 1: weights = weights.reshape(-1, 4)
-                # Pad to 4 columns if accessor had fewer (non-standard but seen)
-                def _pad4(a: np.ndarray) -> np.ndarray:
-                    if a.shape[1] < 4:
-                        p = np.zeros((len(a), 4), dtype=np.float32)
-                        p[:, :a.shape[1]] = a
-                        return p
-                    return a[:, :4]
-                joints  = _pad4(joints)
-                weights = _pad4(weights)
-                if joints.shape[0] != n_verts or weights.shape[0] != n_verts:
-                    raise ValueError(
-                        f"Joint/weight count {joints.shape[0]} != n_verts {n_verts}")
-                self._is_skinned = True
-            except Exception:
-                traceback.print_exc()
-                joints  = np.zeros((n_verts, 4), dtype=np.float32)
-                weights = np.zeros((n_verts, 4), dtype=np.float32)
-                weights[:, 0] = 1.0
-        else:
-            joints  = np.zeros((n_verts, 4), dtype=np.float32)
-            weights = np.zeros((n_verts, 4), dtype=np.float32)
-            weights[:, 0] = 1.0
-
-        # ── Indices ────────────────────────────────────────────────────────────
-        if found_prim.indices is not None:
-            try:
-                indices = read_accessor(gltf, found_prim.indices).flatten().astype(np.uint32)
-            except Exception:
-                traceback.print_exc()
-                indices = np.arange(n_verts, dtype=np.uint32)
-        else:
-            indices = np.arange(n_verts, dtype=np.uint32)
-        self._mesh_count = len(indices)
-
-        # ── Material ──────────────────────────────────────────────────────────
-        # glTF default: white (1,1,1,1) in linear space
-        self._base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-        self._has_tex    = False
-        mat_idx = found_prim.material
-        if mat_idx is not None and gltf.materials and mat_idx < len(gltf.materials):
-            mat = gltf.materials[mat_idx]
-            pbr = getattr(mat, "pbrMetallicRoughness", None)
-            if pbr is not None:
-                bcf = getattr(pbr, "baseColorFactor", None)
-                if bcf is not None and len(bcf) >= 3:
-                    self._base_color = np.array(
-                        [bcf[0], bcf[1], bcf[2], bcf[3] if len(bcf) > 3 else 1.0],
-                        dtype=np.float32,
-                    )
-                tex_info = getattr(pbr, "baseColorTexture", None)
-                if tex_info is not None:
-                    tex_src_idx = getattr(tex_info, "index", None)
-                    if tex_src_idx is not None:
-                        self._upload_texture(gltf, tex_src_idx)
-
-        # ── BBox / camera auto-fit ────────────────────────────────────────────
-        mn, mx = positions.min(axis=0), positions.max(axis=0)
-        self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
-        extent            = float(np.max(mx - mn)) or 1.0
-        self._bbox_scale  = 1.0 / extent
-        self._orbit_dist  = extent * 1.4
-
-        # ── Interleave vertex data: pos(3)|normal(3)|joints(4)|weights(4)|uv(2) ──
-        # = 16 floats = 64 bytes per vertex
-        interleaved           = np.zeros((n_verts, 16), dtype=np.float32)
-        interleaved[:, 0:3]   = positions
-        interleaved[:, 3:6]   = normals
-        interleaved[:, 6:10]  = joints
-        interleaved[:, 10:14] = weights
-        interleaved[:, 14:16] = texcoords
-        vertex_data           = interleaved.flatten()
-
-        stride = 16 * 4   # 64 bytes
-
-        GL.glBindVertexArray(self._mesh_vao)
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._mesh_vbo)
+    @staticmethod
+    def _make_vao(vertex_data: "np.ndarray", indices: "np.ndarray") -> "tuple[int,int,int]":
+        """Upload interleaved vertex + index data to a fresh VAO; return (vao, vbo, ebo)."""
+        stride = 16 * 4   # 64 bytes  pos(3)|normal(3)|joints(4)|weights(4)|uv(2)
+        vao, vbo, ebo = (int(GL.glGenVertexArrays(1)),
+                         int(GL.glGenBuffers(1)),
+                         int(GL.glGenBuffers(1)))
+        GL.glBindVertexArray(vao)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo)
         GL.glBufferData(GL.GL_ARRAY_BUFFER, vertex_data.nbytes,
                         vertex_data, GL.GL_DYNAMIC_DRAW)
-        GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, self._mesh_ebo)
+        GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, ebo)
         GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes,
                         indices, GL.GL_STATIC_DRAW)
-
-        # Attribute pointers (match layout locations 0-4 in the vertex shader)
         GL.glEnableVertexAttribArray(0)
         GL.glVertexAttribPointer(0, 3, GL.GL_FLOAT, GL.GL_FALSE, stride,
                                  GL.ctypes.c_void_p(0))    # pos
@@ -1361,23 +1219,194 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glVertexAttribPointer(4, 2, GL.GL_FLOAT, GL.GL_FALSE, stride,
                                  GL.ctypes.c_void_p(56))   # texcoord
         GL.glBindVertexArray(0)
+        return vao, vbo, ebo
 
-        # ── Skin lookup: find which skin references found_mesh_idx ────────────
-        # (was hard-coded to mesh==0, broke for models where the skinned mesh
-        #  is not the first mesh in the array)
-        self._skin_index = -1
-        for ni, node in enumerate(gltf.nodes or []):
-            if node.mesh == found_mesh_idx and node.skin is not None:
-                self._skin_index = node.skin
-                break
+    def _upload_mesh(self) -> None:
+        """Upload ALL mesh primitives that have POSITION data to the GPU.
 
-        print(f"[Viewport] Loaded mesh {found_mesh_idx}: "
-              f"{n_verts} verts, {self._mesh_count} indices, "
-              f"skinned={self._is_skinned}, skin={self._skin_index}, "
-              f"tex={self._has_tex}")
+        FIX 4 (root cause of partial render): the original code stopped at the
+        very first primitive it found with POSITION data — for Barbarian.glb
+        that happened to be mesh[0] = 'Cube.160' (the left-arm fist), so only
+        the fist was ever drawn.  The model is actually split across 13 meshes
+        and 6 separate skin-referenced nodes (ArmLeft, ArmRight, Body, Head,
+        LegLeft, LegRight).  Every primitive must be uploaded as its own
+        VAO/VBO/EBO entry and drawn independently each frame.
 
-    def _upload_texture(self, gltf: "GLTF2", tex_index: int) -> None:
-        """Decode and upload the glTF texture at tex_index to self._tex_id.
+        The result is stored in self._drawables — a list of dicts, one per
+        renderable primitive.  _draw_mesh() iterates the list each frame.
+        """
+        gltf = self._gltf
+        if not gltf or not gltf.meshes:
+            return
+
+        # Free any previously allocated GPU objects
+        for d in self._drawables:
+            try:
+                GL.glDeleteVertexArrays(1, [d["vao"]])
+                GL.glDeleteBuffers(2, [d["vbo"], d["ebo"]])
+                if d["tex_id"]:
+                    GL.glDeleteTextures(1, [d["tex_id"]])
+            except Exception:
+                pass
+        self._drawables = []
+
+        # Build node→skin lookup so we can resolve skin_index per mesh
+        node_mesh_skin: dict[int, int] = {}   # mesh_index → skin_index
+        for node in (gltf.nodes or []):
+            if node.mesh is not None and node.skin is not None:
+                node_mesh_skin[node.mesh] = node.skin
+
+        # Also build a node→mesh lookup so we can resolve node transforms
+        # for static (unskinned) meshes if needed in future
+        def _pad4(a: np.ndarray) -> np.ndarray:
+            if a.ndim < 2 or a.shape[1] < 4:
+                p = np.zeros((len(a), 4), dtype=np.float32)
+                if a.ndim > 1:
+                    p[:, :a.shape[1]] = a
+                return p
+            return a[:, :4]
+
+        all_positions: list[np.ndarray] = []   # for unified BBox across all parts
+
+        for mesh_idx, mesh in enumerate(gltf.meshes):
+            for prim in (mesh.primitives or []):
+                attrs = prim.attributes
+
+                positions = self._read_positions(gltf, attrs)
+                if positions is None:
+                    continue
+                n_verts = len(positions)
+                all_positions.append(positions)
+
+                # ── Normals ───────────────────────────────────────────────────
+                norm_idx = getattr(attrs, "NORMAL", None)
+                if norm_idx is not None:
+                    try:
+                        normals = read_accessor(gltf, norm_idx).astype(np.float32)
+                        if normals.ndim == 1:
+                            normals = normals.reshape(-1, 3)
+                        if normals.shape != (n_verts, 3):
+                            raise ValueError
+                    except Exception:
+                        normals = np.zeros((n_verts, 3), dtype=np.float32)
+                        normals[:, 2] = 1.0
+                else:
+                    normals = np.zeros((n_verts, 3), dtype=np.float32)
+                    normals[:, 2] = 1.0
+
+                # ── Texture coordinates ───────────────────────────────────────
+                tc_idx = getattr(attrs, "TEXCOORD_0", None)
+                if tc_idx is not None:
+                    try:
+                        texcoords = read_accessor(gltf, tc_idx).astype(np.float32)
+                        if texcoords.ndim == 1:
+                            texcoords = texcoords.reshape(-1, 2)
+                        if texcoords.shape[0] != n_verts or texcoords.shape[1] < 2:
+                            raise ValueError
+                        texcoords = texcoords[:, :2]
+                    except Exception:
+                        texcoords = np.zeros((n_verts, 2), dtype=np.float32)
+                else:
+                    texcoords = np.zeros((n_verts, 2), dtype=np.float32)
+
+                # ── Joints / weights ──────────────────────────────────────────
+                j0_idx = getattr(attrs, "JOINTS_0",  None)
+                w0_idx = getattr(attrs, "WEIGHTS_0", None)
+                is_skinned = False
+                if j0_idx is not None and w0_idx is not None:
+                    try:
+                        joints  = _pad4(read_accessor(gltf, j0_idx).astype(np.float32))
+                        weights = _pad4(read_accessor(gltf, w0_idx).astype(np.float32))
+                        if joints.shape[0] == n_verts and weights.shape[0] == n_verts:
+                            is_skinned = True
+                        else:
+                            raise ValueError("shape mismatch")
+                    except Exception:
+                        traceback.print_exc()
+                        joints  = np.zeros((n_verts, 4), dtype=np.float32)
+                        weights = np.zeros((n_verts, 4), dtype=np.float32)
+                        weights[:, 0] = 1.0
+                else:
+                    joints  = np.zeros((n_verts, 4), dtype=np.float32)
+                    weights = np.zeros((n_verts, 4), dtype=np.float32)
+                    weights[:, 0] = 1.0
+
+                # ── Indices ───────────────────────────────────────────────────
+                if prim.indices is not None:
+                    try:
+                        indices = read_accessor(gltf, prim.indices).flatten().astype(np.uint32)
+                    except Exception:
+                        traceback.print_exc()
+                        indices = np.arange(n_verts, dtype=np.uint32)
+                else:
+                    indices = np.arange(n_verts, dtype=np.uint32)
+
+                # ── Material ──────────────────────────────────────────────────
+                base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+                has_tex    = False
+                tex_id     = 0
+                mat_idx    = prim.material
+                if mat_idx is not None and gltf.materials and mat_idx < len(gltf.materials):
+                    mat = gltf.materials[mat_idx]
+                    pbr = getattr(mat, "pbrMetallicRoughness", None)
+                    if pbr is not None:
+                        bcf = getattr(pbr, "baseColorFactor", None)
+                        if bcf is not None and len(bcf) >= 3:
+                            base_color = np.array(
+                                [bcf[0], bcf[1], bcf[2], bcf[3] if len(bcf) > 3 else 1.0],
+                                dtype=np.float32,
+                            )
+                        tex_info = getattr(pbr, "baseColorTexture", None)
+                        if tex_info is not None:
+                            tex_src_idx = getattr(tex_info, "index", None)
+                            if tex_src_idx is not None:
+                                result = self._upload_texture(gltf, tex_src_idx)
+                                if result:
+                                    tex_id, has_tex = result
+
+                # ── Interleave + upload ───────────────────────────────────────
+                interleaved           = np.zeros((n_verts, 16), dtype=np.float32)
+                interleaved[:, 0:3]   = positions
+                interleaved[:, 3:6]   = normals
+                interleaved[:, 6:10]  = joints
+                interleaved[:, 10:14] = weights
+                interleaved[:, 14:16] = texcoords
+                vao, vbo, ebo = self._make_vao(interleaved.flatten(), indices)
+
+                skin_index = node_mesh_skin.get(mesh_idx, -1)
+
+                self._drawables.append({
+                    "vao":         vao,
+                    "vbo":         vbo,
+                    "ebo":         ebo,
+                    "index_count": len(indices),
+                    "skin_index":  skin_index,
+                    "is_skinned":  is_skinned and skin_index >= 0,
+                    "has_tex":     has_tex,
+                    "tex_id":      tex_id,
+                    "base_color":  base_color,
+                })
+                print(f"[Viewport] mesh[{mesh_idx}] '{mesh.name}': "
+                      f"{n_verts} verts, {len(indices)} idx, "
+                      f"skinned={is_skinned}, skin={skin_index}, tex={has_tex}")
+
+        if not self._drawables:
+            print("[Viewport] No usable mesh primitives found in this GLB.")
+            return
+
+        # ── Unified BBox across ALL parts for camera fit ──────────────────────
+        all_pts = np.concatenate(all_positions, axis=0)
+        mn, mx = all_pts.min(axis=0), all_pts.max(axis=0)
+        self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
+        extent            = float(np.max(mx - mn)) or 1.0
+        self._bbox_scale  = 1.0 / extent
+        self._orbit_dist  = extent * 1.4
+        print(f"[Viewport] Total drawables: {len(self._drawables)}, "
+              f"bbox extent={extent:.3f}")
+
+    def _upload_texture(self, gltf: "GLTF2",
+                        tex_index: int) -> "tuple[int, bool] | None":
+        """Decode and upload the glTF texture at tex_index; return (tex_id, True).
 
         Handles all three glTF image storage variants:
           1. bufferView  — bytes in the GLB binary chunk (most common)
@@ -1386,6 +1415,14 @@ class ModelViewportWidget(QOpenGLWidget):
 
         GL_SRGB8_ALPHA8 tells OpenGL to linearise sRGB→linear on read so
         that Phong lighting works in linear space and colours look correct.
+
+        Returns (tex_id, True) on success, None on failure.
+        Each call allocates a new GL texture object — the caller owns it and
+        must free it with glDeleteTextures when the drawable is discarded.
+        Multiple primitives sharing the same glTF texture index will each get
+        their own GL object; a tex_id cache (keyed by tex_index) on self could
+        deduplicate them, but for typical models with one shared atlas this is
+        not a bottleneck.
         """
         import io, base64 as _b64
         try:
@@ -1393,16 +1430,16 @@ class ModelViewportWidget(QOpenGLWidget):
         except ImportError:
             print("[Viewport] Pillow not installed — textures disabled. "
                   "pip install pillow")
-            return
+            return None
         try:
             if not gltf.textures or tex_index >= len(gltf.textures):
-                return
+                return None
             tex   = gltf.textures[tex_index]
             img_i = tex.source
             if img_i is None:
-                return
+                return None
             if not gltf.images or img_i >= len(gltf.images):
-                return
+                return None
             img_def = gltf.images[img_i]
 
             raw_bytes: bytes | None = None
@@ -1411,7 +1448,7 @@ class ModelViewportWidget(QOpenGLWidget):
                 # Case 1: embedded in the GLB binary chunk
                 if gltf.bufferViews and img_def.bufferView < len(gltf.bufferViews):
                     bv        = gltf.bufferViews[img_def.bufferView]
-                    blob      = gltf.binary_blob()
+                    blob      = _get_blob(gltf)            # use cached blob
                     start     = bv.byteOffset or 0
                     raw_bytes = bytes(blob[start: start + bv.byteLength])
             elif img_def.uri:
@@ -1422,7 +1459,7 @@ class ModelViewportWidget(QOpenGLWidget):
                         raw_bytes = _b64.b64decode(b64)
                     except Exception:
                         traceback.print_exc()
-                        return
+                        return None
                 else:
                     # Case 3: external file — only attempt if path exists
                     if self._gltf_path_hint is not None:
@@ -1432,18 +1469,19 @@ class ModelViewportWidget(QOpenGLWidget):
                         else:
                             print(f"[Viewport] External texture '{img_def.uri}' "
                                   "not found next to the .glb — skipped.")
-                            return
+                            return None
                     else:
-                        return
+                        return None
 
             if not raw_bytes:
-                return
+                return None
 
             pil      = PILImage.open(io.BytesIO(raw_bytes)).convert("RGBA")
             img_data = np.array(pil, dtype=np.uint8)
             h, w     = img_data.shape[:2]
 
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self._tex_id)
+            tex_id = int(GL.glGenTextures(1))
+            GL.glBindTexture(GL.GL_TEXTURE_2D, tex_id)
             # GL_SRGB8_ALPHA8: GPU linearises the sRGB-encoded texels before
             # the fragment shader multiplies them in linear space.
             GL.glTexImage2D(GL.GL_TEXTURE_2D, 0,
@@ -1460,10 +1498,11 @@ class ModelViewportWidget(QOpenGLWidget):
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
                                GL.GL_REPEAT)
             GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-            self._has_tex = True
             print(f"[Viewport] Texture {tex_index} uploaded ({w}×{h} px, sRGB)")
+            return tex_id, True
         except Exception:
             traceback.print_exc()
+            return None
 
     # Maximum bone segments the skeleton VBO can hold (re-allocated if exceeded)
     _SKEL_VBO_SEGMENTS: int = 2048
@@ -1482,65 +1521,83 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glBindVertexArray(0)
 
     def _draw_mesh(self) -> None:
-        if self._prog is None:
+        """Draw all loaded mesh primitives.
+
+        FIX 4: iterates self._drawables instead of issuing a single draw call
+        for one hard-coded VAO.  Each drawable carries its own VAO, skin index,
+        texture id, and base colour so materials and skinning work correctly per
+        part (body, head, arms, legs are each their own primitive in Barbarian.glb).
+
+        Uniforms shared across all parts (MVP, light) are set once before the
+        loop; per-part uniforms (baseColor, texture, joint matrices) are set
+        inside the loop.
+        """
+        if self._prog is None or not self._drawables:
             return
         model, view, proj = self._mvp()
         self._prog.bind()
+        pid = self._prog.programId()
 
         def _u(name: str) -> int:
-            return GL.glGetUniformLocation(self._prog.programId(), name)
+            return GL.glGetUniformLocation(pid, name)
 
+        # ── Uniforms shared by every part ─────────────────────────────────────
         GL.glUniformMatrix4fv(_u("uModel"), 1, GL.GL_TRUE, model)
         GL.glUniformMatrix4fv(_u("uView"),  1, GL.GL_TRUE, view)
         GL.glUniformMatrix4fv(_u("uProj"),  1, GL.GL_TRUE, proj)
-
         light = self._bbox_center + self._orbit_dist * np.array(
             [0.5, 0.8, 0.6], dtype=np.float32)
         GL.glUniform3f(_u("uLightPos"),   *light)
         GL.glUniform3f(_u("uLightColor"), 1.0, 1.0, 1.0)
-        GL.glUniform1f(_u("uAmbient"),    0.15)   # 0.30 washed out all colours
+        GL.glUniform1f(_u("uAmbient"),    0.15)
 
-        bc = self._base_color
-        r  = float(bc[0]) if len(bc) > 0 else 1.0
-        g  = float(bc[1]) if len(bc) > 1 else 1.0
-        b  = float(bc[2]) if len(bc) > 2 else 1.0
-        a  = float(bc[3]) if len(bc) > 3 else 1.0
-        GL.glUniform4f(_u("uBaseColor"), r, g, b, a)
+        # Joint matrices are the same for every part that shares a skin, so
+        # cache them keyed by skin_index to avoid recomputing per drawable.
+        jmat_cache: dict[int, np.ndarray] = {}
 
-        # Albedo texture (slot 0)
-        if self._has_tex:
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self._tex_id)
-            GL.glUniform1i(_u("uAlbedo"),     0)
-            GL.glUniform1i(_u("uHasTexture"), 1)
-        else:
-            GL.glUniform1i(_u("uHasTexture"), 0)
+        # ── Per-part draw loop ─────────────────────────────────────────────────
+        for d in self._drawables:
+            bc = d["base_color"]
+            GL.glUniform4f(_u("uBaseColor"),
+                           float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]))
 
-        GL.glUniform1i(_u("uSkinned"),
-                       1 if self._is_skinned and self._skin_index >= 0 else 0)
+            if d["has_tex"]:
+                GL.glActiveTexture(GL.GL_TEXTURE0)
+                GL.glBindTexture(GL.GL_TEXTURE_2D, d["tex_id"])
+                GL.glUniform1i(_u("uAlbedo"),     0)
+                GL.glUniform1i(_u("uHasTexture"), 1)
+            else:
+                GL.glUniform1i(_u("uHasTexture"), 0)
 
-        # Upload joint matrices
-        if self._is_skinned and self._skin_index >= 0 and self._gltf is not None:
-            try:
-                jmats = compute_joint_matrices(
-                    self._gltf, self._skin_index,
-                    self._anim_index, self._playback_t,
-                )
-                n = min(len(jmats), 64)
+            skin_idx   = d["skin_index"]
+            is_skinned = d["is_skinned"]
+            GL.glUniform1i(_u("uSkinned"), 1 if is_skinned else 0)
+
+            if is_skinned and self._gltf is not None:
+                if skin_idx not in jmat_cache:
+                    try:
+                        jmats = compute_joint_matrices(
+                            self._gltf, skin_idx,
+                            self._anim_index, self._playback_t,
+                        )
+                        jmat_cache[skin_idx] = jmats
+                    except Exception:
+                        traceback.print_exc()
+                        jmat_cache[skin_idx] = np.eye(4, dtype=np.float32)[np.newaxis]
+                jmats = jmat_cache[skin_idx]
+                n    = min(len(jmats), 64)
                 flat = jmats[:n].flatten().astype(np.float32)
-                loc  = GL.glGetUniformLocation(self._prog.programId(), "uJoints[0]")
+                loc  = GL.glGetUniformLocation(pid, "uJoints[0]")
                 GL.glUniformMatrix4fv(loc, n, GL.GL_TRUE, flat)
-            except Exception:
-                # Print once so shader / skinning problems are diagnosable,
-                # then continue — the mesh will render in rest pose.
-                traceback.print_exc()
 
-        GL.glBindVertexArray(self._mesh_vao)
-        GL.glDrawElements(GL.GL_TRIANGLES, self._mesh_count,
-                          GL.GL_UNSIGNED_INT, None)
-        GL.glBindVertexArray(0)
-        if self._has_tex:
-            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+            GL.glBindVertexArray(d["vao"])
+            GL.glDrawElements(GL.GL_TRIANGLES, d["index_count"],
+                              GL.GL_UNSIGNED_INT, None)
+            GL.glBindVertexArray(0)
+
+            if d["has_tex"]:
+                GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+
         self._prog.release()
 
     def _draw_skeleton(self) -> None:
