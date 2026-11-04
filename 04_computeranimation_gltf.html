@@ -404,16 +404,16 @@
     <tr><td>1</td><td>Why glTF?</td><td>The 3D asset exchange problem and how glTF solves it</td><td>—</td></tr>
     <tr><td>2</td><td>glTF 2.0 Structure</td><td>Every top-level key: nodes, meshes, accessors, skins, animations</td><td>Demo 1</td></tr>
     <tr><td>3</td><td>Skeletal Animation</td><td>Bones, the bind pose, the skinning equation, morph targets</td><td>Demo 2</td></tr>
-    <tr><td>4</td><td>Three.js + glTF</td><td>GLTFLoader, SkinnedMesh, AnimationMixer, AnimationAction</td><td>Demo 3</td></tr>
-    <tr><td>5</td><td>Blending &amp; Crossfading</td><td>crossFadeTo, direct weight control, 1D blend trees, slerp</td><td>Demo 4</td></tr>
-    <tr><td>6</td><td>glTF in Python</td><td>pygltflib: inspect, read binary data, modify keyframes, save</td><td>Demo 5</td></tr>
+    <tr><td>4</td><td>Three.js + glTF</td><td>GLTFLoader, SkinnedMesh, AnimationMixer, AnimationAction, crossFadeTo</td><td>Demo 2</td></tr>
+    <tr><td>5</td><td>Locomotion State Machines</td><td>Speed-driven transitions, threshold logic, crossfade, clip portability</td><td>Demo 3</td></tr>
+    <tr><td>6</td><td>glTF in Python</td><td>pygltflib: inspect, read binary data, modify keyframes, save</td><td>Demo 4</td></tr>
     <tr><td>7</td><td>Free glTF Assets</td><td>Where to find rigged characters; Blender export; Mixamo workflow</td><td>—</td></tr>
     <tr><td>8</td><td>Demo Index</td><td>All five demos with run instructions</td><td>—</td></tr>
   </tbody>
 </table>
 
 <div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
-  <strong>Assets used in this chapter.</strong> The browser demos use <strong>Fox.glb</strong> and the Python demo uses <strong>CesiumMan.glb</strong>, both from the official <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener">Khronos glTF Sample Assets</a> repository. Fox.glb is licensed CC0/CC-BY 4.0; CesiumMan.glb is CC-BY 4.0. Both are committed to <code>seminar_04/</code> in the course repository.
+  <strong>Assets used in this chapter.</strong> Demos 1 and 2 use <strong>Fox.glb</strong> from the official <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener">Khronos glTF Sample Assets</a> repository (CC-BY 4.0). Demo 3 uses <strong>Fox.glb</strong>, <strong>Knight.glb</strong>, and <strong>Barbarian.glb</strong> — the KayKit Adventurers pack by Kay Lousberg (CC0). The Python demo uses <strong>CesiumMan.glb</strong> (Khronos, CC-BY 4.0). All assets are committed to <code>seminar_04/04_gltf/</code> in the course repository.
 </div>
 </div>
 
@@ -739,7 +739,7 @@ Where:
 </p>
 
 <div class="demo-box">
-  <strong>Demo 2 — Skeleton Visualiser.</strong> <code>04_ca_skeleton.html</code> loads Fox.glb, adds a <code>THREE.SkeletonHelper</code> overlay, and builds an interactive bone hierarchy panel. Click any bone name to see it highlighted in the 3D view with a sphere marker, and watch its local translation and rotation update live in the render loop.
+  <strong>Demo 2 — Skeleton &amp; Animation Playback.</strong> <code>04_ca_skeleton.html</code> loads Fox.glb (or any GLB you drop in), adds a <code>THREE.SkeletonHelper</code> overlay, and builds an interactive bone hierarchy panel. Click any bone name to highlight it in the 3D view and watch its world position and local rotation update live every frame. The demo also includes a full animation playback panel: select any clip from the loaded model, play/pause, scrub to any point in the timeline, and observe the skeleton updating in real time. A model selector lets you switch between Fox and other characters. Use the sidebar drop zone to load your own GLB — the demo auto-detects scale and rebuilds the bone panel.
   <p style="margin:10px 0 0 0;"><a href="04_ca_skeleton.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 2 &#8599;</a></p>
 </div>
 </div>
@@ -916,116 +916,184 @@ animate();</code></pre>
 </p>
 
 <div class="demo-box">
-  <strong>Demo 3 — Animation Clip Player.</strong> <code>04_ca_clips.html</code> loads Fox.glb, creates an <code>AnimationMixer</code>, and provides Survey / Walk / Run buttons. Each button calls <code>crossFadeTo</code> with a 0.3 s blend. A speed slider controls <code>timeScale</code>. A progress bar shows playback position within the current clip.
-  <p style="margin:10px 0 0 0;"><a href="04_ca_clips.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 3 &#8599;</a></p>
+  <strong>Demo 2 — Skeleton &amp; Animation Playback.</strong> <code>04_ca_skeleton.html</code> loads Fox.glb, adds a <code>THREE.SkeletonHelper</code> overlay, and provides an interactive bone hierarchy panel alongside a full animation playback panel. Click a bone to see its world position and local rotation update live; use the clip selector, play/pause, and scrubber to explore every animation in the loaded model. Drop any <code>.glb</code> into the sidebar to inspect your own assets.
+  <p style="margin:10px 0 0 0;"><a href="04_ca_skeleton.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 2 &#8599;</a></p>
 </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
-<!-- Cell 6 — Section 5: Blending                                -->
+<!-- Cell 6 — Section 5: Locomotion State Machines               -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div class="nb-cell">
 <hr>
-<h2 id="blending">5. Blending and Crossfading</h2>
+<h2 id="state-machines">5. Locomotion State Machines</h2>
 
-<h3>5.1 Why animation blending?</h3>
-<p>A character running on rough terrain must simultaneously play a run cycle and a stumble reaction. A character walking and looking at something continues the walk cycle while the upper body rotates. A character transitioning from idle to sprint cannot instantly jump from one clip to the other — the pop would be jarring.</p>
-<p>The solution is <strong>blending</strong>: every <code>AnimationAction</code> has a weight between 0 and 1. The final pose is the weighted average of all active actions' poses, evaluated per bone. Setting one action's weight to 1 and another's to 0 plays the first purely; setting both to 0.5 mixes them equally. This is the same <code>lerp</code> from seminar 01 — applied per bone transform, once per frame, at 60+ fps.</p>
+<h3>5.1 Why a state machine?</h3>
+<p>Playing clips manually — pressing a button to switch from Walk to Run — works fine for a demo, but breaks down immediately in a real game. The game engine knows the character's speed; it should decide which animation to play automatically. The standard solution is an <strong>animation state machine</strong>: a set of named states (Idle, Walk, Run), one animation clip per state, and transition rules that fire when a parameter crosses a threshold.</p>
+<p>This is exactly what <strong>Unity's Animator Controller</strong> and <strong>Unreal's Animation Blueprint</strong> implement visually. When you drag a slider in Unity that controls character speed, the Animator Controller watches the speed parameter and automatically crossfades between Idle, Walk, and Run at the thresholds you configured. Demo 3 builds exactly this logic by hand so you can see every piece.</p>
 
-<h3>5.2 The crossFadeTo pattern</h3>
-<p>The canonical blending pattern in Three.js — used in the official skinning examples and in every professional Three.js character demo — is a helper function built around <code>crossFadeTo</code>:</p>
-<pre><code>let currentAction = null;
+<h3>5.2 The state machine structure</h3>
+<p>A locomotion state machine has three components: a <strong>state</strong> (the clip currently playing at full weight), a <strong>parameter</strong> (here, a speed value in m/s driven by a slider), and <strong>transition rules</strong> (threshold values at which the machine switches state and crossfades).</p>
 
-/**
- * Switch to a new animation clip, blending out the previous one.
- * @param {THREE.AnimationAction} nextAction - The clip to blend in.
- * @param {number} fadeDuration - Blend time in seconds (default: 0.3 s).
- */
-function playAction(nextAction, fadeDuration = 0.3) {
-    // Guard: if the requested action is already playing, do nothing.
-    if (currentAction === nextAction) return;
+<pre><code>// ANIMATION CONCEPT: state machine variables
+// currentState  — which state we are in ('idle' | 'walk' | 'run')
+// activeAction  — the AnimationAction for the current state (full weight)
+// actions       — map from state name to AnimationAction, built on load
+// fadeDur       — crossfade duration in seconds (adjustable in the demo)
+// isTransitioning — guard: prevents re-triggering a fade mid-transition
 
-    // Reset the incoming action to time 0 and set its weight to 1.
-    // ANIMATION CONCEPT: reset() avoids a stale time offset if the action
-    // was previously stopped partway through its clip.
-    // setEffectiveWeight(1) sets the weight before the fade schedule starts,
-    // preventing a one-frame weight glitch at the beginning of the transition.
-    nextAction.reset().setEffectiveWeight(1).play();
+let currentState = 'idle';
+let activeAction = null;
+let actions = {};     // { idle: AnimationAction, walk: AnimationAction, run: AnimationAction }
+let fadeDur = 0.35;
+let isTransitioning = false;
 
-    if (currentAction) {
-        // crossFadeTo simultaneously fades THIS action out and nextAction in
-        // over fadeDuration seconds. The warp: true argument adjusts timeScale
-        // so clips of different lengths stay in sync during the blend.
-        // ANIMATION CONCEPT: if Walk is 1.2 s and Run is 0.8 s, without warp
-        // the Walk plays at normal speed while the Run tries to keep up —
-        // resulting in a jerky transition. warp: true matches their speeds.
-        currentAction.crossFadeTo(nextAction, fadeDuration, true);
-    }
+// Transition thresholds — tuned per model so transitions feel natural.
+// Fox uses a wider range because its Walk and Run cycles are very different.
+const THRESH_WALK = 0.5;   // speed (m/s) above which Idle → Walk fires
+const THRESH_RUN  = 5.0;   // speed (m/s) above which Walk → Run fires</code></pre>
 
-    currentAction = nextAction;
+<h3>5.3 Setting up all actions on load</h3>
+<p>The correct pattern is to create all <code>AnimationAction</code>s once when the model loads, start them all playing at weight 0, and then let the state machine control their weights. Never create new actions at runtime in response to button clicks — <code>clipAction()</code> is idempotent, but the overhead and the edge cases are not worth it.</p>
+
+<pre><code>// ANIMATION CONCEPT: create all actions on load, reuse them at runtime.
+// mixer.clipAction(clip) is idempotent — calling it with the same clip
+// always returns the same AnimationAction object.
+
+const clipByName = {};
+for (const clip of gltf.animations) {
+    clipByName[clip.name] = clip;
 }
 
-// Usage:
-playAction(walkAction);   // blends from Survey → Walk over 0.3 s
-playAction(runAction);    // blends from Walk   → Run  over 0.3 s</code></pre>
+// MODEL REGISTRY: maps canonical state names to the actual clip names
+// in each GLB. Fox uses 'Survey' / 'Walk' / 'Run'; KayKit characters
+// use 'Idle' / 'Walking_A' / 'Running_A'. The state machine code never
+// touches raw clip names — it always goes through this map.
+const clipMap = { idle: 'Survey', walk: 'Walk', run: 'Run' };  // Fox example
 
-<h3>5.3 Direct weight control: the 1D blend tree</h3>
-<p>For a continuous blend driven by a parameter (character speed, for example), set both actions' weights directly from a slider value:</p>
-<pre><code>// Both actions are playing simultaneously. A slider drives the blend parameter.
-// blendFactor = 0 → pure Walk. blendFactor = 1 → pure Run.
-// Values between produce a blended pose — the character visually interpolates
-// between the two gaits.
+const seenActions = new Set();
+for (const [state, clipName] of Object.entries(clipMap)) {
+    const clip = clipByName[clipName];
+    const action = mixer.clipAction(clip);
+    action.loop = THREE.LoopRepeat;
+    if (!seenActions.has(action)) {
+        seenActions.add(action);
+        action.setEffectiveWeight(0);  // weight 0 — contributes nothing yet
+        action.play();                 // must be playing for weight changes to work
+    }
+    actions[state] = action;
+}
 
-slider.addEventListener('input', () => {
-    const t = parseFloat(slider.value);  // 0.0 … 1.0
+// Start in idle at full weight.
+actions.idle.setEffectiveWeight(1);
+activeAction = actions.idle;
+currentState = 'idle';</code></pre>
 
-    // ANIMATION CONCEPT: setEffectiveWeight vs. setting .weight directly.
-    // setEffectiveWeight respects any fade schedule currently in progress.
-    // If a crossFadeTo is running when the slider moves, setEffectiveWeight
-    // overrides it cleanly. Raw .weight during a fade produces glitches.
-    walkAction.setEffectiveWeight(1 - t);
-    runAction.setEffectiveWeight(t);
-});
+<h3>5.4 The transition function</h3>
+<p>When the speed parameter crosses a threshold, the state machine calls a <code>transitionTo</code> function. This function crossfades from the current action to the new one and updates the state. A guard prevents re-triggering while a fade is already in progress.</p>
 
-// Start both playing (an action with weight 0 contributes nothing, but must
-// be playing for its weight to take effect when the slider moves):
-walkAction.play();
-runAction.play();</code></pre>
+<pre><code>/**
+ * Transition the state machine to a new state.
+ * @param {string} newState - 'idle' | 'walk' | 'run'
+ */
+function transitionTo(newState) {
+    // Guard: already in this state, or mid-transition — do nothing.
+    if (newState === currentState || isTransitioning) return;
 
-<p>This slider is a <strong>1D blend tree</strong> — the simplest form of the animation graph used in every game engine. Unity calls it "1D Blend Space"; Unreal calls it "Blend Space 1D". In a full engine the blend parameter is driven automatically by gameplay variables like character speed. Here you drive it manually to see the effect directly.</p>
+    const nextAction = actions[newState];
+    if (!nextAction) return;
 
-<h3>5.4 Interpolation in animation</h3>
-<p>Recall from seminar 01: <code>lerp(a, b, t) = (1 - t) * a + t * b</code>. Animation blending is per-bone lerp on positions and scales, and per-bone <strong>slerp</strong> on quaternion rotations.</p>
-<p>Slerp (spherical linear interpolation) interpolates along the shortest arc on the unit quaternion hypersphere, producing constant-speed rotation. You cannot lerp quaternions directly — the result collapses towards zero length and produces incorrect, non-constant-speed motion. Three.js uses <code>quaternion.slerpQuaternions(a, b, t)</code> for all bone rotation blending internally.</p>
+    isTransitioning = true;
+
+    // crossFadeTo: fades activeAction out and nextAction in over fadeDur seconds.
+    // warp: true adjusts timeScale so clips of different lengths stay in
+    // visual sync during the blend (prevents the Walk speeding up to match Run).
+    activeAction.crossFadeTo(nextAction, fadeDur, true);
+
+    currentState = newState;
+    activeAction = nextAction;
+
+    // Clear the guard after the fade completes.
+    setTimeout(() => { isTransitioning = false; }, fadeDur * 1000);
+}
+
+// ── Speed slider drives the state machine ─────────────────────────────
+speedSlider.addEventListener('input', () => {
+    const speed = parseFloat(speedSlider.value);  // 0 … 10 m/s
+
+    if      (speed < THRESH_WALK) transitionTo('idle');
+    else if (speed < THRESH_RUN)  transitionTo('walk');
+    else                          transitionTo('run');
+});</code></pre>
+
+<h3>5.5 Clip portability and the model registry</h3>
+<p>Demo 3 drives the same state machine across three different characters: <strong>Fox</strong> (a quadruped, 24 bones, Khronos CC-BY 4.0), <strong>Knight</strong>, and <strong>Barbarian</strong> (both humanoids, 41 bones, KayKit CC0). Each character has the same three locomotion states but different clip names in their GLBs.</p>
+<p>The key concept is <strong>clip portability</strong>: an <code>AnimationClip</code>'s tracks are identified by bone name strings like <code>"Spine.quaternion"</code>. The mixer matches those strings to <code>Object3D.name</code> values at runtime. As long as the bone names in a clip match the bone names in the loaded skeleton, the clip plays correctly on that skeleton. Fox, Knight, and Barbarian all have different bone names, so their clips are not interchangeable — but the state machine interface that drives them is identical, because the registry maps every model's raw clip names to canonical state names.</p>
+
+<pre><code>// MODEL REGISTRY: each entry maps canonical state names to the GLB's
+// actual clip names, plus the asset path and display scale.
+// The state machine code talks only to canonical names (idle/walk/run).
+// This decoupling is exactly what game engines implement as an
+// 'animation controller' or 'animation blueprint'.
+
+const MODEL_REGISTRY = {
+    fox: {
+        path:  '04_gltf/Fox.glb',
+        scale: 0.01,  // Fox was authored in centimetres
+        clipMap: { idle: 'Survey', walk: 'Walk', run: 'Run' },
+        thresholdWalk: 0.5,
+        thresholdRun:  5.0,
+    },
+    knight: {
+        path:  '04_gltf/Knight.glb',
+        scale: 1.0,
+        clipMap: { idle: 'Idle', walk: 'Walking_A', run: 'Running_A' },
+        thresholdWalk: 0.5,
+        thresholdRun:  5.0,
+    },
+    barbarian: {
+        path:  '04_gltf/Barbarian.glb',
+        scale: 1.0,
+        // Barbarian shares the same 41-joint KayKit rig as Knight,
+        // so the clip names are identical.
+        clipMap: { idle: 'Idle', walk: 'Walking_A', run: 'Running_A' },
+        thresholdWalk: 0.5,
+        thresholdRun:  5.0,
+    },
+};</code></pre>
+
+<h3>5.6 Interpolation in animation blending</h3>
+<p>Recall from seminar 01: <code>lerp(a, b, t) = (1 - t) * a + t * b</code>. When <code>crossFadeTo</code> runs, the mixer performs a lerp on bone positions and scales, and a <strong>slerp</strong> on quaternion rotations, evaluated per bone, every frame.</p>
+<p>Slerp (spherical linear interpolation) interpolates along the shortest arc on the unit quaternion hypersphere, producing constant-speed rotation. You cannot lerp quaternions directly — the result shrinks toward zero length and produces incorrect, non-constant-speed motion. Three.js uses <code>quaternion.slerpQuaternions(a, b, t)</code> for all bone rotation blending internally.</p>
 
 <table>
   <thead><tr><th>Interpolation</th><th>Input space</th><th>Formula</th><th>Use in animation</th></tr></thead>
   <tbody>
-    <tr><td>Lerp</td><td>Linear (positions, scales)</td><td><code>(1-t)*a + t*b</code></td><td>Position and scale blending</td></tr>
-    <tr><td>Slerp</td><td>Quaternion rotations</td><td>quaternion slerp on unit sphere</td><td>Bone rotation blending — always use slerp</td></tr>
+    <tr><td>Lerp</td><td>Linear (positions, scales)</td><td><code>(1-t)*a + t*b</code></td><td>Position and scale blending per bone</td></tr>
+    <tr><td>Slerp</td><td>Quaternion rotations</td><td>Shortest arc on unit sphere</td><td>Bone rotation blending — always use slerp</td></tr>
     <tr><td>Cubic Bézier</td><td>Time (easing curves)</td><td>Bézier parametric</td><td>Easing within a keyframe channel</td></tr>
     <tr><td>CUBICSPLINE</td><td>glTF tangent-based</td><td>Hermite cubic spline</td><td>High-quality keyframe interpolation with fewer keys</td></tr>
   </tbody>
 </table>
 
 <div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
-  <strong>Blending is why modern game characters feel smooth.</strong> A character in an open-world game typically has 20–50 active AnimationActions at any moment: a locomotion blend tree, a hit-reaction layer, a facial expression layer, an eye-dart layer, a breathing layer, an injury-limp layer. The total pose is the weighted sum of all of them, evaluated in real time at 60+ fps. What you control in the blend demo below is a simplified version of the same system.
+  <strong>State machines are why game characters feel responsive.</strong> Every modern game engine — Unity, Unreal, Godot — builds its animation system on exactly this concept: named states, one or more clips per state, parameter-driven transitions with configurable thresholds and blend durations. The speed-driven Idle → Walk → Run machine in Demo 3 is structurally identical to what the Animator Controller in Unity generates when you set up a locomotion blend. The difference is that here you write every line of logic yourself, so you can see what the visual editor is abstracting away.
 </div>
 
 <p style="margin:12px 0 0 0;">
   <a href="https://threejs.org/examples/#webgl_animation_skinning_blending" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js Skinning Blend Example &#8599;</a>
-  <a href="https://threejs.org/examples/#webgl_morphtargets" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Three.js Morph Targets Example &#8599;</a>
-  <a href="https://docs.unity3d.com/Manual/class-BlendTree.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Unity Blend Trees (reference) &#8599;</a>
+  <a href="https://docs.unity3d.com/Manual/class-AnimatorController.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Unity Animator Controller &#8599;</a>
+  <a href="https://docs.unrealengine.com/5.0/en-US/animation-blueprints-in-unreal-engine/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Unreal Animation Blueprints &#8599;</a>
 </p>
 
 <div class="demo-box">
-  <strong>Demo 4 — Clip Blending.</strong> <code>04_ca_blend.html</code> plays Walk and Run simultaneously. A blend slider (0 = pure Walk, 1 = pure Run) drives the weights directly, making the 1D blend tree concept tangible. A second button triggers an automatic <code>crossFadeTo</code> transition. A live table shows the current weight, time, and duration of each active action, updated every frame.
-  <p style="margin:10px 0 0 0;"><a href="04_ca_blend.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 4 &#8599;</a></p>
+  <strong>Demo 3 — Locomotion State Machine.</strong> <code>04_ca_state_machine.html</code> implements a speed-driven state machine over three locomotion states: Idle, Walk, and Run. Drag the speed slider and watch the machine automatically crossfade between states at configurable thresholds. Switch between Fox, Knight, and Barbarian to verify that the same state machine code drives any rigged glTF character. The side panel shows live action weights and the current state; the HUD on the canvas shows which state bubble is active. Open DevTools → Console to see every transition logged with its timing.
+  <p style="margin:10px 0 0 0;"><a href="04_ca_state_machine.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 3 &#8599;</a></p>
 </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
-<!-- Cell 7 — Section 6: Python / pygltflib                      -->
+<!-- Cell 7 — Section 6: Python / pygltflib (Demo 4)             -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div class="nb-cell">
 <hr>
@@ -1157,7 +1225,7 @@ print("Saved CesiumMan_modified.glb")</code></pre>
 <p>Blender's Python API (<code>bpy</code>) is the upstream step: <code>bpy.ops.export_scene.gltf(...)</code> exports directly from Blender to <code>.glb</code>. The <code>pygltflib</code> script then post-processes the output. Connecting these two steps is exactly the kind of pipeline automation covered in seminar 03 — Python is the tool that bridges the authoring environment and the engine.</p>
 
 <div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
-  <strong>Every professional game studio has a glTF processing pipeline.</strong> It validates exports from the art team against engine requirements — correct bone names, animation clip names, polygon budget, texture formats, LOD levels. Writing and reading this pipeline in Python is exactly what technical artists and pipeline TDs do day-to-day. The script in Demo 5 is that job in miniature: load, inspect, validate, modify, save.
+  <strong>Every professional game studio has a glTF processing pipeline.</strong> It validates exports from the art team against engine requirements — correct bone names, animation clip names, polygon budget, texture formats, LOD levels. Writing and reading this pipeline in Python is exactly what technical artists and pipeline TDs do day-to-day. The script in Demo 4 is that job in miniature: load, inspect, validate, modify, save.
 </div>
 
 <p style="margin:12px 0 0 0;">
@@ -1168,7 +1236,7 @@ print("Saved CesiumMan_modified.glb")</code></pre>
 </p>
 
 <div class="demo-box">
-  <strong>Demo 5 — glTF Inspection in Python.</strong> <code>seminar_04/04_ca_gltf_python.py</code> loads CesiumMan.glb, prints a full scene tree, lists all animations with keyframe counts and durations, reads the binary keyframe arrays with NumPy, modifies a translation keyframe (doubles the Y component at the midpoint), saves the modified file, and re-loads it to verify the change was applied. Run with:
+  <strong>Demo 4 — glTF Inspection in Python.</strong> <code>seminar_04/04_ca_gltf_python.py</code> loads CesiumMan.glb, prints a full scene tree, lists all animations with keyframe counts and durations, reads the binary keyframe arrays with NumPy, modifies a translation keyframe (doubles the Y component at the midpoint), saves the modified file, and re-loads it to verify the change was applied. Run with:
   <pre style="margin:10px 0 0; background: rgba(52,211,153,0.05); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:12px 16px; font-size:13px;">cd seminar_04
 uv sync        # first time only
 uv run python 04_ca_gltf_python.py</pre>
@@ -1239,7 +1307,7 @@ uv run python 04_ca_gltf_python.py</pre>
     <tr><td><strong>Seminar 03</strong></td><td>← Backward</td><td>The Python demo follows the same <code>uv</code> project structure and Python-as-tooling philosophy. The pyproject.toml format and run commands are identical.</td></tr>
     <tr><td><strong>Seminar 05</strong></td><td>Forward →</td><td>Physics-based animation drives bone transforms directly — the same <code>SkinnedMesh</code> bones exposed in Demo 2 can be positioned by a physics engine for ragdoll animation.</td></tr>
     <tr><td><strong>Seminar 06</strong></td><td>Forward →</td><td>Procedural animation sets bone transforms via code. A noise-driven spine sway uses the same <code>bone.rotation.set(...)</code> API shown in the skeleton demo.</td></tr>
-    <tr><td><strong>Final project</strong></td><td>Direct</td><td>The <code>AnimationMixer</code> API from demos 3 and 4 is the direct foundation for a character animation viewer project. Any free glTF character from Section 7 works as the subject.</td></tr>
+    <tr><td><strong>Final project</strong></td><td>Direct</td><td>The <code>AnimationMixer</code> API and state machine pattern from demos 2 and 3 are the direct foundation for a character animation viewer project. Any free glTF character from Section 7 works as the subject.</td></tr>
   </tbody>
 </table>
 </div>
