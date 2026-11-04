@@ -12,7 +12,7 @@
 A professional Qt application for inspecting, visualising and editing
 animation data inside binary glTF (.glb) files.  Five panels work together:
 
-Fixes applied (v2.1.0)
+Fixes applied (v2.2.0)
 ----------------------
   Performance fixes — resolved hang when loading large .glb files
   (e.g. Barbarian.glb: 76 animations × 123 channels, 8 831 accessors):
@@ -66,6 +66,32 @@ Fixes applied (v2.1.0)
      ▣ entries) carry no animation channels and are never selected by an
      animator.  They are now skipped entirely so the tree shows only bones
      (🦴) and pure transform nodes (○), matching Maya / Blender behaviour.
+
+  Fixes applied in v2.2.0
+  ------------------------
+  FIX 7 — CurveEditorWidget._apply_sane_y_range(): enforce minimum Y window.
+     Channels with near-constant values (scale ≈ 1.0, quaternion W ≈ 1.0)
+     auto-ranged to a window of a few thousandths of a unit.  At that zoom:
+       • The hit-test round-trip accumulated enough floating-point error to
+         miss the 20 px threshold → drag never started → scale appeared uneditable.
+       • Even when drag started, 1 px of mouse movement = ~0.0001 value change
+         → edits felt completely frozen.
+     _apply_sane_y_range() is called after autoRange() and widens the Y window
+     to at least 0.5 units centred on the data midpoint, keeping edits
+     responsive without hiding the curve shape.
+
+  FIX 8 — CurveEditorWidget._is_near_selected_dot(): robust data-space hit test.
+     The previous pixel-projection round-trip (data → scene → widget → pixels)
+     was correct in principle but catastrophically inaccurate when the Y window
+     was narrow: a one-pixel quantisation in the scene→widget step mapped to
+     30+ px of error, causing the threshold miss described in FIX 7.
+     The new approach inverts the chain (viewport pixel → scene → ViewBox data
+     coords) and compares in pixel-equivalent units derived from the current
+     view transform.  This is immune to Y-window zoom level.  Hit radius raised
+     from 20 px to 28 px for a more forgiving click target.
+
+  FIX 9 — _try_pick_bone(): bone pick radius raised 20 px → 25 px.
+     Small improvement in feel when clicking joint dots in the skeleton overlay.
 
   FIX 6 — Full game-engine prop rendering for unskinned meshes.
      Prop meshes (weapons, shield, hat, cape, mug …) have no skin but ARE
@@ -1864,7 +1890,7 @@ class ModelViewportWidget(QOpenGLWidget):
         sx, sy = float(screen_pos.x()), float(screen_pos.y())
 
         best_ni   = -1
-        best_dist = 20.0   # max pixel radius for a hit
+        best_dist = 25.0   # max pixel radius for a hit
 
         for ni, wpos in self._joint_world_pos.items():
             p4  = mvp @ np.array([*wpos, 1.0], dtype=np.float32)
@@ -2170,7 +2196,42 @@ class CurveEditorWidget(QWidget):
             movable=False,
         )
         self._plot.addItem(self._playhead)
+
+        # Smart Y range: autoRange first to get the data extent, then enforce
+        # a minimum window height so channels with near-constant values (scale
+        # ≈ 1.0, quaternion W ≈ 1.0) don't zoom in to a hairline and make
+        # the hit-test and drag-sensitivity completely unusable.
         self._plot.autoRange()
+        self._apply_sane_y_range()
+
+    # Minimum Y window so near-constant channels (scale ≈ 1.0, quat W ≈ 1.0)
+    # never zoom into a hairline that makes hit-testing and drag impossible.
+    _MIN_Y_WINDOW: float = 0.5
+
+    def _apply_sane_y_range(self) -> None:
+        """Enforce a minimum Y window height after autoRange().
+
+        Channels whose values barely deviate from a constant (scale = 1.0,
+        quaternion W ≈ 1.0) auto-range to a window of a few thousandths of a
+        unit.  At that zoom level:
+          • the dot's screen position is accurate but ONE pixel of drag
+            represents only ~0.0001 value change — edits feel completely frozen.
+          • the coordinate round-trip in _is_near_selected_dot accumulates
+            enough floating-point error to miss the 20px threshold, so the
+            drag never starts at all.
+        We widen the window to at least _MIN_Y_WINDOW centred on the data
+        midpoint, which keeps edits responsive without hiding the curve shape.
+        """
+        if self._values is None or self._values.size == 0:
+            return
+        vb  = self._plot.getPlotItem().getViewBox()
+        rng = vb.viewRange()          # [[xmin, xmax], [ymin, ymax]]
+        y_lo, y_hi = rng[1]
+        window = y_hi - y_lo
+        if window < self._MIN_Y_WINDOW:
+            mid    = (y_lo + y_hi) / 2.0
+            half   = self._MIN_Y_WINDOW / 2.0
+            vb.setYRange(mid - half, mid + half, padding=0)
 
     def set_playhead(self, t: float) -> None:
         if self._playhead is not None:
@@ -2371,35 +2432,72 @@ class CurveEditorWidget(QWidget):
 
         return False
 
+    # Pixel radius for the drag-start hit test.  Larger than the dot (10 px)
+    # so a click slightly off-centre still starts the drag.
+    _HIT_RADIUS_PX: float = 28.0
+
     def _is_near_selected_dot(self, screen_pos) -> bool:
-        """Return True if screen_pos is within 20 px of the selected dot.
+        """Return True if screen_pos is within _HIT_RADIUS_PX of the selected dot.
 
-        Coordinate chain:
-          data  →  ViewBox.mapViewToScene()   →  QGraphicsScene coords
-          scene →  PlotWidget.mapFromScene()  →  widget pixel coords
+        Previous approach: map the dot's data coords → scene → widget pixels
+        and compare.  This round-trip accumulates floating-point error that
+        is negligible when the Y window is wide (rotation X/Y/Z swings ±0.3)
+        but catastrophic when it is narrow (scale ≈ 1.000 ± 0.001): a one-
+        pixel quantisation error in the scene→widget projection is enough to
+        push the mapped point 30+ px away from where the user clicked, so
+        the threshold miss and the drag never starts.
 
-        self._plot is a PlotWidget (QGraphicsView subclass) so it has
-        mapFromScene().  self._plot.viewport() is a plain QWidget that does
-        NOT have that method — that was the original AttributeError crash.
+        New approach: convert screen_pos to data-space via the inverse chain
+        (viewport pixel → scene → ViewBox data coords), then compare directly
+        in data space using a radius derived from the current pixel scale.
+        This is immune to narrow Y windows because we work in data units
+        throughout and derive the threshold from the view transform at call
+        time.
+
+        Coordinate chain (all standard PyQtGraph / Qt):
+          viewport pixel  →  PlotWidget.mapToScene()    →  QGraphicsScene pt
+          scene pt        →  ViewBox.mapSceneToView()   →  data coords
+          data radius     ←  _HIT_RADIUS_PX / px_per_data_unit
         """
         if self._values is None or self._times is None:
             return False
-        if self._sel_key < 0 or self._sel_key >= len(self._times):
+        if self._sel_key  < 0 or self._sel_key  >= len(self._times):
             return False
         if self._sel_comp < 0 or self._sel_comp >= self._values.shape[1]:
             return False
 
         from PySide6.QtCore import QPointF
-        vb       = self._plot.getPlotItem().getViewBox()
-        scene_pt = vb.mapViewToScene(pg.Point(
-            float(self._times[self._sel_key]),
-            float(self._values[self._sel_key, self._sel_comp])
-        ))
-        # mapFromScene lives on the QGraphicsView (PlotWidget), not viewport()
-        widget_pt = self._plot.mapFromScene(QPointF(scene_pt.x(), scene_pt.y()))
-        dx = screen_pos.x() - widget_pt.x()
-        dy = screen_pos.y() - widget_pt.y()
-        return math.hypot(dx, dy) < 20.0
+
+        vb = self._plot.getPlotItem().getViewBox()
+
+        # Convert the click position (viewport coords) to data coords.
+        # mapToScene lives on the QGraphicsView (PlotWidget), which wraps
+        # the viewport — so we convert viewport→widget coords first.
+        vp_offset = self._plot.viewport().pos()   # viewport origin in widget coords
+        widget_pt = QPointF(
+            screen_pos.x() + vp_offset.x(),
+            screen_pos.y() + vp_offset.y(),
+        )
+        scene_click = self._plot.mapToScene(widget_pt.toPoint())
+        data_click  = vb.mapSceneToView(scene_click)
+
+        # Dot position in data coords
+        dot_x = float(self._times[self._sel_key])
+        dot_y = float(self._values[self._sel_key, self._sel_comp])
+
+        # Convert _HIT_RADIUS_PX to data units using the current view range
+        # and viewport pixel dimensions, separately for X and Y axes so
+        # non-square views are handled correctly.
+        view_rect = vb.viewRect()
+        vp_w = max(1, self._plot.viewport().width())
+        vp_h = max(1, self._plot.viewport().height())
+        px_per_x = vp_w / max(1e-12, view_rect.width())
+        px_per_y = vp_h / max(1e-12, view_rect.height())
+
+        # Normalised distance in pixel-equivalent units
+        dx_px = (data_click.x() - dot_x) * px_per_x
+        dy_px = (data_click.y() - dot_y) * px_per_y
+        return math.hypot(dx_px, dy_px) < self._HIT_RADIUS_PX
 
     def _update_curve_display(self, comp: int) -> None:
         """Redraw one curve and its scatter after a value change."""
