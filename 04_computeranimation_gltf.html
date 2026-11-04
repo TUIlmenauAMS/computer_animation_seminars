@@ -1097,39 +1097,65 @@ const MODEL_REGISTRY = {
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div class="nb-cell">
 <hr>
-<h2 id="python-pygltflib">6. glTF in Python: pygltflib</h2>
+<h2 id="python-pygltflib">6. glTF in Python: Animation Curve Editor</h2>
 
-<h3>6.1 Why a Python glTF library?</h3>
-<p>Not every step in a 3D pipeline happens inside an interactive engine. Production pipelines routinely process glTF files programmatically: batch-convert assets from Blender, validate that all required animation clip names are present, modify keyframe data without opening a DCC tool, inject procedural motion from a simulation, strip unreferenced materials, or report polygon budgets for every asset in a project. All of this happens in Python scripts run from the command line.</p>
-<p><strong>pygltflib</strong> is a pure-Python glTF 2.0 read/write library. It maps the glTF JSON spec directly to Python dataclasses. Every top-level array you saw in Section 2 — <code>nodes</code>, <code>meshes</code>, <code>animations</code>, <code>skins</code> — becomes a Python list of typed objects. Accessors are Python objects with <code>.componentType</code>, <code>.type</code>, <code>.count</code>. Binary data is accessed through <code>get_data_from_accessor()</code>.</p>
-<p>The demo for this section is a Python script (<code>seminar_04/04_ca_gltf_python.py</code>), run with the same <code>uv</code> project setup from seminar 03. The pattern is identical: <code>cd seminar_04 &amp;&amp; uv sync &amp;&amp; uv run python 04_ca_gltf_python.py</code>.</p>
+<h3>6.1 Why a Python glTF tool?</h3>
+<p>Not every step in a 3D pipeline happens inside a browser or a game engine. Production pipelines routinely process glTF files programmatically: inspecting skeleton hierarchies, visualising and editing animation F-curves, validating keyframe data, and exporting corrected assets — all without opening Blender or Maya. Demo 4 is a full desktop application that does exactly this.</p>
+<p>The tool is built on the same technology stack from seminar 03: <strong>PySide6</strong> for the Qt6 GUI, <strong>pygltflib</strong> for reading and writing the glTF binary format, <strong>PyOpenGL</strong> for a custom OpenGL 3.3 Core Profile 3D viewport with real GPU skeletal skinning, and <strong>PyQtGraph</strong> for the interactive F-curve editor. NumPy underpins every animation and geometry array throughout.</p>
+<p><strong>pygltflib</strong> maps the glTF JSON spec directly to Python dataclasses. Every top-level array from Section 2 — <code>nodes</code>, <code>meshes</code>, <code>animations</code>, <code>skins</code> — becomes a Python list of typed objects. Accessors are Python objects with <code>.componentType</code>, <code>.type</code>, <code>.count</code>. Binary keyframe data is retrieved with <code>get_data_from_accessor()</code> and wrapped in NumPy arrays for inspection and modification.</p>
 
-<h3>6.2 uv commands (seminar 04 reminder)</h3>
-<p>The project structure follows the same <code>uv</code> pattern established in seminar 03 — students already know it. A quick reminder:</p>
-<pre><code># 1. Clone the repo (skip if already done in seminar 03)
-git clone https://github.com/TUIlmenauAMS/computer_animation_seminars
-cd computer_animation_seminars/seminar_04
+<h3>6.2 F-curves: the universal animation primitive</h3>
+<p>Every animated property in a 3D package — position X, rotation Y, scale Z — is stored as a <strong>function curve</strong> (F-curve): a list of <code>(time, value)</code> pairs called <em>keyframes</em>, with an interpolation rule between them. Maya calls them "animation curves"; Blender calls them "F-curves"; glTF calls them "animation samplers". They are all the same idea: a 1D spline that maps time → value.</p>
+<p>In glTF, one <strong>sampler</strong> holds a pair of accessors: the <code>input</code> accessor (keyframe times, always float32 seconds) and the <code>output</code> accessor (keyframe values — VEC3 for translation/scale, VEC4 for rotation quaternions). One <strong>channel</strong> connects a sampler to a target node and property (<code>translation</code>, <code>rotation</code>, <code>scale</code>, or morph <code>weights</code>). Each bone that moves in an animation has one channel per animated property.</p>
 
-# 2. Create the virtual environment and install dependencies
-#    (pygltflib>=1.16.0 and numpy>=1.26.0 are declared in pyproject.toml)
+<table>
+  <thead><tr><th>Concept</th><th>Maya name</th><th>Blender name</th><th>glTF name</th><th>Three.js name</th></tr></thead>
+  <tbody>
+    <tr><td>Time → value curve</td><td>Animation curve</td><td>F-curve</td><td>Animation sampler</td><td>KeyframeTrack</td></tr>
+    <tr><td>Named set of curves</td><td>Clip / Take</td><td>Action</td><td>Animation</td><td>AnimationClip</td></tr>
+    <tr><td>Curve → bone binding</td><td>Connection</td><td>F-curve path</td><td>Channel</td><td>Track path string</td></tr>
+    <tr><td>Between-keyframe rule</td><td>Tangent type</td><td>Handle type</td><td>Interpolation</td><td>Interpolant type</td></tr>
+  </tbody>
+</table>
+
+<h3>6.3 The five-panel application layout</h3>
+<p>Demo 4 is a five-panel desktop application. Each panel teaches a different layer of the animation pipeline:</p>
+
+<table>
+  <thead><tr><th>Panel</th><th>What it shows</th><th>What you can do</th></tr></thead>
+  <tbody>
+    <tr><td><strong>3D Viewport</strong></td><td>OpenGL 3.3 Core Profile render; Blinn-Phong shading; GPU skeletal skinning; skeleton overlay</td><td>Orbit, pan, zoom; click a joint dot to select that bone; watch the pose update live as you edit curves</td></tr>
+    <tr><td><strong>Scene Tree</strong></td><td>Full glTF node hierarchy — 🦴 for joints, ○ for plain transform nodes — mirroring the <code>nodes[]</code> array from Section 2</td><td>Click any node to see its animation channels listed below</td></tr>
+    <tr><td><strong>Curve Editor</strong></td><td>PyQtGraph F-curve display; one coloured curve per component (X=red, Y=green, Z=blue, W=yellow — the same convention as Maya and Blender)</td><td>Click a keyframe dot to select it; drag up/down to change its value live; Escape to revert</td></tr>
+    <tr><td><strong>Keyframe Table</strong></td><td>Exact numeric values for every keyframe in the selected channel</td><td>Double-click any cell to type a new number; the curve and 3D viewport update immediately</td></tr>
+    <tr><td><strong>Transport Bar</strong></td><td>Playback controls and timeline scrubber</td><td>Play / Pause / Stop / Loop; speed slider; drag the scrubber to jump to any point in the clip</td></tr>
+  </tbody>
+</table>
+
+<h3>6.4 uv setup and run commands</h3>
+<p>The project uses the same <code>uv</code> workflow from seminar 03. The <code>pyproject.toml</code> in <code>seminar_04/</code> declares all dependencies: <code>pyside6</code>, <code>pyopengl</code>, <code>pyqtgraph</code>, <code>pygltflib</code>, and <code>numpy</code>.</p>
+<pre><code># 1. Enter the seminar folder
+cd computer_animation_seminars/04_gltf
+
+# 2. Create the virtual environment and install all dependencies (first time only)
 uv sync
 
-# 3. Run the Python demo
+# 3. Run the animation curve editor
 uv run python 04_ca_gltf_python.py
 
-# 4. (Development) lint and format
-uv run ruff check .
-uv run ruff format .</code></pre>
+# Ubuntu / Debian — install Qt system libraries once if the window does not open:
+# sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
 
-<h3>6.3 Loading and inspecting a glTF file</h3>
+# Windows / macOS: no extra steps — PySide6 bundles everything.</code></pre>
+
+<h3>6.5 Loading and inspecting a glTF file with pygltflib</h3>
+<p><code>GLTF2().load()</code> reads the <code>.glb</code>, parses the JSON header, and retains the binary blob in memory. The returned object mirrors the glTF JSON structure exactly — the same keys from Section 2 become Python attributes.</p>
 <pre><code>from pygltflib import GLTF2
 
-# GLTF2().load() reads the .glb, parses the JSON header, and retains the
-# binary blob in memory. The returned object mirrors the glTF JSON structure
-# exactly: gltf.nodes, gltf.meshes, gltf.animations, gltf.skins, etc.
+# Load any .glb — same structure as the annotated JSON in Section 2.
 gltf = GLTF2().load("CesiumMan.glb")
 
-# Top-level counts — a quick asset inventory
+# Top-level asset inventory
 print(f"Scenes:     {len(gltf.scenes)}")
 print(f"Nodes:      {len(gltf.nodes)}")
 print(f"Meshes:     {len(gltf.meshes)}")
@@ -1137,78 +1163,82 @@ print(f"Animations: {len(gltf.animations)}")
 print(f"Skins:      {len(gltf.skins)}")
 print(f"Materials:  {len(gltf.materials)}")
 
-# List all animations with their channels and target information
+# Walk the animation channels — this is exactly what the Scene Tree panel does.
 for i, anim in enumerate(gltf.animations):
-    print(f"\nAnimation {i}: '{anim.name}'")
-    print(f"  Channels: {len(anim.channels)}")
-    print(f"  Samplers: {len(anim.samplers)}")
+    print(f"\nAnimation {i}: '{anim.name}'  ({len(anim.channels)} channels)")
     for ch in anim.channels:
-        # GLTF CONCEPT: ch.target.node is a node index. Look it up in gltf.nodes
-        # to get the human-readable bone name — same as the Three.js bone name.
+        # GLTF CONCEPT: ch.target.node is an index into gltf.nodes[].
+        # The node's .name is the bone name — the same string Three.js
+        # uses to match animation tracks to skeleton bones.
         node_name = gltf.nodes[ch.target.node].name
-        print(f"    → node '{node_name}'  path '{ch.target.path}'")</code></pre>
+        samp      = anim.samplers[ch.sampler]
+        n_keys    = gltf.accessors[samp.input].count
+        duration  = 0.0  # read from the accessor max field when present
+        if gltf.accessors[samp.input].max:
+            duration = gltf.accessors[samp.input].max[0]
+        print(f"  → '{node_name}'  path='{ch.target.path}'  "
+              f"{n_keys} keys  {duration:.3f}s")</code></pre>
 
-<h3>6.4 Reading binary animation data</h3>
-<p>Animation keyframe data is stored in binary buffers. The accessor describes the data type; the buffer view says where in the binary blob; <code>get_data_from_accessor()</code> returns the raw bytes. Wrap in <code>np.frombuffer</code> to get a NumPy array.</p>
+<h3>6.6 Reading binary animation data with NumPy</h3>
+<p>Animation keyframe values live in the binary buffer — the same typed blob described by accessors and buffer views in Section 2. <code>get_data_from_accessor()</code> returns the raw bytes; <code>np.frombuffer()</code> gives you a typed NumPy array. This is exactly how the Curve Editor and Keyframe Table in Demo 4 load their data.</p>
 <pre><code>import numpy as np
 from pygltflib import GLTF2
 
 gltf = GLTF2().load("CesiumMan.glb")
 
-# Navigate: animation → channel → sampler → accessor indices
+# Navigate: animation → channel → sampler → input/output accessor indices.
 anim = gltf.animations[0]
 ch   = anim.channels[0]
 samp = anim.samplers[ch.sampler]
 
-# PYTHON CONCEPT: np.frombuffer() returns a read-only NumPy array backed
-# by the original bytes object. Python bytes are immutable; NumPy respects
-# this by marking the array as non-writable. Always call .copy() before
-# you intend to modify values in place.
-times  = np.frombuffer(
-    gltf.get_data_from_accessor(samp.input),   # raw bytes of the time accessor
-    dtype=np.float32                            # keyframe times are always float32
+# PYTHON CONCEPT: np.frombuffer() returns a read-only array backed by
+# the immutable bytes object. Always call .copy() before modifying values.
+times = np.frombuffer(
+    gltf.get_data_from_accessor(samp.input),   # raw bytes → time values
+    dtype=np.float32
 )
 values_raw = np.frombuffer(
-    gltf.get_data_from_accessor(samp.output),  # raw bytes of the value accessor
+    gltf.get_data_from_accessor(samp.output),  # raw bytes → keyframe values
     dtype=np.float32
 )
 
-# Determine the number of components per keyframe from the accessor type:
-# VEC3 (translation, scale) → 3 components. VEC4 (rotation quaternion) → 4.
-acc_out = gltf.accessors[samp.output]
+# Map accessor type string to component count:
+# VEC3 (translation, scale) → 3; VEC4 (rotation quaternion) → 4.
+acc_out      = gltf.accessors[samp.output]
 n_components = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}[acc_out.type]
-values = values_raw.reshape(-1, n_components)   # shape: (N, 3) or (N, 4)
+values       = values_raw.reshape(-1, n_components)   # (N_keys, N_components)
 
-print(f"Channel target:  node='{gltf.nodes[ch.target.node].name}'  path='{ch.target.path}'")
-print(f"Keyframe count:  {len(times)}")
-print(f"Duration:        {times[-1]:.3f} s")
-print(f"First keyframe:  t={times[0]:.4f}  value={values[0]}")</code></pre>
+print(f"Bone:       {gltf.nodes[ch.target.node].name}")
+print(f"Path:       {ch.target.path}  ({acc_out.type})")
+print(f"Keyframes:  {len(times)}")
+print(f"Duration:   {times[-1]:.3f} s")
+print(f"Frame 0:    t={times[0]:.4f}  value={values[0]}")
 
-<h3>6.5 Modifying keyframe data and saving</h3>
+# This is the data the Curve Editor displays as coloured F-curve lines.
+# X component → red curve; Y → green; Z → blue; W (quaternion scalar) → yellow.</code></pre>
+
+<h3>6.7 Editing keyframe values and writing back to the binary blob</h3>
+<p>To modify a keyframe, patch the binary blob in memory and call <code>set_binary_blob()</code>. The curve editor and keyframe table in Demo 4 perform this operation on every drag or cell commit. Always write to a new file to preserve the original asset.</p>
 <pre><code>from pygltflib import GLTF2
 import numpy as np
 
 gltf = GLTF2().load("CesiumMan.glb")
-
 anim = gltf.animations[0]
 ch   = anim.channels[0]
 samp = anim.samplers[ch.sampler]
 
-# Read the current output (value) data
+# Read and copy the output accessor's data (.copy() — frombuffer is read-only).
 raw    = gltf.get_data_from_accessor(samp.output)
-values = np.frombuffer(raw, dtype=np.float32).copy()  # .copy() — frombuffer is read-only
+values = np.frombuffer(raw, dtype=np.float32).copy()
 
-# Example: double the Y (height) component of every translation keyframe.
-# ch.target.path is "translation", so values are VEC3 (x, y, z).
+# Example modification: double the Y (height) of every translation keyframe.
+# ch.target.path == "translation" means values are VEC3 (x, y, z).
 if ch.target.path == "translation":
     values_3d = values.reshape(-1, 3)
-    values_3d[:, 1] *= 2.0    # column 1 = Y axis
+    values_3d[:, 1] *= 2.0   # column 1 = Y axis — lifts the whole motion up
     values = values_3d.flatten()
 
-# Patch the binary blob directly: find the byte range of the output accessor,
-# replace it with the modified data, and write the blob back to the GLTF2 object.
-# PIPELINE CONCEPT: we write to a new file to preserve the original — a
-# professional pipeline always keeps the source asset untouched.
+# Locate the byte range of the output accessor in the binary blob and replace it.
 accessor = gltf.accessors[samp.output]
 bufview  = gltf.bufferViews[accessor.bufferView]
 blob     = gltf.binary_blob()
@@ -1216,30 +1246,46 @@ new_blob = bytearray(blob)
 new_blob[bufview.byteOffset : bufview.byteOffset + bufview.byteLength] = values.tobytes()
 gltf.set_binary_blob(bytes(new_blob))
 
-# Save as a new .glb — the modified file is a valid glTF asset loadable by Three.js.
+# Save as a new .glb — a fully valid glTF asset loadable by Three.js or Demo 1.
+# PIPELINE CONCEPT: always write to a new file; never overwrite the source asset.
 gltf.save("CesiumMan_modified.glb")
 print("Saved CesiumMan_modified.glb")</code></pre>
 
-<h3>6.6 The Python animation pipeline concept</h3>
-<p>The script above is a minimal version of what a <strong>pipeline technical director (TD)</strong> writes. A real pipeline script might: load a Blender-exported glTF, validate that all animation clip names match what the engine expects, rename clips from Blender's default naming convention to the studio's standard, strip debug meshes, apply a global scale correction, and write the final <code>.glb</code> to the delivery folder — all without opening any GUI, on every asset in a large library, automatically.</p>
-<p>Blender's Python API (<code>bpy</code>) is the upstream step: <code>bpy.ops.export_scene.gltf(...)</code> exports directly from Blender to <code>.glb</code>. The <code>pygltflib</code> script then post-processes the output. Connecting these two steps is exactly the kind of pipeline automation covered in seminar 03 — Python is the tool that bridges the authoring environment and the engine.</p>
+<h3>6.8 The GPU skeletal skinning viewport</h3>
+<p>The 3D viewport in Demo 4 is <em>not</em> a shortcut using Three.js. It is built from scratch using <strong>OpenGL 3.3 Core Profile</strong> via PyOpenGL — the same low-level API that Three.js's WebGL renderer calls under the hood. This means you can see exactly what a real-time skinning pipeline looks like in bare OpenGL:</p>
+<ul>
+  <li><strong>VAO / VBO setup</strong> — vertex positions, normals, UV coordinates, joint indices (<code>JOINTS_0</code>), and blend weights (<code>WEIGHTS_0</code>) are uploaded to GPU buffer objects once at load time, exactly as a game engine does.</li>
+  <li><strong>Bone matrix uniform array</strong> — every frame, the current animated bone transforms are computed on the CPU (by evaluating the F-curves at the current playback time), packed into a <code>float32</code> array of 4×4 matrices, and uploaded as a <code>uniform mat4 boneMatrices[N]</code> to the vertex shader.</li>
+  <li><strong>Skinning vertex shader</strong> — the GLSL vertex shader reads the four bone indices and weights per vertex, multiplies by the bone matrices, and blends the results. This is the skinning equation from Section 3.3, running on the GPU for every vertex, every frame.</li>
+  <li><strong>Blinn-Phong shading</strong> — a simple fragment shader adds ambient, diffuse, and specular lighting so the mesh is readable.</li>
+</ul>
 
 <div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
-  <strong>Every professional game studio has a glTF processing pipeline.</strong> It validates exports from the art team against engine requirements — correct bone names, animation clip names, polygon budget, texture formats, LOD levels. Writing and reading this pipeline in Python is exactly what technical artists and pipeline TDs do day-to-day. The script in Demo 4 is that job in miniature: load, inspect, validate, modify, save.
+  <strong>Three.js does exactly this, in WebGL.</strong> The skinning vertex shader in Demo 4 is structurally identical to Three.js's built-in skinning shader (<code>skinning_vertex.glsl.js</code> in the Three.js source). The bone matrix uniform array is the same as <code>skeleton.boneMatrices</code> uploaded to the GPU each frame. Building the viewport from scratch in OpenGL makes the implicit machinery of Three.js explicit and inspectable.
+</div>
+
+<h3>6.9 The Python animation pipeline concept</h3>
+<p>Demo 4 is a compact version of a <strong>pipeline technical director's (TD's)</strong> toolset. A real studio tool does the same operations at scale: load every <code>.glb</code> from an art team delivery folder, validate that animation clip names match engine requirements, rename bones from Blender's default convention to the studio standard, strip debug meshes, apply a global scale correction, and write the corrected files to a delivery folder — all without opening any DCC tool, running overnight as a batch job on hundreds of assets.</p>
+<p>Blender's Python API (<code>bpy</code>) is the upstream step: <code>bpy.ops.export_scene.gltf(...)</code> exports directly from Blender to <code>.glb</code>. The <code>pygltflib</code> script post-processes the output. Connecting these two steps is exactly the kind of pipeline automation from seminar 03 — Python bridges the authoring environment and the engine.</p>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>Every professional game studio has a glTF processing pipeline.</strong> It validates exports from the art team against engine requirements — correct bone names, animation clip names, polygon budgets, texture formats, LOD levels. Technical artists and pipeline TDs write and maintain exactly this kind of tool. Demo 4 is that job made concrete: open a <code>.glb</code>, inspect its skeleton, visualise and edit its F-curves, and export the corrected file — all in Python, all from first principles.
 </div>
 
 <p style="margin:12px 0 0 0;">
   <a href="https://pypi.org/project/pygltflib/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">pygltflib on PyPI &#8599;</a>
   <a href="https://github.com/lukas-blecher/pygltflib" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">pygltflib on GitHub &#8599;</a>
-  <a href="https://www.mixamo.com/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Mixamo (Adobe) &#8599;</a>
+  <a href="https://pyqtgraph.readthedocs.io/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">PyQtGraph Docs &#8599;</a>
+  <a href="https://doc.qt.io/qtforpython-6/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">PySide6 (Qt for Python) &#8599;</a>
   <a href="https://github.com/KhronosGroup/glTF-Sample-Assets" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Khronos Sample Assets &#8599;</a>
 </p>
 
 <div class="demo-box">
-  <strong>Demo 4 — glTF Inspection in Python.</strong> <code>seminar_04/04_ca_gltf_python.py</code> loads CesiumMan.glb, prints a full scene tree, lists all animations with keyframe counts and durations, reads the binary keyframe arrays with NumPy, modifies a translation keyframe (doubles the Y component at the midpoint), saves the modified file, and re-loads it to verify the change was applied. Run with:
-  <pre style="margin:10px 0 0; background: rgba(52,211,153,0.05); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:12px 16px; font-size:13px;">cd seminar_04
-uv sync        # first time only
+  <strong>Demo 4 — glTF Animation Curve Editor (Python).</strong> <code>04_ca_gltf_python.py</code> is a full five-panel desktop application: a 3D viewport with OpenGL 3.3 Core Profile GPU skeletal skinning, a glTF scene tree, an interactive F-curve editor (click and drag keyframe dots), a keyframe inspector table (double-click to edit values), and a transport bar for playback. Open any <code>.glb</code> with <strong>File → Open GLB</strong> (Ctrl+O), browse the skeleton hierarchy, edit animation curves, and export the result with <strong>File → Export GLB</strong> (Ctrl+S). Run with:
+  <pre style="margin:10px 0 0; background: rgba(52,211,153,0.05); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:12px 16px; font-size:13px;">cd 04_gltf
+uv sync        # first time only — creates .venv and installs all dependencies
 uv run python 04_ca_gltf_python.py</pre>
+  <p style="margin:8px 0 0;">Technology stack: <strong>PySide6</strong> (Qt6 GUI) · <strong>PyOpenGL</strong> (OpenGL 3.3 Core) · <strong>PyQtGraph</strong> (F-curve plots) · <strong>pygltflib</strong> (glTF read/write) · <strong>NumPy</strong> (all animation arrays)</p>
 </div>
 </div>
 
@@ -1318,7 +1364,7 @@ uv run python 04_ca_gltf_python.py</pre>
 <div class="nb-cell">
 <hr>
 <h2 id="demo-index">8. Demo Index</h2>
-<p>Five demos accompany this chapter. The first four run in the browser directly from GitHub Pages. The fifth runs as a Python script from the <code>seminar_04/</code> folder.</p>
+<p>Four demos accompany this chapter. The first three run in the browser directly from GitHub Pages. Demo 4 is a full desktop application that runs as a Python script from the <code>04_gltf/</code> folder.</p>
 <table>
   <thead><tr><th>#</th><th>File</th><th>Type</th><th>Key concept</th><th>How to run</th></tr></thead>
   <tbody>
@@ -1333,29 +1379,22 @@ uv run python 04_ca_gltf_python.py</pre>
       <td>2</td>
       <td><a href="04_ca_skeleton.html" target="_blank"><code>04_ca_skeleton.html</code></a></td>
       <td>Browser</td>
-      <td>SkeletonHelper, bone hierarchy panel, live transform display</td>
+      <td>SkeletonHelper, bone hierarchy panel, AnimationMixer playback, clip selector, timeline scrubber, local GLB drag-and-drop</td>
       <td>Open via GitHub Pages</td>
     </tr>
     <tr>
       <td>3</td>
-      <td><a href="04_ca_clips.html" target="_blank"><code>04_ca_clips.html</code></a></td>
+      <td><a href="04_ca_state_machine.html" target="_blank"><code>04_ca_state_machine.html</code></a></td>
       <td>Browser</td>
-      <td>AnimationMixer, crossFadeTo, timeScale slider, clip progress bar</td>
+      <td>Locomotion state machine, speed-driven transitions, crossFadeTo, clip portability across Fox / Knight / Barbarian</td>
       <td>Open via GitHub Pages</td>
     </tr>
     <tr>
       <td>4</td>
-      <td><a href="04_ca_blend.html" target="_blank"><code>04_ca_blend.html</code></a></td>
-      <td>Browser</td>
-      <td>Direct weight control, 1D blend tree, live action state table</td>
-      <td>Open via GitHub Pages</td>
-    </tr>
-    <tr>
-      <td>5</td>
-      <td><code>seminar_04/04_ca_gltf_python.py</code></td>
-      <td>Python</td>
-      <td>pygltflib, NumPy, binary keyframe reading and modification</td>
-      <td><code>cd seminar_04 &amp;&amp; uv sync &amp;&amp; uv run python 04_ca_gltf_python.py</code></td>
+      <td><code>04_gltf/04_ca_gltf_python.py</code></td>
+      <td>Python desktop app</td>
+      <td>Five-panel GUI: OpenGL 3.3 Core 3D viewport with GPU skinning, scene tree, F-curve editor, keyframe inspector table, transport bar; PySide6 · PyOpenGL · PyQtGraph · pygltflib · NumPy</td>
+      <td><code>cd 04_gltf &amp;&amp; uv sync &amp;&amp; uv run python 04_ca_gltf_python.py</code></td>
     </tr>
   </tbody>
 </table>
