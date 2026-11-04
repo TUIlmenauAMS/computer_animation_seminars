@@ -106,10 +106,14 @@ from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
+from OpenGL import GL
 from pygltflib import GLTF2
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import (
-    QAction, QColor, QFont, QMatrix4x4, QPixmap, QVector3D,
+    QAction,
+    QColor,
+    QPixmap,
+    QSurfaceFormat,
 )
 from PySide6.QtOpenGL import QOpenGLShader, QOpenGLShaderProgram
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -137,8 +141,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QSurfaceFormat
-from OpenGL import GL
 
 # =============================================================================
 # STEP 1 — Module-level constants
@@ -153,29 +155,34 @@ from OpenGL import GL
 # Maps glTF componentType integer → (NumPy dtype, bytes-per-element).
 # Used by read_accessor() to interpret raw binary data from the GLB chunk.
 COMPONENT_DTYPE: dict[int, tuple[np.dtype, int]] = {
-    5120: (np.dtype("int8"),    1),   # GL_BYTE
-    5121: (np.dtype("uint8"),   1),   # GL_UNSIGNED_BYTE
-    5122: (np.dtype("int16"),   2),   # GL_SHORT
-    5123: (np.dtype("uint16"),  2),   # GL_UNSIGNED_SHORT
-    5125: (np.dtype("uint32"),  4),   # GL_UNSIGNED_INT
-    5126: (np.dtype("float32"), 4),   # GL_FLOAT  ← most common in animations
+    5120: (np.dtype("int8"), 1),  # GL_BYTE
+    5121: (np.dtype("uint8"), 1),  # GL_UNSIGNED_BYTE
+    5122: (np.dtype("int16"), 2),  # GL_SHORT
+    5123: (np.dtype("uint16"), 2),  # GL_UNSIGNED_SHORT
+    5125: (np.dtype("uint32"), 4),  # GL_UNSIGNED_INT
+    5126: (np.dtype("float32"), 4),  # GL_FLOAT  ← most common in animations
 }
 
 # Maps glTF accessor type string → number of scalar components per element.
 # A "VEC3" position has 3 components (x, y, z); a "VEC4" quaternion has 4.
 ACCESSOR_NUM_COMPONENTS: dict[str, int] = {
-    "SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4,
-    "MAT2":   4, "MAT3": 9, "MAT4": 16,
+    "SCALAR": 1,
+    "VEC2": 2,
+    "VEC3": 3,
+    "VEC4": 4,
+    "MAT2": 4,
+    "MAT3": 9,
+    "MAT4": 16,
 }
 
 # Curve colours per component: X=red  Y=green  Z=blue  W=yellow.
 # This matches the convention used in Maya's Graph Editor and Blender's
 # F-Curve Editor, so students who switch between tools see the same colours.
 CURVE_COLORS: list[tuple[int, int, int, int]] = [
-    (220,  60,  60, 220),   # X — red
-    ( 80, 200,  80, 220),   # Y — green
-    ( 60, 120, 220, 220),   # Z — blue
-    (220, 200,  50, 220),   # W — yellow
+    (220, 60, 60, 220),  # X — red
+    (80, 200, 80, 220),  # Y — green
+    (60, 120, 220, 220),  # Z — blue
+    (220, 200, 50, 220),  # W — yellow
 ]
 
 # Human-readable axis labels for each glTF animation target path.
@@ -183,9 +190,9 @@ CURVE_COLORS: list[tuple[int, int, int, int]] = [
 # where W is the scalar part.  "weights" labels are for morph-target blending.
 COMPONENT_LABELS: dict[str, list[str]] = {
     "translation": ["X", "Y", "Z"],
-    "rotation":    ["X", "Y", "Z", "W"],
-    "scale":       ["X", "Y", "Z"],
-    "weights":     ["W0", "W1", "W2", "W3"],
+    "rotation": ["X", "Y", "Z", "W"],
+    "scale": ["X", "Y", "Z"],
+    "weights": ["W0", "W1", "W2", "W3"],
 }
 
 # Target frame rate for playback.  16 ms ≈ 62.5 fps, close enough to 60 fps.
@@ -199,106 +206,106 @@ LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 # Dark-theme colour palette.  All colours are hex strings consumed by Qt
 # stylesheets.  Keeping them in one dict makes global retheming trivial.
 PALETTE = {
-    "bg":      "#0d0f14",   # darkest background — main window
-    "surface": "#161a22",   # slightly lighter — panels, headers
-    "border":  "#252b38",   # subtle dividers
-    "text":    "#d8dce6",   # primary text
-    "muted":   "#5a6175",   # secondary / placeholder text
-    "accent":  "#4f9cf9",   # interactive highlights (blue)
-    "accent2": "#a78bfa",   # bone nodes in the scene tree (purple)
-    "green":   "#34d399",   # positive indicators
-    "orange":  "#fb923c",   # warnings / negative values
-    "red":     "#f87171",   # errors
+    "bg": "#0d0f14",  # darkest background — main window
+    "surface": "#161a22",  # slightly lighter — panels, headers
+    "border": "#252b38",  # subtle dividers
+    "text": "#d8dce6",  # primary text
+    "muted": "#5a6175",  # secondary / placeholder text
+    "accent": "#4f9cf9",  # interactive highlights (blue)
+    "accent2": "#a78bfa",  # bone nodes in the scene tree (purple)
+    "green": "#34d399",  # positive indicators
+    "orange": "#fb923c",  # warnings / negative values
+    "red": "#f87171",  # errors
 }
 
 # Qt stylesheet applied to the entire application.  Python f-string interpolation
 # embeds the palette values so the stylesheet reads from one source of truth.
 APP_STYLESHEET = f"""
     QMainWindow, QWidget {{
-        background-color: {PALETTE['bg']};
-        color: {PALETTE['text']};
+        background-color: {PALETTE["bg"]};
+        color: {PALETTE["text"]};
         font-family: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
         font-size: 13px;
     }}
     QToolBar {{
-        background-color: {PALETTE['surface']};
-        border-bottom: 1px solid {PALETTE['border']};
+        background-color: {PALETTE["surface"]};
+        border-bottom: 1px solid {PALETTE["border"]};
         spacing: 6px;
         padding: 4px 8px;
     }}
     QToolBar QLabel {{
-        color: {PALETTE['muted']};
+        color: {PALETTE["muted"]};
         font-size: 12px;
         padding-left: 8px;
     }}
     QPushButton {{
-        background-color: {PALETTE['surface']};
-        color: {PALETTE['text']};
-        border: 1px solid {PALETTE['border']};
+        background-color: {PALETTE["surface"]};
+        color: {PALETTE["text"]};
+        border: 1px solid {PALETTE["border"]};
         border-radius: 4px;
         padding: 5px 14px;
         font-size: 12px;
     }}
     QPushButton:hover {{
-        background-color: {PALETTE['border']};
-        border-color: {PALETTE['accent']};
+        background-color: {PALETTE["border"]};
+        border-color: {PALETTE["accent"]};
     }}
     QPushButton:pressed {{
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         color: #ffffff;
     }}
     QPushButton:checked {{
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         color: #ffffff;
-        border-color: {PALETTE['accent']};
+        border-color: {PALETTE["accent"]};
     }}
     QPushButton#accent_btn {{
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         color: #ffffff;
-        border-color: {PALETTE['accent']};
+        border-color: {PALETTE["accent"]};
         font-weight: 600;
     }}
     QPushButton#accent_btn:hover {{ background-color: #6aabff; }}
     QPushButton#help_btn {{
         background-color: transparent;
-        color: {PALETTE['muted']};
-        border: 1px solid {PALETTE['border']};
+        color: {PALETTE["muted"]};
+        border: 1px solid {PALETTE["border"]};
         border-radius: 4px;
         padding: 4px 10px;
         font-size: 12px;
     }}
     QPushButton#help_btn:hover {{
-        color: {PALETTE['accent']};
-        border-color: {PALETTE['accent']};
+        color: {PALETTE["accent"]};
+        border-color: {PALETTE["accent"]};
     }}
     QTreeWidget {{
-        background-color: {PALETTE['surface']};
-        border: 1px solid {PALETTE['border']};
+        background-color: {PALETTE["surface"]};
+        border: 1px solid {PALETTE["border"]};
         border-radius: 4px;
-        color: {PALETTE['text']};
+        color: {PALETTE["text"]};
         font-size: 12px;
     }}
     QTreeWidget::item:selected {{
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         color: #ffffff;
     }}
-    QTreeWidget::item:hover {{ background-color: {PALETTE['border']}; }}
+    QTreeWidget::item:hover {{ background-color: {PALETTE["border"]}; }}
     QTableWidget {{
-        background-color: {PALETTE['surface']};
-        border: 1px solid {PALETTE['border']};
+        background-color: {PALETTE["surface"]};
+        border: 1px solid {PALETTE["border"]};
         border-radius: 4px;
-        color: {PALETTE['text']};
-        gridline-color: {PALETTE['border']};
+        color: {PALETTE["text"]};
+        gridline-color: {PALETTE["border"]};
         font-size: 12px;
         font-family: 'IBM Plex Mono', 'Courier New', monospace;
     }}
     QTableWidget::item:selected {{
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         color: #ffffff;
     }}
     QHeaderView::section {{
-        background-color: {PALETTE['border']};
-        color: {PALETTE['muted']};
+        background-color: {PALETTE["border"]};
+        color: {PALETTE["muted"]};
         border: none;
         padding: 4px 8px;
         font-size: 11px;
@@ -307,74 +314,74 @@ APP_STYLESHEET = f"""
     }}
     QSlider::groove:horizontal {{
         height: 4px;
-        background-color: {PALETTE['border']};
+        background-color: {PALETTE["border"]};
         border-radius: 2px;
     }}
     QSlider::handle:horizontal {{
         width: 14px; height: 14px; margin: -5px 0;
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         border-radius: 7px;
     }}
     QSlider::sub-page:horizontal {{
-        background-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
         border-radius: 2px;
     }}
     QSplitter::handle {{
-        background-color: {PALETTE['border']};
+        background-color: {PALETTE["border"]};
         width: 2px; height: 2px;
     }}
     QStatusBar {{
-        background-color: {PALETTE['surface']};
-        color: {PALETTE['muted']};
-        border-top: 1px solid {PALETTE['border']};
+        background-color: {PALETTE["surface"]};
+        color: {PALETTE["muted"]};
+        border-top: 1px solid {PALETTE["border"]};
         font-size: 11px;
     }}
     QLabel#section_header {{
-        color: {PALETTE['muted']};
+        color: {PALETTE["muted"]};
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.08em;
         padding: 8px 0 4px 0;
     }}
     QLabel#time_display {{
-        color: {PALETTE['accent']};
+        color: {PALETTE["accent"]};
         font-family: 'IBM Plex Mono', 'Courier New', monospace;
         font-size: 14px;
         font-weight: 700;
         padding: 0 8px;
     }}
     QCheckBox {{
-        color: {PALETTE['text']};
+        color: {PALETTE["text"]};
         spacing: 6px;
         font-size: 12px;
     }}
     QCheckBox::indicator {{
         width: 14px; height: 14px;
-        border: 1px solid {PALETTE['border']};
+        border: 1px solid {PALETTE["border"]};
         border-radius: 3px;
-        background-color: {PALETTE['surface']};
+        background-color: {PALETTE["surface"]};
     }}
     QCheckBox::indicator:checked {{
-        background-color: {PALETTE['accent']};
-        border-color: {PALETTE['accent']};
+        background-color: {PALETTE["accent"]};
+        border-color: {PALETTE["accent"]};
     }}
     QScrollBar:vertical {{
-        background: {PALETTE['surface']};
+        background: {PALETTE["surface"]};
         width: 8px; margin: 0;
     }}
     QScrollBar::handle:vertical {{
-        background: {PALETTE['border']};
+        background: {PALETTE["border"]};
         border-radius: 4px;
         min-height: 20px;
     }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
     QFrame#divider {{
-        background-color: {PALETTE['border']};
+        background-color: {PALETTE["border"]};
         max-height: 1px;
     }}
     QWidget#help_panel {{
-        background-color: {PALETTE['surface']};
-        border: 1px solid {PALETTE['border']};
+        background-color: {PALETTE["surface"]};
+        border: 1px solid {PALETTE["border"]};
         border-radius: 6px;
     }}
 """
@@ -391,6 +398,7 @@ APP_STYLESHEET = f"""
 # raw bytes object.  The helpers below navigate from accessor → bufferView →
 # binary blob → NumPy array, which is the fundamental read operation for all
 # animation data and mesh geometry.
+
 
 def load_gltf(path: Path) -> GLTF2:
     """Load a binary glTF (.glb) file from disk and return the parsed object.
@@ -471,7 +479,7 @@ def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
         accessor.componentType, (np.dtype("float32"), 4)
     )
     n_comp = ACCESSOR_NUM_COMPONENTS.get(accessor.type, 1)
-    count  = accessor.count or 0
+    count = accessor.count or 0
 
     # A bufferView of None means the accessor is "sparse" and its base values
     # are all zeros.  Sparse accessors are uncommon but valid in glTF.
@@ -489,14 +497,14 @@ def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
     blob: bytes = _get_blob(gltf)
 
     # Byte offsets stack: bufferView offset + accessor offset within the view.
-    view_start  = buffer_view.byteOffset or 0
-    acc_start   = view_start + (accessor.byteOffset or 0)
+    view_start = buffer_view.byteOffset or 0
+    acc_start = view_start + (accessor.byteOffset or 0)
 
     # byteStride is the gap between the start of one element and the next.
     # When omitted (None or 0) the data is tightly packed, which is the
     # common case.  Interleaved buffers (e.g. position + normal + uv in one
     # VBO) use a stride larger than the element size.
-    byte_stride   = buffer_view.byteStride or (item_size * n_comp)
+    byte_stride = buffer_view.byteStride or (item_size * n_comp)
     element_bytes = item_size * n_comp
 
     if byte_stride == element_bytes:
@@ -507,7 +515,11 @@ def read_accessor(gltf: GLTF2, accessor_index: int) -> np.ndarray:
         # Interleaved layout — stride-gather each element individually.
         # This is slower but correct and rare in practice.
         raw = b"".join(
-            blob[acc_start + i * byte_stride: acc_start + i * byte_stride + element_bytes]
+            blob[
+                acc_start + i * byte_stride : acc_start
+                + i * byte_stride
+                + element_bytes
+            ]
             for i in range(count)
         )
 
@@ -557,7 +569,7 @@ def build_channel_cache(
             sampler = anim.samplers[channel.sampler]
             # sampler.input  → accessor holding keyframe times  (float32, SCALAR)
             # sampler.output → accessor holding keyframe values  (float32, VEC3 or VEC4)
-            times  = read_accessor(gltf, sampler.input).flatten().astype(np.float32)
+            times = read_accessor(gltf, sampler.input).flatten().astype(np.float32)
             values = read_accessor(gltf, sampler.output).astype(np.float32)
             cache[(ai, ci)] = (times, values)
     return cache
@@ -589,11 +601,11 @@ def read_channel_data(
             return entry
 
     # Fallback: direct accessor read (no cache present).
-    anim    = gltf.animations[anim_index]
+    anim = gltf.animations[anim_index]
     channel = anim.channels[channel_index]
     sampler = anim.samplers[channel.sampler]
-    times   = read_accessor(gltf, sampler.input).flatten().astype(np.float32)
-    values  = read_accessor(gltf, sampler.output).astype(np.float32)
+    times = read_accessor(gltf, sampler.input).flatten().astype(np.float32)
+    values = read_accessor(gltf, sampler.output).astype(np.float32)
     return times, values
 
 
@@ -629,7 +641,9 @@ def save_gltf(gltf: GLTF2, path: Path) -> int:
 
 
 def write_channel_values(
-    gltf: GLTF2, anim_index: int, channel_index: int,
+    gltf: GLTF2,
+    anim_index: int,
+    channel_index: int,
     new_values: np.ndarray,
 ) -> None:
     """Patch keyframe values directly into the GLB binary chunk in memory.
@@ -652,10 +666,10 @@ def write_channel_values(
         new_values: Array of shape ``(n_keys, n_components)`` containing the
             replacement values in float32.
     """
-    anim        = gltf.animations[anim_index]
-    channel     = anim.channels[channel_index]
-    sampler     = anim.samplers[channel.sampler]
-    accessor    = gltf.accessors[sampler.output]
+    anim = gltf.animations[anim_index]
+    channel = anim.channels[channel_index]
+    sampler = anim.samplers[channel.sampler]
+    accessor = gltf.accessors[sampler.output]
     buffer_view = gltf.bufferViews[accessor.bufferView]
 
     # Mutable copy of the binary chunk.
@@ -665,17 +679,18 @@ def write_channel_values(
     byte_offset = (buffer_view.byteOffset or 0) + (accessor.byteOffset or 0)
 
     # Flatten to 1-D float32 and pack as little-endian binary.
-    flat      = new_values.astype(np.float32).flatten()
+    flat = new_values.astype(np.float32).flatten()
     new_bytes = struct.pack(f"{len(flat)}f", *flat)
 
     # Overwrite the exact byte range — no other data is touched.
-    blob[byte_offset: byte_offset + len(new_bytes)] = new_bytes
+    blob[byte_offset : byte_offset + len(new_bytes)] = new_bytes
     gltf.set_binary_blob(bytes(blob))
 
 
 # =============================================================================
 # STEP 3 — Scene tree builder
 # =============================================================================
+
 
 def build_scene_tree(
     gltf: GLTF2,
@@ -712,17 +727,17 @@ def build_scene_tree(
         The created ``QTreeWidgetItem``, or ``None`` when the node is a
         pure skinned-mesh container and is therefore skipped.
     """
-    node     = gltf.nodes[node_index]
-    name     = node.name or f"Node_{node_index}"
-    is_bone  = node_index in skin_joint_set
+    node = gltf.nodes[node_index]
+    name = node.name or f"Node_{node_index}"
+    is_bone = node_index in skin_joint_set
     has_mesh = node.mesh is not None
-    has_skin = node.skin is not None   # node references a skin → skinned-mesh container
+    has_skin = node.skin is not None  # node references a skin → skinned-mesh container
 
     # A node with both a mesh and a skin is a skinned-mesh container: its
     # job is "draw mesh[N] with skin[M]".  It contributes nothing to the
     # animation rig, so we skip it but still recurse into its children.
     if has_mesh and has_skin and not is_bone:
-        for child_index in (node.children or []):
+        for child_index in node.children or []:
             build_scene_tree(gltf, parent_item, child_index, skin_joint_set)
         return None
 
@@ -744,7 +759,7 @@ def build_scene_tree(
     if is_bone:
         item.setForeground(0, QColor(PALETTE["accent2"]))
 
-    for child_index in (node.children or []):
+    for child_index in node.children or []:
         build_scene_tree(gltf, item, child_index, skin_joint_set)
     return item
 
@@ -752,6 +767,7 @@ def build_scene_tree(
 # =============================================================================
 # STEP 4 — Animation channel query
 # =============================================================================
+
 
 def get_animation_channels_for_node(
     gltf: GLTF2, node_index: int
@@ -793,6 +809,7 @@ def get_animation_channels_for_node(
 # matrices that the GPU skinning shader needs.  The same math drives
 # Three.js AnimationMixer, Unreal's AnimGraph, and Maya's DAG evaluation.
 
+
 def _slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
     """Spherical linear interpolation between two unit quaternions.
 
@@ -824,7 +841,7 @@ def _slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
 
     # If dot < 0, negate q1 to ensure we take the shortest arc.
     if dot < 0.0:
-        q1  = -q1
+        q1 = -q1
         dot = -dot
 
     # When the quaternions are very close (dot ≈ 1) the arc is tiny and
@@ -838,13 +855,13 @@ def _slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
     #   slerp(q0, q1, t) = q0 * sin((1-t)*θ) / sin(θ)
     #                     + q1 * sin(t*θ)     / sin(θ)
     # where θ = acos(dot).
-    theta0 = math.acos(dot)         # angle between q0 and q1 on the sphere
-    theta  = theta0 * t             # angle we want to travel
-    sin_t  = math.sin(theta)
+    theta0 = math.acos(dot)  # angle between q0 and q1 on the sphere
+    theta = theta0 * t  # angle we want to travel
+    sin_t = math.sin(theta)
     sin_t0 = math.sin(theta0)
-    s0     = math.cos(theta) - dot * sin_t / sin_t0
-    s1     = sin_t / sin_t0
-    return (s0 * q0 + s1 * q1)
+    s0 = math.cos(theta) - dot * sin_t / sin_t0
+    s1 = sin_t / sin_t0
+    return s0 * q0 + s1 * q1
 
 
 def _lerp(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
@@ -952,15 +969,15 @@ def _trs_to_mat4(
     R = np.eye(4, dtype=np.float32)
     if rotation is not None:
         x, y, z, w = rotation
-        R[0, 0] = 1 - 2*(y*y + z*z)
-        R[0, 1] = 2*(x*y - z*w)
-        R[0, 2] = 2*(x*z + y*w)
-        R[1, 0] = 2*(x*y + z*w)
-        R[1, 1] = 1 - 2*(x*x + z*z)
-        R[1, 2] = 2*(y*z - x*w)
-        R[2, 0] = 2*(x*z - y*w)
-        R[2, 1] = 2*(y*z + x*w)
-        R[2, 2] = 1 - 2*(x*x + y*y)
+        R[0, 0] = 1 - 2 * (y * y + z * z)
+        R[0, 1] = 2 * (x * y - z * w)
+        R[0, 2] = 2 * (x * z + y * w)
+        R[1, 0] = 2 * (x * y + z * w)
+        R[1, 1] = 1 - 2 * (x * x + z * z)
+        R[1, 2] = 2 * (y * z - x * w)
+        R[2, 0] = 2 * (x * z - y * w)
+        R[2, 1] = 2 * (y * z + x * w)
+        R[2, 2] = 1 - 2 * (x * x + y * y)
 
     # Scale matrix — only the diagonal differs from identity.
     S = np.eye(4, dtype=np.float32)
@@ -989,8 +1006,8 @@ def _node_rest_mat(node) -> np.ndarray:
         # NumPy's reshape fills row-first, so we transpose after reshape.
         return np.array(node.matrix, dtype=np.float32).reshape(4, 4).T
     t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
-    r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
-    s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+    r = np.array(node.rotation or [0, 0, 0, 1], dtype=np.float32)
+    s = np.array(node.scale or [1, 1, 1], dtype=np.float32)
     return _trs_to_mat4(t, r, s)
 
 
@@ -1084,10 +1101,10 @@ def compute_joint_matrices(
     Returns:
         Float32 array of shape ``(n_joints, 4, 4)``.
     """
-    skin      = gltf.skins[skin_index]
+    skin = gltf.skins[skin_index]
     joint_ids = skin.joints or []
-    n_joints  = len(joint_ids)
-    n_nodes   = len(gltf.nodes or [])
+    n_joints = len(joint_ids)
+    n_nodes = len(gltf.nodes or [])
 
     # Start from the rest pose for every node in the scene.
     local_mats = [_node_rest_mat(gltf.nodes[i]) for i in range(n_nodes)]
@@ -1096,10 +1113,10 @@ def compute_joint_matrices(
     # This is an O(n_animated_nodes) pass, not O(n_channels).
     node_lookup = _build_anim_node_lookup(gltf, anim_index)
     for ni, path_map in node_lookup.items():
-        node   = gltf.nodes[ni]
+        node = gltf.nodes[ni]
         rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
-        rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
-        rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+        rest_r = np.array(node.rotation or [0, 0, 0, 1], dtype=np.float32)
+        rest_s = np.array(node.scale or [1, 1, 1], dtype=np.float32)
         for path, (_ci, times, values) in path_map.items():
             val = _sample_channel(times, values, t, path)
             if path == "translation":
@@ -1115,7 +1132,7 @@ def compute_joint_matrices(
     # recursion limit (~1000) is too shallow for deep skeletons.
     world_mats = [None] * n_nodes
     root_ids: list[int] = []
-    for scene in (gltf.scenes or []):
+    for scene in gltf.scenes or []:
         root_ids.extend(scene.nodes or [])
     if not root_ids:
         root_ids = list(range(n_nodes))
@@ -1126,7 +1143,7 @@ def compute_joint_matrices(
         ni, parent_world = stack.pop()
         # World matrix = parent's world matrix × this node's local matrix.
         world_mats[ni] = parent_world @ local_mats[ni]
-        for ci in (gltf.nodes[ni].children or []):
+        for ci in gltf.nodes[ni].children or []:
             stack.append((ci, world_mats[ni]))
 
     # Read inverse bind matrices from the skin's accessor.
@@ -1171,15 +1188,15 @@ def compute_world_positions(
     Returns:
         Dict mapping ``node_index → world_position (shape (3,) float32)``.
     """
-    n_nodes    = len(gltf.nodes or [])
+    n_nodes = len(gltf.nodes or [])
     local_mats = [_node_rest_mat(gltf.nodes[i]) for i in range(n_nodes)]
 
     node_lookup = _build_anim_node_lookup(gltf, anim_index)
     for ni, path_map in node_lookup.items():
-        node   = gltf.nodes[ni]
+        node = gltf.nodes[ni]
         rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
-        rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
-        rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+        rest_r = np.array(node.rotation or [0, 0, 0, 1], dtype=np.float32)
+        rest_s = np.array(node.scale or [1, 1, 1], dtype=np.float32)
         for path, (_ci, times, values) in path_map.items():
             val = _sample_channel(times, values, t, path)
             if path == "translation":
@@ -1192,7 +1209,7 @@ def compute_world_positions(
 
     world_mats: dict[int, np.ndarray] = {}
     roots: list[int] = []
-    for scene in (gltf.scenes or []):
+    for scene in gltf.scenes or []:
         roots.extend(scene.nodes or [])
     if not roots:
         roots = list(range(n_nodes))
@@ -1201,7 +1218,7 @@ def compute_world_positions(
     while stack2:
         ni, pw = stack2.pop()
         world_mats[ni] = pw @ local_mats[ni]
-        for ci in (gltf.nodes[ni].children or []):
+        for ci in gltf.nodes[ni].children or []:
             stack2.append((ci, world_mats[ni]))
 
     # Extract the translation column (column 3, rows 0–2) from each 4×4 matrix.
@@ -1230,7 +1247,7 @@ def _build_node_parent_map(gltf: GLTF2) -> dict[int, int]:
         return gltf_dict["_node_parent_map"]
     parent_map: dict[int, int] = {}
     for ni, node in enumerate(gltf.nodes or []):
-        for ci in (node.children or []):
+        for ci in node.children or []:
             parent_map[ci] = ni
     gltf_dict["_node_parent_map"] = parent_map
     return parent_map
@@ -1277,18 +1294,18 @@ def _get_node_world_mat(
     while cur is not None:
         chain.append(cur)
         cur = parent_map.get(cur)
-    chain.reverse()   # now root → … → node
+    chain.reverse()  # now root → … → node
 
     node_lookup = _build_anim_node_lookup(gltf, anim_index)
 
     world = np.eye(4, dtype=np.float32)
     for ni in chain:
-        node     = gltf.nodes[ni]
+        node = gltf.nodes[ni]
         path_map = node_lookup.get(ni, {})
         # Start from rest pose and override any animated channels.
         rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
-        rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
-        rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+        rest_r = np.array(node.rotation or [0, 0, 0, 1], dtype=np.float32)
+        rest_s = np.array(node.scale or [1, 1, 1], dtype=np.float32)
         for path, (_ci, times, values) in path_map.items():
             val = _sample_channel(times, values, t, path)
             if path == "translation":
@@ -1520,9 +1537,9 @@ class ModelViewportWidget(QOpenGLWidget):
         super().__init__(parent)
 
         # glTF data
-        self._gltf:       GLTF2 | None = None
-        self._anim_index: int          = -1
-        self._playback_t: float        = 0.0
+        self._gltf: GLTF2 | None = None
+        self._anim_index: int = -1
+        self._playback_t: float = 0.0
 
         # GPU drawables — one entry per renderable mesh primitive.
         # Each dict holds: vao, vbo, ebo, index_count, skin_index, node_index,
@@ -1530,7 +1547,7 @@ class ModelViewportWidget(QOpenGLWidget):
         self._drawables: list[dict] = []
 
         # Compiled shader programs (created in initializeGL).
-        self._prog:      QOpenGLShaderProgram | None = None
+        self._prog: QOpenGLShaderProgram | None = None
         self._line_prog: QOpenGLShaderProgram | None = None
 
         # Skeleton line geometry — one VAO/VBO pair, refilled each frame.
@@ -1538,13 +1555,13 @@ class ModelViewportWidget(QOpenGLWidget):
         self._line_vbo: int = 0
 
         # Camera state — orbit camera around _bbox_center.
-        self._orbit_yaw:   float = 30.0    # horizontal angle in degrees
-        self._orbit_pitch: float = 15.0    # vertical angle in degrees
-        self._orbit_dist:  float = 3.0     # distance from target to eye
+        self._orbit_yaw: float = 30.0  # horizontal angle in degrees
+        self._orbit_pitch: float = 15.0  # vertical angle in degrees
+        self._orbit_dist: float = 3.0  # distance from target to eye
 
         # Mouse tracking for orbit (left-button) and pan (middle-button).
-        self._last_mouse     = None   # QPointF while left button is held
-        self._pan_last_mouse = None   # QPointF while middle button is held
+        self._last_mouse = None  # QPointF while left button is held
+        self._pan_last_mouse = None  # QPointF while middle button is held
 
         # World-space centre and scale of the loaded model's bounding box.
         # _bbox_center is also the camera target point for orbit / pan.
@@ -1553,17 +1570,17 @@ class ModelViewportWidget(QOpenGLWidget):
 
         # Saved camera defaults for double-click reframe.
         # Stored when the model is loaded so the camera can be reset at any time.
-        self._bbox_center_default  = np.zeros(3, dtype=np.float32)
-        self._orbit_dist_default:  float = 3.0
-        self._orbit_yaw_default:   float = 30.0
+        self._bbox_center_default = np.zeros(3, dtype=np.float32)
+        self._orbit_dist_default: float = 3.0
+        self._orbit_yaw_default: float = 30.0
         self._orbit_pitch_default: float = 15.0
 
         # Skeleton display options.
-        self._show_skeleton:  bool = True   # toggled by toolbar button
-        self._selected_joint: int  = -1     # highlighted joint node index
+        self._show_skeleton: bool = True  # toggled by toolbar button
+        self._selected_joint: int = -1  # highlighted joint node index
 
         # Path hint for external texture resolution (rare in .glb files).
-        self._gltf_path_hint: "Path | None" = None
+        self._gltf_path_hint: Path | None = None
 
         # World-space joint positions populated each frame for bone picking.
         self._joint_world_pos: dict[int, np.ndarray] = {}
@@ -1577,8 +1594,9 @@ class ModelViewportWidget(QOpenGLWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def load_model(self, gltf: GLTF2, anim_index: int = 0,
-                   path: "Path | None" = None) -> None:
+    def load_model(
+        self, gltf: GLTF2, anim_index: int = 0, path: Path | None = None
+    ) -> None:
         """Upload all mesh primitives from ``gltf`` to the GPU.
 
         Args:
@@ -1587,9 +1605,9 @@ class ModelViewportWidget(QOpenGLWidget):
             path: Optional filesystem path to the .glb, used to resolve
                 external texture URIs (rare in self-contained .glb files).
         """
-        self._gltf           = gltf
-        self._anim_index     = anim_index
-        self._playback_t     = 0.0
+        self._gltf = gltf
+        self._anim_index = anim_index
+        self._playback_t = 0.0
         self._gltf_path_hint = path
 
         # makeCurrent / doneCurrent bracket all OpenGL calls made outside
@@ -1670,11 +1688,13 @@ class ModelViewportWidget(QOpenGLWidget):
         # to the console so a blank viewport is diagnosable.
         self._prog = QOpenGLShaderProgram(self)
         ok = self._prog.addShaderFromSourceCode(
-            QOpenGLShader.ShaderTypeBit.Vertex, _VERT_SRC)
+            QOpenGLShader.ShaderTypeBit.Vertex, _VERT_SRC
+        )
         if not ok:
             print(f"[Viewport] Vertex shader compile error:\n{self._prog.log()}")
         ok = self._prog.addShaderFromSourceCode(
-            QOpenGLShader.ShaderTypeBit.Fragment, _FRAG_SRC)
+            QOpenGLShader.ShaderTypeBit.Fragment, _FRAG_SRC
+        )
         if not ok:
             print(f"[Viewport] Fragment shader compile error:\n{self._prog.log()}")
         if not self._prog.link():
@@ -1683,11 +1703,13 @@ class ModelViewportWidget(QOpenGLWidget):
         # Compile and link the skeleton line shader.
         self._line_prog = QOpenGLShaderProgram(self)
         ok = self._line_prog.addShaderFromSourceCode(
-            QOpenGLShader.ShaderTypeBit.Vertex, _LINE_VERT)
+            QOpenGLShader.ShaderTypeBit.Vertex, _LINE_VERT
+        )
         if not ok:
             print(f"[Viewport] Line vertex shader error:\n{self._line_prog.log()}")
         ok = self._line_prog.addShaderFromSourceCode(
-            QOpenGLShader.ShaderTypeBit.Fragment, _LINE_FRAG)
+            QOpenGLShader.ShaderTypeBit.Fragment, _LINE_FRAG
+        )
         if not ok:
             print(f"[Viewport] Line fragment shader error:\n{self._line_prog.log()}")
         if not self._line_prog.link():
@@ -1738,10 +1760,10 @@ class ModelViewportWidget(QOpenGLWidget):
         Args:
             event: QMouseEvent from Qt.
         """
-        self._bbox_center  = self._bbox_center_default.copy()
-        self._orbit_dist   = self._orbit_dist_default
-        self._orbit_yaw    = self._orbit_yaw_default
-        self._orbit_pitch  = self._orbit_pitch_default
+        self._bbox_center = self._bbox_center_default.copy()
+        self._orbit_dist = self._orbit_dist_default
+        self._orbit_yaw = self._orbit_yaw_default
+        self._orbit_pitch = self._orbit_pitch_default
         self.update()
         event.accept()
 
@@ -1809,9 +1831,9 @@ class ModelViewportWidget(QOpenGLWidget):
                 # A real drag started — suppress the bone pick that fired on
                 # press so clicking and dragging don't both select a bone.
                 self._last_mouse = None
-            self._orbit_yaw  += dx * 0.4
+            self._orbit_yaw += dx * 0.4
             self._orbit_pitch = max(-89.0, min(89.0, self._orbit_pitch + dy * 0.4))
-            self._last_mouse  = pos
+            self._last_mouse = pos
             self.update()
 
         # ── Middle-drag pan ───────────────────────────────────────────────────
@@ -1823,29 +1845,29 @@ class ModelViewportWidget(QOpenGLWidget):
             # from yaw and pitch — the same vectors _mvp() computes for the
             # view matrix.  We need them to know which world-space directions
             # correspond to screen-space left/right and up/down.
-            yaw   = math.radians(self._orbit_yaw)
+            yaw = math.radians(self._orbit_yaw)
             pitch = math.radians(self._orbit_pitch)
-            cx    = math.cos(pitch) * math.sin(yaw)
-            cy    = math.sin(pitch)
-            cz    = math.cos(pitch) * math.cos(yaw)
-            f_vec = -np.array([cx, cy, cz], dtype=np.float32)   # forward (toward target)
-            up    = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            cx = math.cos(pitch) * math.sin(yaw)
+            cy = math.sin(pitch)
+            cz = math.cos(pitch) * math.cos(yaw)
+            f_vec = -np.array([cx, cy, cz], dtype=np.float32)  # forward (toward target)
+            up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
             # Right vector: perpendicular to forward and world-up.
             r_vec = np.cross(f_vec, up)
-            norm  = np.linalg.norm(r_vec)
+            norm = np.linalg.norm(r_vec)
             if norm > 1e-6:
                 r_vec /= norm
 
             # Camera up vector: perpendicular to right and forward.
             u_vec = np.cross(r_vec, f_vec)
-            norm  = np.linalg.norm(u_vec)
+            norm = np.linalg.norm(u_vec)
             if norm > 1e-6:
                 u_vec /= norm
 
             # Scale factor: orbit_dist / viewport_height gives world units per
             # pixel, keeping pan speed proportional to the visible scene size.
-            h_px  = max(1, self.height())
+            h_px = max(1, self.height())
             scale = self._orbit_dist / h_px
 
             # Moving right on screen (dx > 0) should shift the target leftward
@@ -1869,8 +1891,8 @@ class ModelViewportWidget(QOpenGLWidget):
         """
         delta = event.angleDelta().y()
         # 0.999^120 ≈ 0.887 per notch — feel-tuned for typical trackpads.
-        self._orbit_dist *= 0.999 ** delta
-        self._orbit_dist  = max(0.01, self._orbit_dist)
+        self._orbit_dist *= 0.999**delta
+        self._orbit_dist = max(0.01, self._orbit_dist)
         self.update()
 
     # ------------------------------------------------------------------
@@ -1910,47 +1932,49 @@ class ModelViewportWidget(QOpenGLWidget):
         Returns:
             Tuple ``(model, view, proj)`` of 4×4 float32 ndarrays.
         """
-        w, h   = max(1, self.width()), max(1, self.height())
+        w, h = max(1, self.width()), max(1, self.height())
         aspect = w / h
 
         # Scale near/far with orbit distance so clipping adapts to zoom level.
         near = max(0.001, self._orbit_dist * 0.005)
-        far  = self._orbit_dist * 200.0
+        far = self._orbit_dist * 200.0
 
         # Perspective projection matrix — derived from the frustum equations.
-        fov    = math.radians(45.0)
-        f      = 1.0 / math.tan(fov / 2)   # cotangent of half-FOV
-        proj   = np.zeros((4, 4), dtype=np.float32)
-        proj[0, 0] = f / aspect            # X scale (accounts for aspect ratio)
-        proj[1, 1] = f                     # Y scale
+        fov = math.radians(45.0)
+        f = 1.0 / math.tan(fov / 2)  # cotangent of half-FOV
+        proj = np.zeros((4, 4), dtype=np.float32)
+        proj[0, 0] = f / aspect  # X scale (accounts for aspect ratio)
+        proj[1, 1] = f  # Y scale
         proj[2, 2] = (far + near) / (near - far)
-        proj[2, 3] = (2 * far * near) / (near - far)   # Z translation term
-        proj[3, 2] = -1.0                              # perspective divide trigger
+        proj[2, 3] = (2 * far * near) / (near - far)  # Z translation term
+        proj[3, 2] = -1.0  # perspective divide trigger
 
         # Orbit camera — eye position computed from yaw, pitch, and distance.
-        yaw   = math.radians(self._orbit_yaw)
+        yaw = math.radians(self._orbit_yaw)
         pitch = math.radians(self._orbit_pitch)
-        cx    = self._orbit_dist * math.cos(pitch) * math.sin(yaw)
-        cy    = self._orbit_dist * math.sin(pitch)
-        cz    = self._orbit_dist * math.cos(pitch) * math.cos(yaw)
-        eye   = self._bbox_center + np.array([cx, cy, cz], dtype=np.float32)
-        ctr   = self._bbox_center.copy()
-        up    = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        cx = self._orbit_dist * math.cos(pitch) * math.sin(yaw)
+        cy = self._orbit_dist * math.sin(pitch)
+        cz = self._orbit_dist * math.cos(pitch) * math.cos(yaw)
+        eye = self._bbox_center + np.array([cx, cy, cz], dtype=np.float32)
+        ctr = self._bbox_center.copy()
+        up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
         # Orthonormal camera basis from the standard look-at construction.
-        f_vec = (ctr - eye); f_vec /= (np.linalg.norm(f_vec) + 1e-9)   # forward
-        r_vec = np.cross(f_vec, up); r_vec /= (np.linalg.norm(r_vec) + 1e-9)   # right
-        u_vec = np.cross(r_vec, f_vec)                                            # up
+        f_vec = ctr - eye
+        f_vec /= np.linalg.norm(f_vec) + 1e-9  # forward
+        r_vec = np.cross(f_vec, up)
+        r_vec /= np.linalg.norm(r_vec) + 1e-9  # right
+        u_vec = np.cross(r_vec, f_vec)  # up
 
         # Row-major view matrix: dot each basis vector with the eye position
         # to build the camera-space translation.
-        view  = np.eye(4, dtype=np.float32)
+        view = np.eye(4, dtype=np.float32)
         view[0, :3] = r_vec
         view[1, :3] = u_vec
         view[2, :3] = -f_vec
-        view[0, 3]  = -np.dot(r_vec, eye)
-        view[1, 3]  = -np.dot(u_vec, eye)
-        view[2, 3]  =  np.dot(f_vec, eye)
+        view[0, 3] = -np.dot(r_vec, eye)
+        view[1, 3] = -np.dot(u_vec, eye)
+        view[2, 3] = np.dot(f_vec, eye)
 
         # Model matrix is identity: all world-space transforms are baked into
         # the joint matrices for skinned meshes, or into the per-drawable
@@ -1963,7 +1987,7 @@ class ModelViewportWidget(QOpenGLWidget):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _read_positions(gltf: "GLTF2", attrs) -> "np.ndarray | None":
+    def _read_positions(gltf: GLTF2, attrs) -> np.ndarray | None:
         """Read the POSITION accessor from a mesh primitive's attributes.
 
         Args:
@@ -1992,9 +2016,7 @@ class ModelViewportWidget(QOpenGLWidget):
         return arr
 
     @staticmethod
-    def _make_vao(
-        vertex_data: "np.ndarray", indices: "np.ndarray"
-    ) -> "tuple[int, int, int]":
+    def _make_vao(vertex_data: np.ndarray, indices: np.ndarray) -> tuple[int, int, int]:
         """Upload interleaved vertex + index data to a new VAO.
 
         Interleaved vertex layout (stride = 64 bytes = 16 floats):
@@ -2015,7 +2037,7 @@ class ModelViewportWidget(QOpenGLWidget):
         Returns:
             Tuple ``(vao, vbo, ebo)`` of OpenGL object IDs.
         """
-        stride = 16 * 4   # 16 floats × 4 bytes = 64 bytes per vertex
+        stride = 16 * 4  # 16 floats × 4 bytes = 64 bytes per vertex
         vao = int(GL.glGenVertexArrays(1))
         vbo = int(GL.glGenBuffers(1))
         ebo = int(GL.glGenBuffers(1))
@@ -2024,29 +2046,36 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo)
         # GL_DYNAMIC_DRAW: data may be updated each frame (skinning can
         # update the VBO; we also re-use the VBO for skeleton drawing).
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, vertex_data.nbytes,
-                        vertex_data, GL.GL_DYNAMIC_DRAW)
+        GL.glBufferData(
+            GL.GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL.GL_DYNAMIC_DRAW
+        )
         GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, ebo)
-        GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes,
-                        indices, GL.GL_STATIC_DRAW)
+        GL.glBufferData(
+            GL.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL.GL_STATIC_DRAW
+        )
 
         # Tell the VAO how to interpret each attribute within the interleaved
         # buffer.  Arguments: (location, components, type, normalise, stride, offset).
         GL.glEnableVertexAttribArray(0)
-        GL.glVertexAttribPointer(0, 3, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(0))    # position at byte 0
+        GL.glVertexAttribPointer(
+            0, 3, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(0)
+        )  # position at byte 0
         GL.glEnableVertexAttribArray(1)
-        GL.glVertexAttribPointer(1, 3, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(12))   # normal at byte 12
+        GL.glVertexAttribPointer(
+            1, 3, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(12)
+        )  # normal at byte 12
         GL.glEnableVertexAttribArray(2)
-        GL.glVertexAttribPointer(2, 4, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(24))   # joints at byte 24
+        GL.glVertexAttribPointer(
+            2, 4, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(24)
+        )  # joints at byte 24
         GL.glEnableVertexAttribArray(3)
-        GL.glVertexAttribPointer(3, 4, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(40))   # weights at byte 40
+        GL.glVertexAttribPointer(
+            3, 4, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(40)
+        )  # weights at byte 40
         GL.glEnableVertexAttribArray(4)
-        GL.glVertexAttribPointer(4, 2, GL.GL_FLOAT, GL.GL_FALSE, stride,
-                                 GL.ctypes.c_void_p(56))   # texcoord at byte 56
+        GL.glVertexAttribPointer(
+            4, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(56)
+        )  # texcoord at byte 56
         GL.glBindVertexArray(0)
         return vao, vbo, ebo
 
@@ -2095,8 +2124,8 @@ class ModelViewportWidget(QOpenGLWidget):
         # Build lookup tables: mesh_index → skin_index and mesh_index → node_index.
         # We need these to know which skin (if any) each mesh primitive belongs to,
         # and which node owns the mesh (for prop world-transform computation).
-        node_mesh_skin: dict[int, int] = {}   # mesh_index → skin_index
-        mesh_to_node:   dict[int, int] = {}   # mesh_index → node_index
+        node_mesh_skin: dict[int, int] = {}  # mesh_index → skin_index
+        mesh_to_node: dict[int, int] = {}  # mesh_index → node_index
         for ni, node in enumerate(gltf.nodes or []):
             if node.mesh is not None:
                 mesh_to_node[node.mesh] = ni
@@ -2111,7 +2140,7 @@ class ModelViewportWidget(QOpenGLWidget):
             if a.ndim < 2 or a.shape[1] < 4:
                 p = np.zeros((len(a), 4), dtype=np.float32)
                 if a.ndim > 1:
-                    p[:, :a.shape[1]] = a
+                    p[:, : a.shape[1]] = a
                 return p
             return a[:, :4]
 
@@ -2119,7 +2148,7 @@ class ModelViewportWidget(QOpenGLWidget):
         all_positions: list[np.ndarray] = []
 
         for mesh_idx, mesh in enumerate(gltf.meshes):
-            for prim in (mesh.primitives or []):
+            for prim in mesh.primitives or []:
                 attrs = prim.attributes
 
                 positions = self._read_positions(gltf, attrs)
@@ -2165,12 +2194,12 @@ class ModelViewportWidget(QOpenGLWidget):
                 # JOINTS_0: up to 4 joint indices per vertex (stored as integers
                 #   but we keep them as float32 for the shader).
                 # WEIGHTS_0: corresponding blend weights — must sum to ≈ 1.
-                j0_idx = getattr(attrs, "JOINTS_0",  None)
+                j0_idx = getattr(attrs, "JOINTS_0", None)
                 w0_idx = getattr(attrs, "WEIGHTS_0", None)
                 is_skinned = False
                 if j0_idx is not None and w0_idx is not None:
                     try:
-                        joints  = _pad4(read_accessor(gltf, j0_idx).astype(np.float32))
+                        joints = _pad4(read_accessor(gltf, j0_idx).astype(np.float32))
                         weights = _pad4(read_accessor(gltf, w0_idx).astype(np.float32))
                         if joints.shape[0] == n_verts and weights.shape[0] == n_verts:
                             is_skinned = True
@@ -2178,12 +2207,12 @@ class ModelViewportWidget(QOpenGLWidget):
                             raise ValueError("shape mismatch")
                     except Exception:
                         traceback.print_exc()
-                        joints  = np.zeros((n_verts, 4), dtype=np.float32)
+                        joints = np.zeros((n_verts, 4), dtype=np.float32)
                         weights = np.zeros((n_verts, 4), dtype=np.float32)
-                        weights[:, 0] = 1.0   # bind fully to joint 0 as fallback
+                        weights[:, 0] = 1.0  # bind fully to joint 0 as fallback
                 else:
                     # No skinning data — vertex binds entirely to joint 0.
-                    joints  = np.zeros((n_verts, 4), dtype=np.float32)
+                    joints = np.zeros((n_verts, 4), dtype=np.float32)
                     weights = np.zeros((n_verts, 4), dtype=np.float32)
                     weights[:, 0] = 1.0
 
@@ -2193,7 +2222,11 @@ class ModelViewportWidget(QOpenGLWidget):
                 # generate a trivial sequential index array.
                 if prim.indices is not None:
                     try:
-                        indices = read_accessor(gltf, prim.indices).flatten().astype(np.uint32)
+                        indices = (
+                            read_accessor(gltf, prim.indices)
+                            .flatten()
+                            .astype(np.uint32)
+                        )
                     except Exception:
                         traceback.print_exc()
                         indices = np.arange(n_verts, dtype=np.uint32)
@@ -2206,17 +2239,26 @@ class ModelViewportWidget(QOpenGLWidget):
                 # Blinn-Phong shader; the PBR metallic-roughness model is out
                 # of scope for this demo but the structure is the same.
                 base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-                has_tex    = False
-                tex_id     = 0
-                mat_idx    = prim.material
-                if mat_idx is not None and gltf.materials and mat_idx < len(gltf.materials):
+                has_tex = False
+                tex_id = 0
+                mat_idx = prim.material
+                if (
+                    mat_idx is not None
+                    and gltf.materials
+                    and mat_idx < len(gltf.materials)
+                ):
                     mat = gltf.materials[mat_idx]
                     pbr = getattr(mat, "pbrMetallicRoughness", None)
                     if pbr is not None:
                         bcf = getattr(pbr, "baseColorFactor", None)
                         if bcf is not None and len(bcf) >= 3:
                             base_color = np.array(
-                                [bcf[0], bcf[1], bcf[2], bcf[3] if len(bcf) > 3 else 1.0],
+                                [
+                                    bcf[0],
+                                    bcf[1],
+                                    bcf[2],
+                                    bcf[3] if len(bcf) > 3 else 1.0,
+                                ],
                                 dtype=np.float32,
                             )
                         tex_info = getattr(pbr, "baseColorTexture", None)
@@ -2231,10 +2273,10 @@ class ModelViewportWidget(QOpenGLWidget):
                 # Pack position, normal, joints, weights, and texcoords into
                 # a single array.  Shape is (n_verts, 16) which we flatten
                 # before passing to glBufferData.
-                interleaved           = np.zeros((n_verts, 16), dtype=np.float32)
-                interleaved[:, 0:3]   = positions
-                interleaved[:, 3:6]   = normals
-                interleaved[:, 6:10]  = joints
+                interleaved = np.zeros((n_verts, 16), dtype=np.float32)
+                interleaved[:, 0:3] = positions
+                interleaved[:, 3:6] = normals
+                interleaved[:, 6:10] = joints
                 interleaved[:, 10:14] = weights
                 interleaved[:, 14:16] = texcoords
                 vao, vbo, ebo = self._make_vao(interleaved.flatten(), indices)
@@ -2242,21 +2284,25 @@ class ModelViewportWidget(QOpenGLWidget):
                 skin_index = node_mesh_skin.get(mesh_idx, -1)
                 node_index = mesh_to_node.get(mesh_idx, -1)
 
-                self._drawables.append({
-                    "vao":         vao,
-                    "vbo":         vbo,
-                    "ebo":         ebo,
-                    "index_count": len(indices),
-                    "skin_index":  skin_index,
-                    "node_index":  node_index,
-                    "is_skinned":  is_skinned and skin_index >= 0,
-                    "has_tex":     has_tex,
-                    "tex_id":      tex_id,
-                    "base_color":  base_color,
-                })
-                print(f"[Viewport] mesh[{mesh_idx}] '{mesh.name}': "
-                      f"{n_verts} verts, {len(indices)} idx, "
-                      f"skinned={is_skinned}, skin={skin_index}, tex={has_tex}")
+                self._drawables.append(
+                    {
+                        "vao": vao,
+                        "vbo": vbo,
+                        "ebo": ebo,
+                        "index_count": len(indices),
+                        "skin_index": skin_index,
+                        "node_index": node_index,
+                        "is_skinned": is_skinned and skin_index >= 0,
+                        "has_tex": has_tex,
+                        "tex_id": tex_id,
+                        "base_color": base_color,
+                    }
+                )
+                print(
+                    f"[Viewport] mesh[{mesh_idx}] '{mesh.name}': "
+                    f"{n_verts} verts, {len(indices)} idx, "
+                    f"skinned={is_skinned}, skin={skin_index}, tex={has_tex}"
+                )
 
         if not self._drawables:
             print("[Viewport] No usable mesh primitives found in this GLB.")
@@ -2267,24 +2313,25 @@ class ModelViewportWidget(QOpenGLWidget):
         # This gives a bounding box that encompasses the entire model,
         # which we use to position the camera so the whole model is in view.
         all_pts = np.concatenate(all_positions, axis=0)
-        mn, mx  = all_pts.min(axis=0), all_pts.max(axis=0)
+        mn, mx = all_pts.min(axis=0), all_pts.max(axis=0)
         self._bbox_center = ((mn + mx) / 2.0).astype(np.float32)
-        extent            = float(np.max(mx - mn)) or 1.0
-        self._bbox_scale  = 1.0 / extent
+        extent = float(np.max(mx - mn)) or 1.0
+        self._bbox_scale = 1.0 / extent
         # Place the camera at 1.4× the longest extent — close enough to see
         # detail, far enough to see the whole model.
-        self._orbit_dist  = extent * 1.4
+        self._orbit_dist = extent * 1.4
 
         # Save the initial camera state so double-click can restore it.
-        self._bbox_center_default  = self._bbox_center.copy()
-        self._orbit_dist_default   = self._orbit_dist
-        self._orbit_yaw_default    = 30.0
-        self._orbit_pitch_default  = 15.0
-        print(f"[Viewport] Total drawables: {len(self._drawables)}, "
-              f"bbox extent={extent:.3f}")
+        self._bbox_center_default = self._bbox_center.copy()
+        self._orbit_dist_default = self._orbit_dist
+        self._orbit_yaw_default = 30.0
+        self._orbit_pitch_default = 15.0
+        print(
+            f"[Viewport] Total drawables: {len(self._drawables)}, "
+            f"bbox extent={extent:.3f}"
+        )
 
-    def _upload_texture(self, gltf: "GLTF2",
-                        tex_index: int) -> "tuple[int, bool] | None":
+    def _upload_texture(self, gltf: GLTF2, tex_index: int) -> tuple[int, bool] | None:
         """Decode and upload the glTF texture at ``tex_index`` to the GPU.
 
         glTF stores images in one of three ways:
@@ -2304,17 +2351,21 @@ class ModelViewportWidget(QOpenGLWidget):
         Returns:
             ``(tex_id, True)`` on success, or ``None`` on failure.
         """
-        import io, base64 as _b64
+        import base64 as _b64
+        import io
+
         try:
             from PIL import Image as PILImage
         except ImportError:
-            print("[Viewport] Pillow not installed — textures disabled. "
-                  "pip install pillow")
+            print(
+                "[Viewport] Pillow not installed — textures disabled. "
+                "pip install pillow"
+            )
             return None
         try:
             if not gltf.textures or tex_index >= len(gltf.textures):
                 return None
-            tex   = gltf.textures[tex_index]
+            tex = gltf.textures[tex_index]
             img_i = tex.source
             if img_i is None:
                 return None
@@ -2327,10 +2378,10 @@ class ModelViewportWidget(QOpenGLWidget):
             if img_def.bufferView is not None:
                 # Case 1: image embedded in the GLB binary chunk.
                 if gltf.bufferViews and img_def.bufferView < len(gltf.bufferViews):
-                    bv        = gltf.bufferViews[img_def.bufferView]
-                    blob      = _get_blob(gltf)
-                    start     = bv.byteOffset or 0
-                    raw_bytes = bytes(blob[start: start + bv.byteLength])
+                    bv = gltf.bufferViews[img_def.bufferView]
+                    blob = _get_blob(gltf)
+                    start = bv.byteOffset or 0
+                    raw_bytes = bytes(blob[start : start + bv.byteLength])
             elif img_def.uri:
                 if img_def.uri.startswith("data:"):
                     # Case 2: data URI — "data:image/png;base64,iVBOR…"
@@ -2347,8 +2398,10 @@ class ModelViewportWidget(QOpenGLWidget):
                         if candidate.exists():
                             raw_bytes = candidate.read_bytes()
                         else:
-                            print(f"[Viewport] External texture '{img_def.uri}' "
-                                  "not found next to the .glb — skipped.")
+                            print(
+                                f"[Viewport] External texture '{img_def.uri}' "
+                                "not found next to the .glb — skipped."
+                            )
                             return None
                     else:
                         return None
@@ -2356,29 +2409,34 @@ class ModelViewportWidget(QOpenGLWidget):
             if not raw_bytes:
                 return None
 
-            pil      = PILImage.open(io.BytesIO(raw_bytes)).convert("RGBA")
+            pil = PILImage.open(io.BytesIO(raw_bytes)).convert("RGBA")
             img_data = np.array(pil, dtype=np.uint8)
-            h, w     = img_data.shape[:2]
+            h, w = img_data.shape[:2]
 
             tex_id = int(GL.glGenTextures(1))
             GL.glBindTexture(GL.GL_TEXTURE_2D, tex_id)
             # GL_SRGB8_ALPHA8: GPU linearises sRGB-encoded texels before
             # the fragment shader reads them, so lighting stays in linear space.
-            GL.glTexImage2D(GL.GL_TEXTURE_2D, 0,
-                            GL.GL_SRGB8_ALPHA8,
-                            w, h, 0,
-                            GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data)
+            GL.glTexImage2D(
+                GL.GL_TEXTURE_2D,
+                0,
+                GL.GL_SRGB8_ALPHA8,
+                w,
+                h,
+                0,
+                GL.GL_RGBA,
+                GL.GL_UNSIGNED_BYTE,
+                img_data,
+            )
             # Mipmaps improve appearance when the texture is viewed at a small
             # size on screen — each mip level is a half-resolution version.
             GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
-            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
-                               GL.GL_LINEAR_MIPMAP_LINEAR)
-            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER,
-                               GL.GL_LINEAR)
-            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S,
-                               GL.GL_REPEAT)
-            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
-                               GL.GL_REPEAT)
+            GL.glTexParameteri(
+                GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR
+            )
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_REPEAT)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_REPEAT)
             GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
             print(f"[Viewport] Texture {tex_index} uploaded ({w}×{h} px, sRGB)")
             return tex_id, True
@@ -2399,12 +2457,16 @@ class ModelViewportWidget(QOpenGLWidget):
         """
         GL.glBindVertexArray(self._line_vao)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._line_vbo)
-        GL.glBufferData(GL.GL_ARRAY_BUFFER,
-                        self._SKEL_VBO_SEGMENTS * 2 * 3 * 4,
-                        None, GL.GL_DYNAMIC_DRAW)
+        GL.glBufferData(
+            GL.GL_ARRAY_BUFFER,
+            self._SKEL_VBO_SEGMENTS * 2 * 3 * 4,
+            None,
+            GL.GL_DYNAMIC_DRAW,
+        )
         GL.glEnableVertexAttribArray(0)
-        GL.glVertexAttribPointer(0, 3, GL.GL_FLOAT, GL.GL_FALSE, 12,
-                                 GL.ctypes.c_void_p(0))
+        GL.glVertexAttribPointer(
+            0, 3, GL.GL_FLOAT, GL.GL_FALSE, 12, GL.ctypes.c_void_p(0)
+        )
         GL.glBindVertexArray(0)
 
     def _draw_mesh(self) -> None:
@@ -2435,39 +2497,42 @@ class ModelViewportWidget(QOpenGLWidget):
             return GL.glGetUniformLocation(pid, name)
 
         # ── Uniforms shared by every drawable ─────────────────────────────────
-        GL.glUniformMatrix4fv(_u("uView"),  1, GL.GL_TRUE, view)
-        GL.glUniformMatrix4fv(_u("uProj"),  1, GL.GL_TRUE, proj)
+        GL.glUniformMatrix4fv(_u("uView"), 1, GL.GL_TRUE, view)
+        GL.glUniformMatrix4fv(_u("uProj"), 1, GL.GL_TRUE, proj)
         # Place the key light slightly above and to the right of the camera
         # so the model is well-lit from most viewing angles.
         light = self._bbox_center + self._orbit_dist * np.array(
-            [0.5, 0.8, 0.6], dtype=np.float32)
-        GL.glUniform3f(_u("uLightPos"),   *light)
+            [0.5, 0.8, 0.6], dtype=np.float32
+        )
+        GL.glUniform3f(_u("uLightPos"), *light)
         GL.glUniform3f(_u("uLightColor"), 1.0, 1.0, 1.0)
-        GL.glUniform1f(_u("uAmbient"),    0.15)
+        GL.glUniform1f(_u("uAmbient"), 0.15)
 
         # Per-frame caches to avoid recomputing shared data per drawable.
-        jmat_cache:    dict[int, np.ndarray] = {}   # skin_index → joint matrices
+        jmat_cache: dict[int, np.ndarray] = {}  # skin_index → joint matrices
         prop_mat_cache: dict[int, np.ndarray] = {}  # node_index → world matrix
-        parent_map = (_build_node_parent_map(self._gltf)
-                      if self._gltf is not None else {})
+        parent_map = (
+            _build_node_parent_map(self._gltf) if self._gltf is not None else {}
+        )
 
         # ── Per-drawable draw loop ─────────────────────────────────────────────
         for d in self._drawables:
             bc = d["base_color"]
-            GL.glUniform4f(_u("uBaseColor"),
-                           float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3]))
+            GL.glUniform4f(
+                _u("uBaseColor"), float(bc[0]), float(bc[1]), float(bc[2]), float(bc[3])
+            )
 
             # Bind texture if this drawable has one.
             if d["has_tex"]:
                 GL.glActiveTexture(GL.GL_TEXTURE0)
                 GL.glBindTexture(GL.GL_TEXTURE_2D, d["tex_id"])
-                GL.glUniform1i(_u("uAlbedo"),     0)
+                GL.glUniform1i(_u("uAlbedo"), 0)
                 GL.glUniform1i(_u("uHasTexture"), 1)
             else:
                 GL.glUniform1i(_u("uHasTexture"), 0)
 
-            skin_idx   = d["skin_index"]
-            node_idx   = d["node_index"]
+            skin_idx = d["skin_index"]
+            node_idx = d["node_index"]
             is_skinned = d["is_skinned"]
             GL.glUniform1i(_u("uSkinned"), 1 if is_skinned else 0)
 
@@ -2482,17 +2547,19 @@ class ModelViewportWidget(QOpenGLWidget):
                 if skin_idx not in jmat_cache:
                     try:
                         jmats = compute_joint_matrices(
-                            self._gltf, skin_idx,
-                            self._anim_index, self._playback_t,
+                            self._gltf,
+                            skin_idx,
+                            self._anim_index,
+                            self._playback_t,
                         )
                         jmat_cache[skin_idx] = jmats
                     except Exception:
                         traceback.print_exc()
                         jmat_cache[skin_idx] = np.eye(4, dtype=np.float32)[np.newaxis]
                 jmats = jmat_cache[skin_idx]
-                n    = min(len(jmats), 64)   # shader declares uJoints[64]
+                n = min(len(jmats), 64)  # shader declares uJoints[64]
                 flat = jmats[:n].flatten().astype(np.float32)
-                loc  = GL.glGetUniformLocation(pid, "uJoints[0]")
+                loc = GL.glGetUniformLocation(pid, "uJoints[0]")
                 GL.glUniformMatrix4fv(loc, n, GL.GL_TRUE, flat)
             else:
                 # Unskinned prop: compute the animated world matrix for this
@@ -2502,13 +2569,15 @@ class ModelViewportWidget(QOpenGLWidget):
                     if node_idx not in prop_mat_cache:
                         try:
                             prop_world = _get_node_world_mat(
-                                self._gltf, node_idx,
-                                self._anim_index, self._playback_t,
+                                self._gltf,
+                                node_idx,
+                                self._anim_index,
+                                self._playback_t,
                                 parent_map,
                             )
                         except Exception:
                             traceback.print_exc()
-                            prop_world = model   # fallback: identity
+                            prop_world = model  # fallback: identity
                         prop_mat_cache[node_idx] = prop_world
                     GL.glUniformMatrix4fv(
                         _u("uModel"), 1, GL.GL_TRUE, prop_mat_cache[node_idx]
@@ -2518,8 +2587,9 @@ class ModelViewportWidget(QOpenGLWidget):
 
             # Issue the actual draw call: render indexed triangles.
             GL.glBindVertexArray(d["vao"])
-            GL.glDrawElements(GL.GL_TRIANGLES, d["index_count"],
-                              GL.GL_UNSIGNED_INT, None)
+            GL.glDrawElements(
+                GL.GL_TRIANGLES, d["index_count"], GL.GL_UNSIGNED_INT, None
+            )
             GL.glBindVertexArray(0)
 
             if d["has_tex"]:
@@ -2543,7 +2613,9 @@ class ModelViewportWidget(QOpenGLWidget):
             return
         gltf = self._gltf
         try:
-            world_pos = compute_world_positions(gltf, self._anim_index, self._playback_t)
+            world_pos = compute_world_positions(
+                gltf, self._anim_index, self._playback_t
+            )
         except Exception:
             return
 
@@ -2557,7 +2629,7 @@ class ModelViewportWidget(QOpenGLWidget):
             p_pos = world_pos.get(ni)
             if p_pos is None:
                 continue
-            for ci in (node.children or []):
+            for ci in node.children or []:
                 c_pos = world_pos.get(ci)
                 if c_pos is None:
                     continue
@@ -2567,12 +2639,12 @@ class ModelViewportWidget(QOpenGLWidget):
         if not segments:
             return
 
-        arr       = np.array(segments, dtype=np.float32)
+        arr = np.array(segments, dtype=np.float32)
         max_bytes = self._SKEL_VBO_SEGMENTS * 2 * 3 * 4
 
         # Upload line data to the shared skeleton VBO.
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._line_vbo)
-        upload = arr[:max_bytes // 4]
+        upload = arr[: max_bytes // 4]
         GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0, upload.nbytes, upload)
 
         # Build the combined MVP matrix for the skeleton (no per-vertex transform).
@@ -2580,7 +2652,7 @@ class ModelViewportWidget(QOpenGLWidget):
         mvp = proj @ view @ model
 
         self._line_prog.bind()
-        loc_mvp   = GL.glGetUniformLocation(self._line_prog.programId(), "uMVP")
+        loc_mvp = GL.glGetUniformLocation(self._line_prog.programId(), "uMVP")
         loc_color = GL.glGetUniformLocation(self._line_prog.programId(), "uColor")
         GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
 
@@ -2594,7 +2666,7 @@ class ModelViewportWidget(QOpenGLWidget):
         GL.glDrawArrays(GL.GL_LINES, 0, n_verts)
 
         # Draw joint dots: regular joints white, the selected joint orange.
-        joint_pts:   list[float] = []
+        joint_pts: list[float] = []
         selected_pt: list[float] = []
         for ni, pos in world_pos.items():
             if ni == self._selected_joint:
@@ -2604,17 +2676,20 @@ class ModelViewportWidget(QOpenGLWidget):
 
         if joint_pts:
             pts_arr = np.array(joint_pts, dtype=np.float32)
-            cap     = min(pts_arr.nbytes, max_bytes)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0, cap, pts_arr.flatten()[:cap // 4])
+            cap = min(pts_arr.nbytes, max_bytes)
+            GL.glBufferSubData(
+                GL.GL_ARRAY_BUFFER, 0, cap, pts_arr.flatten()[: cap // 4]
+            )
             GL.glUniform3f(loc_color, 0.9, 0.9, 0.9)
             GL.glPointSize(5.0)
-            GL.glDrawArrays(GL.GL_POINTS, 0, min(len(joint_pts) // 3,
-                                                   self._SKEL_VBO_SEGMENTS * 2))
+            GL.glDrawArrays(
+                GL.GL_POINTS, 0, min(len(joint_pts) // 3, self._SKEL_VBO_SEGMENTS * 2)
+            )
 
         if selected_pt:
             sel_arr = np.array(selected_pt[:3], dtype=np.float32)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, 0, sel_arr.nbytes, sel_arr)
-            GL.glUniform3f(loc_color, 1.0, 0.576, 0.235)   # orange
+            GL.glUniform3f(loc_color, 1.0, 0.576, 0.235)  # orange
             GL.glPointSize(10.0)
             GL.glDrawArrays(GL.GL_POINTS, 0, 1)
 
@@ -2642,23 +2717,23 @@ class ModelViewportWidget(QOpenGLWidget):
         w, h = max(1, self.width()), max(1, self.height())
         sx, sy = float(screen_pos.x()), float(screen_pos.y())
 
-        best_ni   = -1
-        best_dist = 25.0   # maximum pixel radius for a valid pick
+        best_ni = -1
+        best_dist = 25.0  # maximum pixel radius for a valid pick
 
         for ni, wpos in self._joint_world_pos.items():
             # Project world position to clip space: p4 = MVP * [x, y, z, 1].
             p4 = mvp @ np.array([*wpos, 1.0], dtype=np.float32)
             if p4[3] <= 0:
-                continue   # behind the camera — skip
+                continue  # behind the camera — skip
             # Divide by W to get NDC, then map to pixel coordinates.
-            ndc_x =  p4[0] / p4[3]
-            ndc_y = -p4[1] / p4[3]   # flip Y: NDC +Y = screen top
+            ndc_x = p4[0] / p4[3]
+            ndc_y = -p4[1] / p4[3]  # flip Y: NDC +Y = screen top
             px = (ndc_x * 0.5 + 0.5) * w
             py = (ndc_y * 0.5 + 0.5) * h
-            d  = math.hypot(px - sx, py - sy)
+            d = math.hypot(px - sx, py - sy)
             if d < best_dist:
                 best_dist = d
-                best_ni   = ni
+                best_ni = ni
 
         if best_ni >= 0:
             self._selected_joint = best_ni
@@ -2667,25 +2742,36 @@ class ModelViewportWidget(QOpenGLWidget):
 
     def _draw_empty_hint(self) -> None:
         """Draw a centred instruction text when no model is loaded."""
-        from PySide6.QtGui import QPainter, QFont as _QFont, QColor as _QColor
+        from PySide6.QtGui import QColor as _QColor
+        from PySide6.QtGui import QFont as _QFont
+        from PySide6.QtGui import QPainter
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(self.rect(),
-                         _QColor(int(PALETTE["bg"][1:3], 16),
-                                 int(PALETTE["bg"][3:5], 16),
-                                 int(PALETTE["bg"][5:7], 16)))
+        painter.fillRect(
+            self.rect(),
+            _QColor(
+                int(PALETTE["bg"][1:3], 16),
+                int(PALETTE["bg"][3:5], 16),
+                int(PALETTE["bg"][5:7], 16),
+            ),
+        )
         font = _QFont("Segoe UI", 14)
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(_QColor(PALETTE["muted"]))
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                         "3-D Viewport\n\nOpen a .glb file to see the model here\n"
-                         "(Ctrl+O or the blue button)")
+        painter.drawText(
+            self.rect(),
+            Qt.AlignmentFlag.AlignCenter,
+            "3-D Viewport\n\nOpen a .glb file to see the model here\n"
+            "(Ctrl+O or the blue button)",
+        )
 
 
 # =============================================================================
 # STEP 7 — Help / instructions panel
 # =============================================================================
+
 
 class HelpPanel(QWidget):
     """Collapsible instruction panel displayed above the 3-D viewport.
@@ -2704,57 +2790,57 @@ class HelpPanel(QWidget):
         html = f"""
         <table cellspacing="0" cellpadding="0" width="100%">
           <tr><td colspan="2" style="padding-bottom:8px;">
-            <span style="color:{PALETTE['accent']};font-size:13px;font-weight:bold;">
+            <span style="color:{PALETTE["accent"]};font-size:13px;font-weight:bold;">
               How to use this demo
             </span>
           </td></tr>
           <tr>
-            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+            <td style="color:{PALETTE["text"]};font-size:12px;font-weight:bold;
                        padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
               1 &nbsp;Open a model
             </td>
-            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+            <td style="color:{PALETTE["muted"]};font-size:11px;padding:3px 0 1px 0;">
               Ctrl+O or the blue button — load any .glb file that contains animations.
               The first animated bone is selected automatically.
             </td>
           </tr>
           <tr>
-            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+            <td style="color:{PALETTE["text"]};font-size:12px;font-weight:bold;
                        padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
               2 &nbsp;Browse the scene
             </td>
-            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+            <td style="color:{PALETTE["muted"]};font-size:11px;padding:3px 0 1px 0;">
               Click any bone in the Scene Tree (left). Its animation channels appear
               below, and the first channel is selected automatically.
             </td>
           </tr>
           <tr>
-            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+            <td style="color:{PALETTE["text"]};font-size:12px;font-weight:bold;
                        padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
               3 &nbsp;Inspect curves
             </td>
-            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+            <td style="color:{PALETTE["muted"]};font-size:11px;padding:3px 0 1px 0;">
               Click a channel (translation / rotation / scale) to draw its F-curves.
               X=red &nbsp;Y=green &nbsp;Z=blue &nbsp;W=yellow. Toggle with checkboxes.
             </td>
           </tr>
           <tr>
-            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+            <td style="color:{PALETTE["text"]};font-size:12px;font-weight:bold;
                        padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
               4 &nbsp;Play &amp; edit
             </td>
-            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+            <td style="color:{PALETTE["muted"]};font-size:11px;padding:3px 0 1px 0;">
               Space or &#9654; to play — model animates in the viewport above.<br>
               <b>Click a coloured dot</b> on any curve to select it, then
               <b>drag up/down</b> to edit the value. Ctrl+S exports the modified .glb.
             </td>
           </tr>
           <tr>
-            <td style="color:{PALETTE['text']};font-size:12px;font-weight:bold;
+            <td style="color:{PALETTE["text"]};font-size:12px;font-weight:bold;
                        padding:3px 12px 1px 0;white-space:nowrap;vertical-align:top;">
               Viewport
             </td>
-            <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
+            <td style="color:{PALETTE["muted"]};font-size:11px;padding:3px 0 1px 0;">
               <b>Left-drag</b> to orbit &middot; <b>Middle-drag</b> to pan &middot; <b>Scroll</b> to zoom.<br>
               <b>Double-click</b> to reframe the camera to the model's bounding box.<br>
               <b>Click a joint dot</b> on the skeleton to select that bone in the Scene Tree.<br>
@@ -2762,7 +2848,7 @@ class HelpPanel(QWidget):
             </td>
           </tr>
           <tr><td colspan="2" style="padding-top:8px;">
-            <span style="color:{PALETTE['muted']};font-size:10px;font-style:italic;">
+            <span style="color:{PALETTE["muted"]};font-size:10px;font-style:italic;">
               Press ? or click &#10005; Help to hide this panel.
             </span>
           </td></tr>
@@ -2777,6 +2863,7 @@ class HelpPanel(QWidget):
 # =============================================================================
 # STEP 8 — Curve editor widget (PyQtGraph)
 # =============================================================================
+
 
 class CurveEditorWidget(QWidget):
     """PyQtGraph-backed animation F-curve editor with drag-to-edit keyframes.
@@ -2829,12 +2916,18 @@ class CurveEditorWidget(QWidget):
         header.setStyleSheet(f"background-color: {PALETTE['surface']};")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(12, 6, 12, 6)
-        self._channel_label = QLabel("No channel selected — click a bone, then a channel")
-        self._channel_label.setStyleSheet(f"color: {PALETTE['muted']}; font-size: 12px;")
+        self._channel_label = QLabel(
+            "No channel selected — click a bone, then a channel"
+        )
+        self._channel_label.setStyleSheet(
+            f"color: {PALETTE['muted']}; font-size: 12px;"
+        )
         hl.addWidget(self._channel_label)
         hl.addStretch()
 
-        self._edit_tip = QLabel("Click a dot to select  ·  Drag up/down to edit  ·  Scroll to zoom")
+        self._edit_tip = QLabel(
+            "Click a dot to select  ·  Drag up/down to edit  ·  Scroll to zoom"
+        )
         self._edit_tip.setStyleSheet(
             f"color: {PALETTE['muted']}; font-size: 10px; font-style: italic; padding-right: 8px;"
         )
@@ -2866,8 +2959,10 @@ class CurveEditorWidget(QWidget):
         self._plot = pg.PlotWidget()
         self._plot.setMenuEnabled(False)
         self._plot.showGrid(x=True, y=True, alpha=0.15)
-        self._plot.setLabel("bottom", "Time", units="s",  color=PALETTE["muted"], size="10pt")
-        self._plot.setLabel("left",   "Value",             color=PALETTE["muted"], size="10pt")
+        self._plot.setLabel(
+            "bottom", "Time", units="s", color=PALETTE["muted"], size="10pt"
+        )
+        self._plot.setLabel("left", "Value", color=PALETTE["muted"], size="10pt")
         self._plot.getAxis("bottom").setPen(pg.mkPen(color=PALETTE["border"]))
         self._plot.getAxis("left").setPen(pg.mkPen(color=PALETTE["border"]))
         self._plot.getAxis("bottom").setTextPen(pg.mkPen(color=PALETTE["muted"]))
@@ -2888,24 +2983,24 @@ class CurveEditorWidget(QWidget):
         layout.addWidget(self._plot, stretch=1)
 
         # ── Internal state ────────────────────────────────────────────────────
-        self._curves:        list[pg.PlotDataItem]       = []
-        self._scatter_items: list[pg.ScatterPlotItem]    = []
-        self._playhead:      pg.InfiniteLine | None      = None
-        self._times:         np.ndarray | None           = None
-        self._values:        np.ndarray | None           = None
-        self._anim_index:    int                         = -1
-        self._channel_index: int                         = -1
-        self._gltf_ref:      GLTF2 | None               = None
-        self._on_modified_cb: callable | None            = None
-        self._on_live_cb:     callable | None            = None
-        self._current_target_path_labels: list[str]     = ["X", "Y", "Z", "W"]
+        self._curves: list[pg.PlotDataItem] = []
+        self._scatter_items: list[pg.ScatterPlotItem] = []
+        self._playhead: pg.InfiniteLine | None = None
+        self._times: np.ndarray | None = None
+        self._values: np.ndarray | None = None
+        self._anim_index: int = -1
+        self._channel_index: int = -1
+        self._gltf_ref: GLTF2 | None = None
+        self._on_modified_cb: callable | None = None
+        self._on_live_cb: callable | None = None
+        self._current_target_path_labels: list[str] = ["X", "Y", "Z", "W"]
 
         # Drag state — all reset when a drag completes or is reverted.
-        self._drag_comp:          int        = -1     # component index being dragged
-        self._drag_key:           int        = -1     # keyframe index being dragged
-        self._drag_orig:          float      = 0.0    # value at drag-start (for Escape revert)
-        self._drag_start_y:       float | None = None # screen-Y pixel at mouse-down
-        self._drag_start_scene_y: float      = 0.0    # plot-space Y at mouse-down
+        self._drag_comp: int = -1  # component index being dragged
+        self._drag_key: int = -1  # keyframe index being dragged
+        self._drag_orig: float = 0.0  # value at drag-start (for Escape revert)
+        self._drag_start_y: float | None = None  # screen-Y pixel at mouse-down
+        self._drag_start_scene_y: float = 0.0  # plot-space Y at mouse-down
         # _drag_active is set True on mouse-down and False on release or revert.
         # It is separate from _drag_start_y so Escape works even if the mouse
         # was momentarily released between press and pressing Escape.
@@ -2913,8 +3008,8 @@ class CurveEditorWidget(QWidget):
 
         # Selection highlight — a white dot drawn over the selected keyframe.
         self._sel_scatter: pg.ScatterPlotItem | None = None
-        self._sel_comp:    int                       = -1
-        self._sel_key:     int                       = -1
+        self._sel_comp: int = -1
+        self._sel_key: int = -1
 
     def closeEvent(self, event) -> None:
         """Uninstall the application-level event filter on widget destruction.
@@ -2973,22 +3068,22 @@ class CurveEditorWidget(QWidget):
             target_path: glTF path: ``"translation"``, ``"rotation"``, etc.
             anim_name: Display name of the animation clip.
         """
-        self._gltf_ref      = gltf
-        self._anim_index    = anim_index
+        self._gltf_ref = gltf
+        self._anim_index = anim_index
         self._channel_index = channel_index
 
         times, values = read_channel_data(gltf, anim_index, channel_index)
         # Ensure values is 2-D: (n_keys, n_components).
         if values.ndim == 1:
             values = values[:, np.newaxis]
-        self._times  = times
+        self._times = times
         self._values = values
 
         labels = COMPONENT_LABELS.get(target_path, ["V0", "V1", "V2", "V3"])
         self._current_target_path_labels = labels
 
         duration = float(times[-1]) if len(times) > 0 else 0.0
-        n_keys   = len(times)
+        n_keys = len(times)
         self._channel_label.setText(
             f"{node_name}  ·  {target_path}  ·  {anim_name}  ·  "
             f"{n_keys} keyframes  ·  {duration:.3f}s"
@@ -2998,10 +3093,12 @@ class CurveEditorWidget(QWidget):
         n_components = self._values.shape[1]
         for i in range(n_components):
             color = CURVE_COLORS[i % len(CURVE_COLORS)]
-            pen   = pg.mkPen(color=color[:3], width=2)
+            pen = pg.mkPen(color=color[:3], width=2)
             curve = self._plot.plot(
-                times, self._values[:, i],
-                pen=pen, name=labels[i] if i < len(labels) else f"V{i}"
+                times,
+                self._values[:, i],
+                pen=pen,
+                name=labels[i] if i < len(labels) else f"V{i}",
             )
             self._curves.append(curve)
 
@@ -3009,7 +3106,8 @@ class CurveEditorWidget(QWidget):
             # Each dot stores (component_index, keyframe_index) in its data
             # payload so the click handler can identify which keyframe was hit.
             scatter = pg.ScatterPlotItem(
-                x=times, y=self._values[:, i],
+                x=times,
+                y=self._values[:, i],
                 size=10,
                 pen=pg.mkPen(color=color[:3], width=1),
                 brush=pg.mkBrush(color=(*color[:3], 200)),
@@ -3018,8 +3116,7 @@ class CurveEditorWidget(QWidget):
                 hoverBrush=pg.mkBrush(color=(*color[:3], 255)),
             )
             scatter.setData(
-                x=times, y=self._values[:, i],
-                data=[(i, j) for j in range(len(times))]
+                x=times, y=self._values[:, i], data=[(i, j) for j in range(len(times))]
             )
             # sigClicked handles selection only — editing is done via the
             # eventFilter drag, which gives sub-pixel precision.
@@ -3033,9 +3130,9 @@ class CurveEditorWidget(QWidget):
 
         # Add the orange dashed playhead line at t=0.
         self._playhead = pg.InfiniteLine(
-            pos=0.0, angle=90,
-            pen=pg.mkPen(color=PALETTE["orange"], width=1,
-                         style=Qt.PenStyle.DashLine),
+            pos=0.0,
+            angle=90,
+            pen=pg.mkPen(color=PALETTE["orange"], width=1, style=Qt.PenStyle.DashLine),
             movable=False,
         )
         self._plot.addItem(self._playhead)
@@ -3071,12 +3168,12 @@ class CurveEditorWidget(QWidget):
         """
         if self._values is None or self._values.size == 0:
             return
-        vb  = self._plot.getPlotItem().getViewBox()
-        rng = vb.viewRange()     # [[xmin, xmax], [ymin, ymax]]
+        vb = self._plot.getPlotItem().getViewBox()
+        rng = vb.viewRange()  # [[xmin, xmax], [ymin, ymax]]
         y_lo, y_hi = rng[1]
         window = y_hi - y_lo
         if window < self._MIN_Y_WINDOW:
-            mid  = (y_lo + y_hi) / 2.0
+            mid = (y_lo + y_hi) / 2.0
             half = self._MIN_Y_WINDOW / 2.0
             vb.setYRange(mid - half, mid + half, padding=0)
 
@@ -3097,13 +3194,13 @@ class CurveEditorWidget(QWidget):
         """
         if self._values is None or self._times is None:
             return
-        for i, (curve, scatter) in enumerate(
-                zip(self._curves, self._scatter_items)):
+        for i, (curve, scatter) in enumerate(zip(self._curves, self._scatter_items)):
             if i < self._values.shape[1]:
                 curve.setData(self._times, self._values[:, i])
                 scatter.setData(
-                    x=self._times, y=self._values[:, i],
-                    data=[(i, j) for j in range(len(self._times))]
+                    x=self._times,
+                    y=self._values[:, i],
+                    data=[(i, j) for j in range(len(self._times))],
                 )
         self._refresh_selection_dot()
 
@@ -3112,14 +3209,16 @@ class CurveEditorWidget(QWidget):
         self._plot.clear()
         self._curves.clear()
         self._scatter_items.clear()
-        self._playhead    = None
+        self._playhead = None
         self._sel_scatter = None
 
     def clear(self) -> None:
         """Clear the plot and reset the header label to the default text."""
         self._clear_plot()
-        self._channel_label.setText("No channel selected — click a bone, then a channel")
-        self._times  = None
+        self._channel_label.setText(
+            "No channel selected — click a bone, then a channel"
+        )
+        self._times = None
         self._values = None
 
     def _toggle_curve(self, component_index: int) -> None:
@@ -3152,24 +3251,29 @@ class CurveEditorWidget(QWidget):
             if isinstance(arg, (list, np.ndarray)) and len(arg) > 0:
                 points = arg
                 break
-        if (points is None
-                or (hasattr(points, "__len__") and len(points) == 0)
-                or self._values is None):
+        if (
+            points is None
+            or (hasattr(points, "__len__") and len(points) == 0)
+            or self._values is None
+        ):
             return
 
         point = points[0]
-        data  = point.data()
+        data = point.data()
         if data is None:
             return
         comp, key = data
         self._sel_comp = comp
-        self._sel_key  = key
+        self._sel_key = key
         self._refresh_selection_dot()
 
         val = float(self._values[key, comp])
-        t   = float(self._times[key])
-        lbl = (self._current_target_path_labels[comp]
-               if comp < len(self._current_target_path_labels) else f"V{comp}")
+        t = float(self._times[key])
+        lbl = (
+            self._current_target_path_labels[comp]
+            if comp < len(self._current_target_path_labels)
+            else f"V{comp}"
+        )
         self._edit_tip.setText(
             f"Selected  t={t:.4f}s  {lbl}={val:.5f}  ·  Drag UP/DOWN to edit  ·  Scroll to zoom"
         )
@@ -3186,8 +3290,12 @@ class CurveEditorWidget(QWidget):
                 pass
             self._sel_scatter = None
 
-        if (self._sel_comp < 0 or self._sel_key < 0
-                or self._values is None or self._times is None):
+        if (
+            self._sel_comp < 0
+            or self._sel_key < 0
+            or self._values is None
+            or self._times is None
+        ):
             return
         if self._sel_comp >= self._values.shape[1]:
             return
@@ -3197,7 +3305,8 @@ class CurveEditorWidget(QWidget):
         x = float(self._times[self._sel_key])
         y = float(self._values[self._sel_key, self._sel_comp])
         self._sel_scatter = pg.ScatterPlotItem(
-            x=[x], y=[y],
+            x=[x],
+            y=[y],
             size=16,
             pen=pg.mkPen("w", width=2),
             brush=pg.mkBrush(255, 255, 255, 60),
@@ -3237,26 +3346,30 @@ class CurveEditorWidget(QWidget):
         t = event.type()
 
         # ── Branch 1: Application-level Escape revert ─────────────────────────
-        if (obj is QApplication.instance()
-                and t == QEvent.Type.KeyPress
-                and self._drag_active
-                and self._values is not None):
+        if (
+            obj is QApplication.instance()
+            and t == QEvent.Type.KeyPress
+            and self._drag_active
+            and self._values is not None
+        ):
             if event.key() == Qt.Key.Key_Escape:
                 # Restore the original value that was stored at drag-start.
                 self._values[self._drag_key, self._drag_comp] = np.float32(
-                    self._drag_orig)
+                    self._drag_orig
+                )
                 self._update_curve_display(self._drag_comp)
                 self._refresh_selection_dot()
                 # Notify the live callback so the 3-D viewport shows the
                 # reverted pose immediately.
                 if self._on_live_cb is not None:
                     self._on_live_cb(
-                        self._anim_index, self._channel_index, self._values)
+                        self._anim_index, self._channel_index, self._values
+                    )
                 # Reset all drag state.
-                self._drag_active  = False
+                self._drag_active = False
                 self._drag_start_y = None
-                self._drag_comp    = -1
-                self._drag_key     = -1
+                self._drag_comp = -1
+                self._drag_key = -1
                 self._edit_tip.setText(
                     "Drag reverted  ·  Click a dot to select  ·  Drag up/down to edit"
                 )
@@ -3264,8 +3377,8 @@ class CurveEditorWidget(QWidget):
                     f"color: {PALETTE['muted']}; font-size: 10px;"
                     "font-style: italic; padding-right: 8px;"
                 )
-                return True   # Consume the event — don't let Escape close dialogs.
-            return False      # Other keys pass through normally.
+                return True  # Consume the event — don't let Escape close dialogs.
+            return False  # Other keys pass through normally.
 
         # ── Branch 2: Viewport mouse events ───────────────────────────────────
         # Ignore events from any object other than the plot's viewport widget.
@@ -3277,42 +3390,46 @@ class CurveEditorWidget(QWidget):
             if event.button() == Qt.MouseButton.LeftButton and self._sel_comp >= 0:
                 if self._is_near_selected_dot(event.position()):
                     # Record the drag start state: which keyframe, what value.
-                    self._drag_comp          = self._sel_comp
-                    self._drag_key           = self._sel_key
-                    self._drag_orig          = float(
-                        self._values[self._drag_key, self._drag_comp])
-                    self._drag_start_y       = float(event.position().y())
+                    self._drag_comp = self._sel_comp
+                    self._drag_key = self._sel_key
+                    self._drag_orig = float(
+                        self._values[self._drag_key, self._drag_comp]
+                    )
+                    self._drag_start_y = float(event.position().y())
                     self._drag_start_scene_y = self._drag_orig
-                    self._drag_active        = True
-                    return True   # Consume — prevent PyQtGraph from starting a pan.
+                    self._drag_active = True
+                    return True  # Consume — prevent PyQtGraph from starting a pan.
             return False
 
         if t == QEvent.Type.MouseMove:
             if self._drag_start_y is not None and self._values is not None:
                 # Compute how far the mouse has moved in Y since drag-start.
-                dy_px     = float(event.position().y()) - self._drag_start_y
+                dy_px = float(event.position().y()) - self._drag_start_y
                 view_rect = self._plot.viewRect()
-                h_px      = max(1, self._plot.viewport().height())
+                h_px = max(1, self._plot.viewport().height())
                 # Convert pixel delta to data-space delta using the current
                 # view scale (data units per pixel in Y).
                 px_per_unit = h_px / max(1e-9, view_rect.height())
-                delta_val   = -dy_px / px_per_unit   # negative: drag up = increase value
-                new_val     = np.float32(self._drag_start_scene_y + delta_val)
+                delta_val = -dy_px / px_per_unit  # negative: drag up = increase value
+                new_val = np.float32(self._drag_start_scene_y + delta_val)
                 # Write the new value directly into the shared array so the
                 # live callback, curve display, and inspector all see it.
                 self._values[self._drag_key, self._drag_comp] = new_val
                 self._update_curve_display(self._drag_comp)
                 self._refresh_selection_dot()
-                lbl = (self._current_target_path_labels[self._drag_comp]
-                       if self._drag_comp < len(self._current_target_path_labels)
-                       else f"V{self._drag_comp}")
+                lbl = (
+                    self._current_target_path_labels[self._drag_comp]
+                    if self._drag_comp < len(self._current_target_path_labels)
+                    else f"V{self._drag_comp}"
+                )
                 self._edit_tip.setText(
                     f"Editing  t={float(self._times[self._drag_key]):.4f}s  "
                     f"{lbl}={float(new_val):.5f}  ·  Release to commit  ·  Esc to revert"
                 )
                 if self._on_live_cb is not None:
                     self._on_live_cb(
-                        self._anim_index, self._channel_index, self._values)
+                        self._anim_index, self._channel_index, self._values
+                    )
                 return True
             return False
 
@@ -3321,12 +3438,13 @@ class CurveEditorWidget(QWidget):
                 # Commit the edited value to the glTF binary blob.
                 if self._on_modified_cb is not None and self._values is not None:
                     self._on_modified_cb(
-                        self._anim_index, self._channel_index, self._values)
+                        self._anim_index, self._channel_index, self._values
+                    )
                 # Reset drag state.
-                self._drag_active  = False
+                self._drag_active = False
                 self._drag_start_y = None
-                self._drag_comp    = -1
-                self._drag_key     = -1
+                self._drag_comp = -1
+                self._drag_key = -1
                 self._edit_tip.setStyleSheet(
                     f"color: {PALETTE['accent']}; font-size: 10px;"
                     "font-style: italic; padding-right: 8px;"
@@ -3373,7 +3491,7 @@ class CurveEditorWidget(QWidget):
         """
         if self._values is None or self._times is None:
             return False
-        if self._sel_key  < 0 or self._sel_key  >= len(self._times):
+        if self._sel_key < 0 or self._sel_key >= len(self._times):
             return False
         if self._sel_comp < 0 or self._sel_comp >= self._values.shape[1]:
             return False
@@ -3391,7 +3509,7 @@ class CurveEditorWidget(QWidget):
             screen_pos.y() + vp_offset.y(),
         )
         scene_click = self._plot.mapToScene(widget_pt.toPoint())
-        data_click  = vb.mapSceneToView(scene_click)
+        data_click = vb.mapSceneToView(scene_click)
 
         # Dot position in data coordinates.
         dot_x = float(self._times[self._sel_key])
@@ -3423,14 +3541,16 @@ class CurveEditorWidget(QWidget):
             self._curves[comp].setData(self._times, self._values[:, comp])
         if comp < len(self._scatter_items):
             self._scatter_items[comp].setData(
-                x=self._times, y=self._values[:, comp],
-                data=[(comp, j) for j in range(len(self._times))]
+                x=self._times,
+                y=self._values[:, comp],
+                data=[(comp, j) for j in range(len(self._times))],
             )
 
 
 # =============================================================================
 # STEP 9 — Keyframe inspector table
 # =============================================================================
+
 
 class KeyframeInspectorWidget(QWidget):
     """Spreadsheet view of exact numeric keyframe values for one channel.
@@ -3460,8 +3580,12 @@ class KeyframeInspectorWidget(QWidget):
         layout.addWidget(hdr)
 
         self._table = QTableWidget(0, 5)
-        self._table.setHorizontalHeaderLabels(["Time", "X / W0", "Y / W1", "Z / W2", "W / W3"])
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.setHorizontalHeaderLabels(
+            ["Time", "X / W0", "Y / W1", "Z / W2", "W / W3"]
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         self._table.verticalHeader().setDefaultSectionSize(22)
         self._table.verticalHeader().setVisible(False)
         # Only the value columns (1–4) are editable; Time (column 0) is read-only
@@ -3482,15 +3606,15 @@ class KeyframeInspectorWidget(QWidget):
 
         # Shared data references.  _values points to the same numpy array as
         # CurveEditorWidget._values so edits here are immediately visible there.
-        self._times:        np.ndarray | None = None
-        self._values:       np.ndarray | None = None
-        self._n_comp:       int               = 0
-        self._target_path:  str               = ""
-        self._loading:      bool              = False   # suppresses itemChanged during fill
-        self._modified_cb:  callable | None   = None
-        self._live_cb:      callable | None   = None
-        self._anim_index:   int               = -1
-        self._channel_index: int              = -1
+        self._times: np.ndarray | None = None
+        self._values: np.ndarray | None = None
+        self._n_comp: int = 0
+        self._target_path: str = ""
+        self._loading: bool = False  # suppresses itemChanged during fill
+        self._modified_cb: callable | None = None
+        self._live_cb: callable | None = None
+        self._anim_index: int = -1
+        self._channel_index: int = -1
 
     def set_modified_callback(self, cb: callable) -> None:
         """Register a callback fired when a cell edit is committed.
@@ -3515,7 +3639,7 @@ class KeyframeInspectorWidget(QWidget):
             anim_index: Index into ``gltf.animations``.
             channel_index: Index into the animation's channels.
         """
-        self._anim_index    = anim_index
+        self._anim_index = anim_index
         self._channel_index = channel_index
 
     def load_channel(
@@ -3532,9 +3656,9 @@ class KeyframeInspectorWidget(QWidget):
         try:
             if values.ndim == 1:
                 values = values[:, np.newaxis]
-            self._times       = times
-            self._values      = values   # shared reference — edits go here directly
-            self._n_comp      = values.shape[1]
+            self._times = times
+            self._values = values  # shared reference — edits go here directly
+            self._n_comp = values.shape[1]
             self._target_path = target_path
 
             n_keys, n_comp = values.shape
@@ -3563,7 +3687,9 @@ class KeyframeInspectorWidget(QWidget):
         for row in range(n_keys):
             # Time column — read-only, muted colour.
             t_item = QTableWidgetItem(f"{times[row]:.4f}")
-            t_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            t_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             t_item.setForeground(QColor(PALETTE["muted"]))
             t_item.setFlags(t_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(row, 0, t_item)
@@ -3600,7 +3726,7 @@ class KeyframeInspectorWidget(QWidget):
         n_keys = len(times)
         stats_parts = []
         for col in range(n_comp):
-            lbl  = labels[col] if col < len(labels) else f"V{col}"
+            lbl = labels[col] if col < len(labels) else f"V{col}"
             lo, hi = float(values[:, col].min()), float(values[:, col].max())
             stats_parts.append(f"{lbl}: [{lo:.3f} → {hi:.3f}]")
         duration = float(times[-1]) if n_keys > 0 else 0.0
@@ -3638,7 +3764,7 @@ class KeyframeInspectorWidget(QWidget):
         row = item.row()
         col = item.column()
         if col == 0 or col > self._n_comp:
-            return   # Time column or empty placeholder — ignore.
+            return  # Time column or empty placeholder — ignore.
         comp = col - 1
         try:
             # Accept both "." and "," as decimal separator.
@@ -3689,13 +3815,14 @@ class KeyframeInspectorWidget(QWidget):
         self._table.setRowCount(0)
         self._loading = False
         self._stats_label.setText("")
-        self._times  = None
+        self._times = None
         self._values = None
 
 
 # =============================================================================
 # STEP 10 — Animation channel list panel
 # =============================================================================
+
 
 class ChannelListWidget(QWidget):
     """Left-side panel listing all animation channels for the selected node.
@@ -3752,12 +3879,18 @@ class ChannelListWidget(QWidget):
             self._tree.addTopLevelItem(group)
             for anim_idx, ch_idx, _, path in entries:
                 # Icon visually encodes the channel type.
-                icon  = {"translation": "→", "rotation": "↻",
-                         "scale": "⊡", "weights": "≈"}.get(path, "·")
+                icon = {
+                    "translation": "→",
+                    "rotation": "↻",
+                    "scale": "⊡",
+                    "weights": "≈",
+                }.get(path, "·")
                 child = QTreeWidgetItem([f"  {icon}  {path}"])
                 # Store the full tuple in UserRole so the click handler can
                 # retrieve it without parsing the label text.
-                child.setData(0, Qt.ItemDataRole.UserRole, (anim_idx, ch_idx, anim_name, path))
+                child.setData(
+                    0, Qt.ItemDataRole.UserRole, (anim_idx, ch_idx, anim_name, path)
+                )
                 child.setForeground(0, QColor(PALETTE["text"]))
                 group.addChild(child)
             group.setExpanded(True)
@@ -3781,6 +3914,7 @@ class ChannelListWidget(QWidget):
 # =============================================================================
 # STEP 11 — Transport / playback controls
 # =============================================================================
+
 
 class TransportWidget(QWidget):
     """Bottom transport bar: play / pause / stop / loop, speed slider, scrubber.
@@ -3859,11 +3993,11 @@ class TransportWidget(QWidget):
         layout.addWidget(self._time_display)
 
         # Expose controls as public attributes for the main window to connect.
-        self.play_btn     = self._play_btn
-        self.stop_btn     = self._stop_btn
-        self.loop_btn     = self._loop_btn
+        self.play_btn = self._play_btn
+        self.stop_btn = self._stop_btn
+        self.loop_btn = self._loop_btn
         self.speed_slider = self._speed_slider
-        self.scrubber     = self._scrubber
+        self.scrubber = self._scrubber
 
     def set_duration(self, duration: float) -> None:
         """Reset the scrubber to the start when a new channel is loaded.
@@ -3896,6 +4030,7 @@ class TransportWidget(QWidget):
 # STEP 12 — Main application window
 # =============================================================================
 
+
 class GltfCurveEditor(QMainWindow):
     """Main window — glTF Animation Curve Editor.
 
@@ -3920,20 +4055,22 @@ class GltfCurveEditor(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("glTF Animation Curve Editor — Computeranimation Seminar 04")
+        self.setWindowTitle(
+            "glTF Animation Curve Editor — Computeranimation Seminar 04"
+        )
         self.setMinimumSize(1100, 700)
 
         # Application state.
-        self._gltf:                  GLTF2 | None = None
-        self._gltf_path:             Path  | None = None
-        self._current_anim_index:    int          = -1
-        self._current_channel_index: int          = -1
-        self._current_duration:      float        = 0.0
-        self._playback_time:         float        = 0.0
-        self._is_playing:            bool         = False
-        self._dirty:                 bool         = False   # True if unsaved edits exist
-        self._help_visible:          bool         = False
-        self._skel_btn:              QPushButton  = QPushButton()
+        self._gltf: GLTF2 | None = None
+        self._gltf_path: Path | None = None
+        self._current_anim_index: int = -1
+        self._current_channel_index: int = -1
+        self._current_duration: float = 0.0
+        self._playback_time: float = 0.0
+        self._is_playing: bool = False
+        self._dirty: bool = False  # True if unsaved edits exist
+        self._help_visible: bool = False
+        self._skel_btn: QPushButton = QPushButton()
 
         self._build_toolbar()
         self._build_central()
@@ -4038,11 +4175,13 @@ class GltfCurveEditor(QMainWindow):
 
         # Register keyboard shortcuts via QAction so they work even when the
         # toolbar buttons don't have focus.
-        for shortcut, slot in [("Ctrl+O", self._on_open),
-                                ("Ctrl+S", self._on_export),
-                                ("Space",  self._toggle_playback),
-                                ("?",      self._toggle_help),
-                                ("K",      self._toggle_skeleton)]:
+        for shortcut, slot in [
+            ("Ctrl+O", self._on_open),
+            ("Ctrl+S", self._on_export),
+            ("Space", self._toggle_playback),
+            ("?", self._toggle_help),
+            ("K", self._toggle_skeleton),
+        ]:
             act = QAction(self)
             act.setShortcut(shortcut)
             act.triggered.connect(slot)
@@ -4061,7 +4200,7 @@ class GltfCurveEditor(QMainWindow):
         self._h_splitter = h_split
 
         # ── Left column: scene tree + channel list ────────────────────────────
-        left_panel  = QWidget()
+        left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
@@ -4078,7 +4217,8 @@ class GltfCurveEditor(QMainWindow):
         self._scene_tree.itemClicked.connect(self._on_node_selected)
         left_layout.addWidget(self._scene_tree, stretch=3)
 
-        div = QFrame(); div.setObjectName("divider")
+        div = QFrame()
+        div.setObjectName("divider")
         div.setFrameShape(QFrame.Shape.HLine)
         left_layout.addWidget(div)
 
@@ -4103,7 +4243,8 @@ class GltfCurveEditor(QMainWindow):
         self._viewport.bone_selected.connect(self._on_bone_selected_in_viewport)
         center_layout.addWidget(self._viewport, stretch=2)
 
-        vp_div = QFrame(); vp_div.setObjectName("divider")
+        vp_div = QFrame()
+        vp_div.setObjectName("divider")
         vp_div.setFrameShape(QFrame.Shape.HLine)
         center_layout.addWidget(vp_div)
 
@@ -4193,12 +4334,19 @@ class GltfCurveEditor(QMainWindow):
         Args:
             node_index: glTF node index of the clicked joint.
         """
-        def _find(parent) -> "QTreeWidgetItem | None":
-            count = (self._scene_tree.topLevelItemCount()
-                     if parent is None else parent.childCount())
+
+        def _find(parent) -> QTreeWidgetItem | None:
+            count = (
+                self._scene_tree.topLevelItemCount()
+                if parent is None
+                else parent.childCount()
+            )
             for i in range(count):
-                item = (self._scene_tree.topLevelItem(i)
-                        if parent is None else parent.child(i))
+                item = (
+                    self._scene_tree.topLevelItem(i)
+                    if parent is None
+                    else parent.child(i)
+                )
                 if item.data(0, Qt.ItemDataRole.UserRole) == node_index:
                     return item
                 found = _find(item)
@@ -4220,8 +4368,10 @@ class GltfCurveEditor(QMainWindow):
         """Open a file dialog and load the selected .glb file."""
         start_dir = str(self._gltf_path.parent) if self._gltf_path else str(Path.home())
         path_str, _ = QFileDialog.getOpenFileName(
-            self, "Open glTF Binary (.glb)", start_dir,
-            "glTF Binary (*.glb);;All Files (*)"
+            self,
+            "Open glTF Binary (.glb)",
+            start_dir,
+            "glTF Binary (*.glb);;All Files (*)",
         )
         if not path_str:
             return
@@ -4229,12 +4379,14 @@ class GltfCurveEditor(QMainWindow):
         try:
             gltf = load_gltf(path)
         except Exception as exc:
-            QMessageBox.critical(self, "Load Error", f"Could not load {path.name}:\n{exc}")
+            QMessageBox.critical(
+                self, "Load Error", f"Could not load {path.name}:\n{exc}"
+            )
             return
 
-        self._gltf      = gltf
+        self._gltf = gltf
         self._gltf_path = path
-        self._dirty     = False
+        self._dirty = False
         self._file_label.setText(f"  {path.name}")
 
         # Pre-read all accessor data and build reverse-index lookups immediately
@@ -4242,7 +4394,7 @@ class GltfCurveEditor(QMainWindow):
         # subsequent per-frame animation evaluation is just dict lookups
         # and fast NumPy array sampling — no I/O, no allocation.
         self._status.showMessage(f"Building animation cache for {path.name}…")
-        QApplication.processEvents()   # let the status bar repaint
+        QApplication.processEvents()  # let the status bar repaint
         channel_cache = build_channel_cache(gltf)
         object.__getattribute__(gltf, "__dict__")["_channel_cache"] = channel_cache
         for ai in range(len(gltf.animations or [])):
@@ -4257,10 +4409,10 @@ class GltfCurveEditor(QMainWindow):
         self._curve_editor.clear()
         self._inspector.clear()
 
-        n_nodes  = len(gltf.nodes or [])
-        n_anims  = len(gltf.animations or [])
+        n_nodes = len(gltf.nodes or [])
+        n_anims = len(gltf.animations or [])
         n_meshes = len(gltf.meshes or [])
-        n_skins  = len(gltf.skins or [])
+        n_skins = len(gltf.skins or [])
         self._status.showMessage(
             f"{path.name}  ·  {n_nodes} nodes  ·  {n_meshes} meshes  ·  "
             f"{n_skins} skins  ·  {n_anims} animations  ·  "
@@ -4276,13 +4428,15 @@ class GltfCurveEditor(QMainWindow):
         if self._gltf is None:
             QMessageBox.information(self, "Export", "No file loaded.")
             return
-        default_name = (self._gltf_path.stem + "_modified.glb"
-                        if self._gltf_path else "export.glb")
+        default_name = (
+            self._gltf_path.stem + "_modified.glb" if self._gltf_path else "export.glb"
+        )
         start_dir = str(self._gltf_path.parent) if self._gltf_path else str(Path.home())
         path_str, _ = QFileDialog.getSaveFileName(
-            self, "Export glTF Binary (.glb)",
+            self,
+            "Export glTF Binary (.glb)",
             str(Path(start_dir) / default_name),
-            "glTF Binary (*.glb);;All Files (*)"
+            "glTF Binary (*.glb);;All Files (*)",
         )
         if not path_str:
             return
@@ -4293,9 +4447,7 @@ class GltfCurveEditor(QMainWindow):
             QMessageBox.critical(self, "Export Error", f"Could not save:\n{exc}")
             return
         self._dirty = False
-        self._status.showMessage(
-            f"Exported → {out_path.name}  ({size / 1024:.1f} KB)"
-        )
+        self._status.showMessage(f"Exported → {out_path.name}  ({size / 1024:.1f} KB)")
 
     # -------------------------------------------------------------------------
     # Scene tree
@@ -4309,10 +4461,10 @@ class GltfCurveEditor(QMainWindow):
         # Collect all node indices that appear in any skin's joint list.
         # These are the "bones" — they get a special icon and colour.
         skin_joint_set: set[int] = set()
-        for skin in (self._gltf.skins or []):
+        for skin in self._gltf.skins or []:
             skin_joint_set.update(skin.joints or [])
-        for scene in (self._gltf.scenes or []):
-            for root_idx in (scene.nodes or []):
+        for scene in self._gltf.scenes or []:
+            for root_idx in scene.nodes or []:
                 item = build_scene_tree(self._gltf, None, root_idx, skin_joint_set)
                 if item is not None:
                     self._scene_tree.addTopLevelItem(item)
@@ -4332,8 +4484,8 @@ class GltfCurveEditor(QMainWindow):
             return
 
         first_node_idx: int | None = None
-        for anim in (self._gltf.animations or []):
-            for channel in (anim.channels or []):
+        for anim in self._gltf.animations or []:
+            for channel in anim.channels or []:
                 if channel.target.node is not None:
                     first_node_idx = channel.target.node
                     break
@@ -4345,11 +4497,17 @@ class GltfCurveEditor(QMainWindow):
 
         # Walk the QTreeWidget to find the item whose UserRole matches.
         def _find(parent: QTreeWidgetItem | None) -> QTreeWidgetItem | None:
-            count = (self._scene_tree.topLevelItemCount()
-                     if parent is None else parent.childCount())
+            count = (
+                self._scene_tree.topLevelItemCount()
+                if parent is None
+                else parent.childCount()
+            )
             for i in range(count):
-                item = (self._scene_tree.topLevelItem(i)
-                        if parent is None else parent.child(i))
+                item = (
+                    self._scene_tree.topLevelItem(i)
+                    if parent is None
+                    else parent.child(i)
+                )
                 if item.data(0, Qt.ItemDataRole.UserRole) == first_node_idx:
                     return item
                 found = _find(item)
@@ -4396,8 +4554,9 @@ class GltfCurveEditor(QMainWindow):
             # clicking a bone — no second click required.
             self._on_channel_selected(*channels[0])
 
-    def _on_channel_selected(self, anim_index: int, channel_index: int,
-                              anim_name: str, target_path: str) -> None:
+    def _on_channel_selected(
+        self, anim_index: int, channel_index: int, anim_name: str, target_path: str
+    ) -> None:
         """Handle a channel selection from the ChannelListWidget.
 
         Loads the selected channel into the curve editor, keyframe inspector,
@@ -4412,17 +4571,21 @@ class GltfCurveEditor(QMainWindow):
         """
         if self._gltf is None:
             return
-        self._current_anim_index    = anim_index
+        self._current_anim_index = anim_index
         self._current_channel_index = channel_index
 
         self._viewport.set_anim_index(anim_index)
 
-        channel   = self._gltf.animations[anim_index].channels[channel_index]
+        channel = self._gltf.animations[anim_index].channels[channel_index]
         node_name = get_node_name(self._gltf, channel.target.node)
 
         self._curve_editor.load_channel(
-            self._gltf, anim_index, channel_index,
-            node_name, target_path, anim_name,
+            self._gltf,
+            anim_index,
+            channel_index,
+            node_name,
+            target_path,
+            anim_name,
         )
 
         times, values = read_channel_data(self._gltf, anim_index, channel_index)
@@ -4449,8 +4612,9 @@ class GltfCurveEditor(QMainWindow):
     # Keyframe modification callbacks
     # -------------------------------------------------------------------------
 
-    def _on_keyframe_modified(self, anim_index: int, channel_index: int,
-                               new_values: np.ndarray) -> None:
+    def _on_keyframe_modified(
+        self, anim_index: int, channel_index: int, new_values: np.ndarray
+    ) -> None:
         """Commit a keyframe edit to the glTF binary blob.
 
         Called on mouse-release (from the curve editor) or on table cell
@@ -4474,8 +4638,9 @@ class GltfCurveEditor(QMainWindow):
             "✎  Keyframe modified — unsaved changes  ·  Ctrl+S to export the modified .glb"
         )
 
-    def _on_keyframe_live(self, anim_index: int, channel_index: int,
-                          new_values: np.ndarray) -> None:
+    def _on_keyframe_live(
+        self, anim_index: int, channel_index: int, new_values: np.ndarray
+    ) -> None:
         """Drive the UI on every mouse-move during a drag (before commit).
 
         Does NOT write to the glTF blob — that only happens in
@@ -4533,7 +4698,7 @@ class GltfCurveEditor(QMainWindow):
         (transport scrubber, curve playhead, 3-D viewport).
         """
         speed = self._transport.speed_slider.value() / 10.0
-        dt    = PLAYBACK_INTERVAL_MS / 1000.0 * speed
+        dt = PLAYBACK_INTERVAL_MS / 1000.0 * speed
         self._playback_time += dt
 
         if self._playback_time > self._current_duration:
@@ -4550,9 +4715,11 @@ class GltfCurveEditor(QMainWindow):
 
         # Scroll the keyframe table to the nearest keyframe so students can
         # watch the values change as the animation plays.
-        if (self._gltf is not None
-                and self._current_anim_index >= 0
-                and self._current_channel_index >= 0):
+        if (
+            self._gltf is not None
+            and self._current_anim_index >= 0
+            and self._current_channel_index >= 0
+        ):
             times, _ = read_channel_data(
                 self._gltf, self._current_anim_index, self._current_channel_index
             )
@@ -4578,6 +4745,7 @@ class GltfCurveEditor(QMainWindow):
 # STEP 13 — Entry point
 # =============================================================================
 
+
 def main() -> None:
     """Create the QApplication and enter the Qt event loop.
 
@@ -4602,7 +4770,7 @@ def main() -> None:
     fmt.setVersion(3, 3)
     fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
     fmt.setDepthBufferSize(24)
-    fmt.setSamples(4)   # 4× MSAA for smoother skeleton lines and mesh edges
+    fmt.setSamples(4)  # 4× MSAA for smoother skeleton lines and mesh edges
     QSurfaceFormat.setDefaultFormat(fmt)
 
     app = QApplication(sys.argv)
