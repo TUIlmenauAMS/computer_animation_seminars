@@ -12,7 +12,7 @@
 A professional Qt application for inspecting, visualising and editing
 animation data inside binary glTF (.glb) files.  Five panels work together:
 
-Fixes applied (v2.0.3)
+Fixes applied (v2.1.0)
 ----------------------
   Performance fixes — resolved hang when loading large .glb files
   (e.g. Barbarian.glb: 76 animations × 123 channels, 8 831 accessors):
@@ -59,10 +59,34 @@ Fixes applied (v2.0.3)
   5. Added missing GltfCurveEditor._on_keyframe_live() method.
   6. Fixed KeyframeInspectorWidget never receiving its anim/channel indices.
 
+  Fixes applied in v2.1.0
+  ------------------------
+  FIX 5 — build_scene_tree(): remove skinned-mesh nodes from the Scene Tree.
+     Nodes whose only role is "this geometry references skin[N]" (the green
+     ▣ entries) carry no animation channels and are never selected by an
+     animator.  They are now skipped entirely so the tree shows only bones
+     (🦴) and pure transform nodes (○), matching Maya / Blender behaviour.
+
+  FIX 6 — Full game-engine prop rendering for unskinned meshes.
+     Prop meshes (weapons, shield, hat, cape, mug …) have no skin but ARE
+     parented to a bone node in the scene graph.  Previously they were drawn
+     with np.eye(4) as uModel, placing them at the world origin.
+     The fix mirrors exactly what a game engine does:
+       a) _build_node_parent_map() — O(n) pre-pass that records each node's
+          parent index from the scene graph children lists.
+       b) _get_node_world_mat() — walks the parent chain upward, multiplying
+          animated local TRS matrices, to produce the bone-space world matrix.
+       c) _upload_mesh() records each drawable's node_index (which node owns
+          this mesh primitive) alongside its skin_index.
+       d) _draw_mesh() calls _get_node_world_mat() for every unskinned
+          drawable and passes the result as uModel, so the weapon/shield/hat
+          follow the correct bone every frame during animation.
+
   1. 3-D Viewport   — renders the mesh with Phong shading and draws the
                        skeleton as coloured bone lines; the model animates
                        live as the transport plays.
-  2. Scene Tree     — glTF node hierarchy (bones in purple, meshes in green).
+  2. Scene Tree     — glTF node hierarchy (bones in purple 🦴, transform nodes in grey ○).
+                       Skinned-mesh container nodes are hidden — animators never need them.
   3. Curve Editor   — PyQtGraph F-curve editor; one coloured curve per
                        animated component (X=red Y=green Z=blue W=yellow).
   4. Keyframe Table — spreadsheet view of the selected channel; rows highlight
@@ -527,16 +551,36 @@ def build_scene_tree(
     parent_item: QTreeWidgetItem | None,
     node_index: int,
     skin_joint_set: set[int],
-) -> QTreeWidgetItem:
+) -> QTreeWidgetItem | None:
+    """Recursively build the scene-tree QTreeWidgetItem for one glTF node.
+
+    FIX 5: Nodes whose sole purpose is "this geometry references skin[N]"
+    (the former green ▣ entries) are skipped entirely.  A node is considered
+    a pure skinned-mesh container when it has a mesh AND a skin but is NOT
+    itself a skeleton joint.  Animators never select these nodes — they carry
+    no animation channels and are not part of the rig hierarchy — so showing
+    them only clutters the tree and confuses students.  Their children (if any)
+    are still traversed and re-parented to the nearest visible ancestor so
+    nothing in the hierarchy is accidentally dropped.
+
+    Returns the created QTreeWidgetItem, or None when the node is skipped.
+    """
     node     = gltf.nodes[node_index]
     name     = node.name or f"Node_{node_index}"
     is_bone  = node_index in skin_joint_set
     has_mesh = node.mesh is not None
+    has_skin = node.skin is not None   # node references a skin → skinned-mesh container
+
+    # Skip pure skinned-mesh containers (has mesh + skin, but is not a joint).
+    # Their children are still processed under the current parent_item so the
+    # rest of the hierarchy is preserved.
+    if has_mesh and has_skin and not is_bone:
+        for child_index in (node.children or []):
+            build_scene_tree(gltf, parent_item, child_index, skin_joint_set)
+        return None
 
     if is_bone:
         label, badge = f"🦴  {name}", "bone"
-    elif has_mesh:
-        label, badge = f"▣  {name}", "mesh"
     else:
         label, badge = f"○  {name}", "node"
 
@@ -548,8 +592,6 @@ def build_scene_tree(
     item.setData(0, Qt.ItemDataRole.UserRole, node_index)
     if is_bone:
         item.setForeground(0, QColor(PALETTE["accent2"]))
-    elif has_mesh:
-        item.setForeground(0, QColor(PALETTE["green"]))
 
     for child_index in (node.children or []):
         build_scene_tree(gltf, item, child_index, skin_joint_set)
@@ -823,6 +865,81 @@ def compute_world_positions(
     return {ni: wm[:3, 3] for ni, wm in world_mats.items()}
 
 
+def _build_node_parent_map(gltf: GLTF2) -> dict[int, int]:
+    """Return {child_node_index: parent_node_index} for every non-root node.
+
+    FIX 6a: glTF encodes the scene graph as parent→children lists.  To walk
+    upward from a prop node to its parent bone we need the inverse mapping.
+    This is built once per loaded model (cached on the GLTF2 object) and costs
+    O(n_nodes) time — a single pass over all nodes.
+    """
+    gltf_dict = object.__getattribute__(gltf, "__dict__")
+    if "_node_parent_map" in gltf_dict:
+        return gltf_dict["_node_parent_map"]
+    parent_map: dict[int, int] = {}
+    for ni, node in enumerate(gltf.nodes or []):
+        for ci in (node.children or []):
+            parent_map[ci] = ni
+    gltf_dict["_node_parent_map"] = parent_map
+    return parent_map
+
+
+def _get_node_world_mat(
+    gltf: GLTF2,
+    node_index: int,
+    anim_index: int,
+    t: float,
+    parent_map: dict[int, int],
+) -> np.ndarray:
+    """Return the animated world-space 4×4 matrix for any node at time t.
+
+    FIX 6b: For unskinned prop meshes (weapons, shield, hat, cape, mug …) the
+    correct model matrix is the full animated world transform of the node that
+    owns the mesh — identical to what a game engine computes when it draws a
+    prop that is "attached" to a bone via the scene graph.
+
+    Algorithm (matches the standard game-engine scene-graph traversal):
+      1. Collect the ancestor chain: node → parent → grandparent → … → root.
+      2. Sample each ancestor's animated local TRS at time t (falling back to
+         the rest-pose if no animation channel targets that node).
+      3. Multiply the chain root-first to accumulate the world matrix.
+
+    The result is M_world = M_root @ M_child1 @ … @ M_node.
+
+    This is the same math as compute_joint_matrices() but applied to a single
+    node rather than a full skin palette, so no inverse-bind step is needed.
+    """
+    # Build the ancestor chain (bottom-up)
+    chain: list[int] = []
+    cur = node_index
+    while cur is not None:
+        chain.append(cur)
+        cur = parent_map.get(cur)
+    chain.reverse()   # now root-first
+
+    # Retrieve the animated-node lookup for this animation
+    node_lookup = _build_anim_node_lookup(gltf, anim_index)
+
+    world = np.eye(4, dtype=np.float32)
+    for ni in chain:
+        node = gltf.nodes[ni]
+        path_map = node_lookup.get(ni, {})
+        # Start from rest pose, override with animated values
+        rest_t = np.array(node.translation or [0, 0, 0], dtype=np.float32)
+        rest_r = np.array(node.rotation    or [0, 0, 0, 1], dtype=np.float32)
+        rest_s = np.array(node.scale       or [1, 1, 1], dtype=np.float32)
+        for path, (_ci, times, values) in path_map.items():
+            val = _sample_channel(times, values, t, path)
+            if path == "translation":
+                rest_t = val.flatten()[:3]
+            elif path == "rotation":
+                rest_r = val.flatten()[:4]
+            elif path == "scale":
+                rest_s = val.flatten()[:3]
+        world = world @ _trs_to_mat4(rest_t, rest_r, rest_s)
+    return world
+
+
 # =============================================================================
 # STEP 6 — 3-D OpenGL viewport
 # =============================================================================
@@ -954,8 +1071,10 @@ class ModelViewportWidget(QOpenGLWidget):
         self._anim_index:    int          = -1
         self._playback_t:    float        = 0.0
         # FIX 4: multi-mesh support — one entry per renderable primitive.
-        # Each dict holds: vao, vbo, ebo, index_count, skin_index,
+        # Each dict holds: vao, vbo, ebo, index_count, skin_index, node_index,
         #   is_skinned, has_tex, tex_id, base_color.
+        # FIX 6: node_index is now stored so unskinned drawables can look up
+        #   their animated world transform via _get_node_world_mat().
         # The old single-mesh scalars (_mesh_vao, _mesh_count, …) are gone.
         self._drawables: list[dict] = []
         self._prog:          QOpenGLShaderProgram | None = None
@@ -1250,14 +1369,20 @@ class ModelViewportWidget(QOpenGLWidget):
                 pass
         self._drawables = []
 
-        # Build node→skin lookup so we can resolve skin_index per mesh
-        node_mesh_skin: dict[int, int] = {}   # mesh_index → skin_index
-        for node in (gltf.nodes or []):
-            if node.mesh is not None and node.skin is not None:
-                node_mesh_skin[node.mesh] = node.skin
+        # Build node→skin and mesh→node lookups.
+        # mesh_index → skin_index  (for skinned drawables)
+        node_mesh_skin: dict[int, int] = {}
+        # mesh_index → node_index  (for unskinned prop drawables — FIX 6)
+        mesh_to_node:   dict[int, int] = {}
+        for ni, node in enumerate(gltf.nodes or []):
+            if node.mesh is not None:
+                mesh_to_node[node.mesh] = ni
+                if node.skin is not None:
+                    node_mesh_skin[node.mesh] = node.skin
 
-        # Also build a node→mesh lookup so we can resolve node transforms
-        # for static (unskinned) meshes if needed in future
+        # Pre-build the node parent map for prop world-transform evaluation (FIX 6)
+        _build_node_parent_map(gltf)
+
         def _pad4(a: np.ndarray) -> np.ndarray:
             if a.ndim < 2 or a.shape[1] < 4:
                 p = np.zeros((len(a), 4), dtype=np.float32)
@@ -1374,6 +1499,7 @@ class ModelViewportWidget(QOpenGLWidget):
                 vao, vbo, ebo = self._make_vao(interleaved.flatten(), indices)
 
                 skin_index = node_mesh_skin.get(mesh_idx, -1)
+                node_index = mesh_to_node.get(mesh_idx, -1)   # FIX 6
 
                 self._drawables.append({
                     "vao":         vao,
@@ -1381,6 +1507,7 @@ class ModelViewportWidget(QOpenGLWidget):
                     "ebo":         ebo,
                     "index_count": len(indices),
                     "skin_index":  skin_index,
+                    "node_index":  node_index,   # FIX 6: owner node for prop transform
                     "is_skinned":  is_skinned and skin_index >= 0,
                     "has_tex":     has_tex,
                     "tex_id":      tex_id,
@@ -1542,7 +1669,8 @@ class ModelViewportWidget(QOpenGLWidget):
             return GL.glGetUniformLocation(pid, name)
 
         # ── Uniforms shared by every part ─────────────────────────────────────
-        GL.glUniformMatrix4fv(_u("uModel"), 1, GL.GL_TRUE, model)
+        # uModel is set per-drawable below (identity for skinned, animated world
+        # matrix for unskinned props — FIX 6).  view and proj never change.
         GL.glUniformMatrix4fv(_u("uView"),  1, GL.GL_TRUE, view)
         GL.glUniformMatrix4fv(_u("uProj"),  1, GL.GL_TRUE, proj)
         light = self._bbox_center + self._orbit_dist * np.array(
@@ -1554,6 +1682,14 @@ class ModelViewportWidget(QOpenGLWidget):
         # Joint matrices are the same for every part that shares a skin, so
         # cache them keyed by skin_index to avoid recomputing per drawable.
         jmat_cache: dict[int, np.ndarray] = {}
+
+        # FIX 6: prop world-transform cache — keyed by node_index.
+        # For unskinned props the model matrix is the full animated world
+        # transform of the node that owns the mesh (weapon follows its parent
+        # bone exactly as a game engine would compute it).
+        prop_mat_cache: dict[int, np.ndarray] = {}
+        parent_map = (_build_node_parent_map(self._gltf)
+                      if self._gltf is not None else {})
 
         # ── Per-part draw loop ─────────────────────────────────────────────────
         for d in self._drawables:
@@ -1570,10 +1706,15 @@ class ModelViewportWidget(QOpenGLWidget):
                 GL.glUniform1i(_u("uHasTexture"), 0)
 
             skin_idx   = d["skin_index"]
+            node_idx   = d["node_index"]
             is_skinned = d["is_skinned"]
             GL.glUniform1i(_u("uSkinned"), 1 if is_skinned else 0)
 
             if is_skinned and self._gltf is not None:
+                # Skinned mesh: identity model matrix (vertices are already in
+                # model space; the joint matrices move them to world space).
+                GL.glUniformMatrix4fv(_u("uModel"), 1, GL.GL_TRUE, model)
+
                 if skin_idx not in jmat_cache:
                     try:
                         jmats = compute_joint_matrices(
@@ -1589,6 +1730,28 @@ class ModelViewportWidget(QOpenGLWidget):
                 flat = jmats[:n].flatten().astype(np.float32)
                 loc  = GL.glGetUniformLocation(pid, "uJoints[0]")
                 GL.glUniformMatrix4fv(loc, n, GL.GL_TRUE, flat)
+            else:
+                # FIX 6: unskinned prop — compute its animated world matrix by
+                # walking the scene graph from this node up to the root and
+                # composing animated TRS at each ancestor.  This is exactly
+                # what a game engine does for props parented to a bone.
+                if node_idx >= 0 and self._gltf is not None:
+                    if node_idx not in prop_mat_cache:
+                        try:
+                            prop_world = _get_node_world_mat(
+                                self._gltf, node_idx,
+                                self._anim_index, self._playback_t,
+                                parent_map,
+                            )
+                        except Exception:
+                            traceback.print_exc()
+                            prop_world = model   # fallback: identity
+                        prop_mat_cache[node_idx] = prop_world
+                    GL.glUniformMatrix4fv(
+                        _u("uModel"), 1, GL.GL_TRUE, prop_mat_cache[node_idx]
+                    )
+                else:
+                    GL.glUniformMatrix4fv(_u("uModel"), 1, GL.GL_TRUE, model)
 
             GL.glBindVertexArray(d["vao"])
             GL.glDrawElements(GL.GL_TRIANGLES, d["index_count"],
@@ -2989,8 +3152,11 @@ class GltfCurveEditor(QMainWindow):
             skin_joint_set.update(skin.joints or [])
         for scene in (self._gltf.scenes or []):
             for root_idx in (scene.nodes or []):
+                # build_scene_tree returns None when the root node is itself a
+                # skinned-mesh container (rare but possible); skip those.
                 item = build_scene_tree(self._gltf, None, root_idx, skin_joint_set)
-                self._scene_tree.addTopLevelItem(item)
+                if item is not None:
+                    self._scene_tree.addTopLevelItem(item)
         self._scene_tree.expandAll()
 
     # -------------------------------------------------------------------------
