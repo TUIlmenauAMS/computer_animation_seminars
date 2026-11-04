@@ -12,7 +12,7 @@
 A professional Qt application for inspecting, visualising and editing
 animation data inside binary glTF (.glb) files.  Five panels work together:
 
-Fixes applied (v2.2.0)
+Fixes applied (v2.3.0)
 ----------------------
   Performance fixes — resolved hang when loading large .glb files
   (e.g. Barbarian.glb: 76 animations × 123 channels, 8 831 accessors):
@@ -66,6 +66,36 @@ Fixes applied (v2.2.0)
      ▣ entries) carry no animation channels and are never selected by an
      animator.  They are now skipped entirely so the tree shows only bones
      (🦴) and pure transform nodes (○), matching Maya / Blender behaviour.
+
+  Fixes applied in v2.3.0
+  ------------------------
+  FIX 10 — Escape-to-revert now works reliably via an app-level event filter.
+     The viewport event filter never received KeyPress events because PyQtGraph's
+     ViewBox consumed them first (or keyboard focus was elsewhere).  The KeyPress
+     branch is removed from the viewport filter entirely.  Instead,
+     CurveEditorWidget installs a second filter on QApplication.instance() in
+     __init__ and uninstalls it in closeEvent.  Application-level filters see
+     every key event in the process before any widget handles it, so focus chain
+     and PyQtGraph's internal routing are irrelevant.  A separate _drag_active
+     boolean (set on drag-start, cleared on commit or revert) replaces the
+     _drag_start_y is not None guard so Escape works even if the mouse was
+     momentarily released.
+
+  FIX 11 — Middle-mouse pan in the 3-D viewport.
+     Clicking the scroll wheel (middle button) now pans the camera target point
+     (_bbox_center) in the camera's local X/Y plane.  Each mouse-move frame the
+     pixel delta is converted to world-space units from the view's right vector
+     (r_vec) and up vector (u_vec) — the same vectors already computed in _mvp()
+     — scaled by orbit_dist so panning feels proportional at any zoom level.
+     A separate _pan_last_mouse tracks the middle-button position independently
+     of the left-button orbit tracker so both can be used without conflict.
+
+  FIX 12 — Double-click reframes the camera to the model's bounding box.
+     _upload_mesh() now saves _bbox_center_default and _orbit_dist_default after
+     computing the unified bounding box.  mouseDoubleClickEvent() restores those
+     values and resets yaw/pitch to the initial viewing angle, giving a one-click
+     way back after panning or zooming far from the model.  The title bar
+     maximize-on-double-click suppression is preserved.
 
   Fixes applied in v2.2.0
   ------------------------
@@ -1111,8 +1141,14 @@ class ModelViewportWidget(QOpenGLWidget):
         self._orbit_pitch:   float        = 15.0
         self._orbit_dist:    float        = 3.0
         self._last_mouse                  = None
+        self._pan_last_mouse              = None   # FIX 11: middle-mouse pan tracker
         self._bbox_center    = np.zeros(3, dtype=np.float32)
         self._bbox_scale:    float        = 1.0
+        # FIX 12: saved defaults for double-click reframe
+        self._bbox_center_default = np.zeros(3, dtype=np.float32)
+        self._orbit_dist_default: float   = 3.0
+        self._orbit_yaw_default:  float   = 30.0
+        self._orbit_pitch_default: float  = 15.0
         self._show_skeleton: bool         = True       # toggled by toolbar button
         self._selected_joint: int         = -1         # highlighted joint node index
         self._gltf_path_hint: "Path | None" = None   # set by load_model for external tex
@@ -1222,34 +1258,88 @@ class ModelViewportWidget(QOpenGLWidget):
     # ------------------------------------------------------------------
 
     def mouseDoubleClickEvent(self, event) -> None:
-        """Consume double-clicks so they don't reach the window title bar
-        and accidentally toggle the maximized state."""
+        """Double-click reframes the camera to the model's bounding-box fit.
+
+        FIX 12: restores _bbox_center, orbit distance, yaw and pitch to the
+        values saved when the model was loaded.  This gives a one-click escape
+        from an accidental pan or extreme zoom.  The event is accepted so it
+        does not propagate to the window title bar (which would toggle the
+        maximized state on some platforms).
+        """
+        self._bbox_center  = self._bbox_center_default.copy()
+        self._orbit_dist   = self._orbit_dist_default
+        self._orbit_yaw    = self._orbit_yaw_default
+        self._orbit_pitch  = self._orbit_pitch_default
+        self.update()
         event.accept()
 
     def mousePressEvent(self, event) -> None:
-        self._last_mouse = event.position()
-        # Bone picking: only on left-click with no drag
+        pos = event.position()
         if event.button() == Qt.MouseButton.LeftButton:
-            self._try_pick_bone(event.position())
+            self._last_mouse = pos
+            self._try_pick_bone(pos)
+        elif event.button() == Qt.MouseButton.MiddleButton:
+            # FIX 11: start middle-mouse pan
+            self._pan_last_mouse = pos
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._last_mouse = None
+        elif event.button() == Qt.MouseButton.MiddleButton:
+            self._pan_last_mouse = None
 
     def mouseMoveEvent(self, event) -> None:
-        if self._last_mouse is None:
-            return
-        dx = event.position().x() - self._last_mouse.x()
-        dy = event.position().y() - self._last_mouse.y()
-        # If there's real drag, cancel any pending pick so orbit takes priority
-        if abs(dx) > 2 or abs(dy) > 2:
-            self._last_mouse = None   # will be reset below
-        self._orbit_yaw   += dx * 0.4
-        self._orbit_pitch  = max(-89, min(89, self._orbit_pitch + dy * 0.4))
-        self._last_mouse   = event.position()
-        self.update()
+        pos = event.position()
+
+        # ── Left-drag orbit ───────────────────────────────────────────────────
+        if self._last_mouse is not None:
+            dx = pos.x() - self._last_mouse.x()
+            dy = pos.y() - self._last_mouse.y()
+            if abs(dx) > 2 or abs(dy) > 2:
+                # Real drag started — suppress the bone pick that fired on press
+                self._last_mouse = None
+            self._orbit_yaw   += dx * 0.4
+            self._orbit_pitch  = max(-89.0, min(89.0, self._orbit_pitch + dy * 0.4))
+            self._last_mouse   = pos
+            self.update()
+
+        # ── Middle-drag pan ───────────────────────────────────────────────────
+        if self._pan_last_mouse is not None:
+            # FIX 11: translate _bbox_center (the orbit target) in the camera's
+            # local X/Y plane so the model follows the cursor.
+            # We recompute r_vec and u_vec from the current yaw/pitch — the same
+            # vectors _mvp() uses — scaled so one pixel of drag moves
+            # orbit_dist / viewport_height world units (feels linear at any zoom).
+            dx_px = pos.x() - self._pan_last_mouse.x()
+            dy_px = pos.y() - self._pan_last_mouse.y()
+
+            yaw   = math.radians(self._orbit_yaw)
+            pitch = math.radians(self._orbit_pitch)
+            cx    = math.cos(pitch) * math.sin(yaw)
+            cy    = math.sin(pitch)
+            cz    = math.cos(pitch) * math.cos(yaw)
+            f_vec = -np.array([cx, cy, cz], dtype=np.float32)   # points toward target
+            up    = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            r_vec = np.cross(f_vec, up)
+            norm  = np.linalg.norm(r_vec)
+            if norm > 1e-6:
+                r_vec /= norm
+            u_vec = np.cross(r_vec, f_vec)
+            norm  = np.linalg.norm(u_vec)
+            if norm > 1e-6:
+                u_vec /= norm
+
+            h_px   = max(1, self.height())
+            scale  = self._orbit_dist / h_px   # world units per pixel
+            # dx moves right → subtract r_vec; dy moves down → subtract u_vec
+            self._bbox_center -= r_vec * (dx_px * scale)
+            self._bbox_center += u_vec * (dy_px * scale)
+            self._pan_last_mouse = pos
+            self.update()
 
     def wheelEvent(self, event) -> None:
         delta = event.angleDelta().y()
-        # FIX: proportional zoom so large and small models both feel responsive.
-        # One standard wheel notch (delta = 120) scales distance by ~0.9 (zoom in)
-        # or ~1.11 (zoom out).
+        # Proportional zoom: one standard notch (delta=120) → ~0.9× distance.
         self._orbit_dist *= 0.999 ** delta
         self._orbit_dist = max(0.01, self._orbit_dist)
         self.update()
@@ -1554,6 +1644,11 @@ class ModelViewportWidget(QOpenGLWidget):
         extent            = float(np.max(mx - mn)) or 1.0
         self._bbox_scale  = 1.0 / extent
         self._orbit_dist  = extent * 1.4
+        # FIX 12: save defaults so double-click can reframe to the original fit
+        self._bbox_center_default  = self._bbox_center.copy()
+        self._orbit_dist_default   = self._orbit_dist
+        self._orbit_yaw_default    = 30.0
+        self._orbit_pitch_default  = 15.0
         print(f"[Viewport] Total drawables: {len(self._drawables)}, "
               f"bbox extent={extent:.3f}")
 
@@ -1999,7 +2094,8 @@ class HelpPanel(QWidget):
               Viewport
             </td>
             <td style="color:{PALETTE['muted']};font-size:11px;padding:3px 0 1px 0;">
-              Drag to orbit &middot; Scroll to zoom (works at any scale).<br>
+              <b>Left-drag</b> to orbit &middot; <b>Middle-drag</b> to pan &middot; <b>Scroll</b> to zoom.<br>
+              <b>Double-click</b> to reframe the camera to the model's bounding box.<br>
               <b>Click a joint dot</b> on the skeleton to select that bone in the Scene Tree.<br>
               <b>🦴 Skeleton</b> button (or <b>K</b>) toggles the skeleton overlay on/off.
             </td>
@@ -2096,6 +2192,12 @@ class CurveEditorWidget(QWidget):
         # Install event filter on the viewport so we can intercept mouse events
         # for drag-editing without fighting PyQtGraph's own pan/zoom handlers.
         self._plot.viewport().installEventFilter(self)
+
+        # FIX 10: install an application-level filter to catch Escape reliably.
+        # Viewport-level KeyPress events are silently consumed by PyQtGraph's
+        # ViewBox before our filter sees them, regardless of focus.  An app-
+        # level filter sits above all widget routing and always fires.
+        QApplication.instance().installEventFilter(self)
         layout.addWidget(self._plot, stretch=1)
 
         # ── State ─────────────────────────────────────────────────────────────
@@ -2117,11 +2219,21 @@ class CurveEditorWidget(QWidget):
         self._drag_orig:   float = 0.0   # value at drag-start (for Escape revert)
         self._drag_start_y: float | None = None   # screen Y at mouse-down
         self._drag_start_scene_y: float = 0.0     # plot-space Y at mouse-down
+        # FIX 10: separate active flag so Escape works even if mouse was released
+        self._drag_active: bool = False
 
         # Selection highlight: one selected dot drawn as an extra scatter item
         self._sel_scatter: pg.ScatterPlotItem | None = None
         self._sel_comp:    int   = -1
         self._sel_key:     int   = -1
+
+    def closeEvent(self, event) -> None:
+        """Uninstall the app-level event filter when the widget is destroyed."""
+        try:
+            QApplication.instance().removeEventFilter(self)
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -2340,47 +2452,76 @@ class CurveEditorWidget(QWidget):
     # ── Drag-to-edit via event filter ─────────────────────────────────────────
 
     def eventFilter(self, obj, event) -> bool:  # type: ignore[override]
-        """Intercept mouse press/move/release on the plot viewport for drag editing.
+        """Intercept events for drag editing and Escape revert.
 
-        We only handle the drag when a keyframe is selected AND the user presses
-        left-button on the plot.  Pan/zoom still works because we only consume
-        the event when a drag has actually started on a selected dot.
+        Two sources call this filter:
+          • self._plot.viewport()  — mouse press/move/release for drag editing.
+          • QApplication.instance() — key events for Escape revert (FIX 10).
+
+        Keeping them in one method avoids a separate override and matches the
+        Qt event-filter contract (one object, one eventFilter method).
         """
         from PySide6.QtCore import QEvent
-        from PySide6.QtGui  import QMouseEvent
-
-        if obj is not self._plot.viewport():
-            return False
 
         t = event.type()
 
+        # ── App-level Escape handler (FIX 10) ────────────────────────────────
+        # This branch fires for every KeyPress in the application, so guard it
+        # tightly: only act when a drag is genuinely active.
+        if (obj is QApplication.instance()
+                and t == QEvent.Type.KeyPress
+                and self._drag_active
+                and self._values is not None):
+            if event.key() == Qt.Key.Key_Escape:
+                self._values[self._drag_key, self._drag_comp] = np.float32(
+                    self._drag_orig)
+                self._update_curve_display(self._drag_comp)
+                self._refresh_selection_dot()
+                if self._on_live_cb is not None:
+                    self._on_live_cb(
+                        self._anim_index, self._channel_index, self._values)
+                self._drag_active  = False
+                self._drag_start_y = None
+                self._drag_comp    = -1
+                self._drag_key     = -1
+                self._edit_tip.setText(
+                    "Drag reverted  ·  Click a dot to select  ·  Drag up/down to edit"
+                )
+                self._edit_tip.setStyleSheet(
+                    f"color: {PALETTE['muted']}; font-size: 10px;"
+                    "font-style: italic; padding-right: 8px;"
+                )
+                return True   # consume — don't let Escape close dialogs etc.
+            return False
+
+        # ── Viewport mouse events ─────────────────────────────────────────────
+        if obj is not self._plot.viewport():
+            return False
+
         if t == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.LeftButton and self._sel_comp >= 0:
-                # Check whether the press is close enough to the selected dot
                 if self._is_near_selected_dot(event.position()):
-                    self._drag_comp   = self._sel_comp
-                    self._drag_key    = self._sel_key
-                    self._drag_orig   = float(
+                    self._drag_comp            = self._sel_comp
+                    self._drag_key             = self._sel_key
+                    self._drag_orig            = float(
                         self._values[self._drag_key, self._drag_comp])
-                    self._drag_start_y = float(event.position().y())
-                    self._drag_start_scene_y = self._drag_orig
+                    self._drag_start_y         = float(event.position().y())
+                    self._drag_start_scene_y   = self._drag_orig
+                    self._drag_active          = True   # FIX 10
                     return True   # consume — prevent pan
             return False
 
         if t == QEvent.Type.MouseMove:
             if self._drag_start_y is not None and self._values is not None:
                 dy_px = float(event.position().y()) - self._drag_start_y
-                # Map pixel delta to value delta using the current plot Y range
                 view_rect = self._plot.viewRect()
                 h_px = max(1, self._plot.viewport().height())
                 px_per_unit = h_px / max(1e-9, view_rect.height())
-                # Dragging UP (negative dy_px) should increase value
                 delta_val = -dy_px / px_per_unit
                 new_val   = np.float32(self._drag_start_scene_y + delta_val)
                 self._values[self._drag_key, self._drag_comp] = new_val
                 self._update_curve_display(self._drag_comp)
                 self._refresh_selection_dot()
-                # Update tip label live
                 lbl = (self._current_target_path_labels[self._drag_comp]
                        if self._drag_comp < len(self._current_target_path_labels)
                        else f"V{self._drag_comp}")
@@ -2388,7 +2529,6 @@ class CurveEditorWidget(QWidget):
                     f"Editing  t={float(self._times[self._drag_key]):.4f}s  "
                     f"{lbl}={float(new_val):.5f}  ·  Release to commit  ·  Esc to revert"
                 )
-                # Fire live callback so the viewport updates
                 if self._on_live_cb is not None:
                     self._on_live_cb(
                         self._anim_index, self._channel_index, self._values)
@@ -2397,35 +2537,16 @@ class CurveEditorWidget(QWidget):
 
         if t == QEvent.Type.MouseButtonRelease:
             if self._drag_start_y is not None:
-                # Commit the edit to the glTF blob
                 if self._on_modified_cb is not None and self._values is not None:
                     self._on_modified_cb(
                         self._anim_index, self._channel_index, self._values)
+                self._drag_active  = False   # FIX 10
                 self._drag_start_y = None
                 self._drag_comp    = -1
                 self._drag_key     = -1
                 self._edit_tip.setStyleSheet(
                     f"color: {PALETTE['accent']}; font-size: 10px;"
                     "font-style: italic; padding-right: 8px;"
-                )
-                return True
-            return False
-
-        if t == QEvent.Type.KeyPress:
-            if (event.key() == Qt.Key.Key_Escape
-                    and self._drag_start_y is not None
-                    and self._values is not None):
-                # Revert to the value at drag-start
-                self._values[self._drag_key, self._drag_comp] = np.float32(
-                    self._drag_orig)
-                self._update_curve_display(self._drag_comp)
-                self._refresh_selection_dot()
-                if self._on_live_cb is not None:
-                    self._on_live_cb(
-                        self._anim_index, self._channel_index, self._values)
-                self._drag_start_y = None
-                self._edit_tip.setText(
-                    "Drag reverted  ·  Click a dot to select  ·  Drag up/down to edit"
                 )
                 return True
             return False
@@ -3098,7 +3219,9 @@ class GltfCurveEditor(QMainWindow):
             "Step 1: Open a .glb file (Ctrl+O or blue button)  ·  "
             "Step 2: Click a bone in the Scene Tree (or click a joint dot in the viewport)  ·  "
             "Step 3: Click a channel (rotation / translation / scale)  ·  "
-            "Step 4: Press Space to play  ·  🦴 Skeleton button or K to toggle skeleton"
+            "Step 4: Press Space to play  ·  "
+            "Viewport: Left-drag orbit  ·  Middle-drag pan  ·  Scroll zoom  ·  "
+            "Double-click reframe  ·  🦴 Skeleton / K to toggle skeleton"
         )
 
     def _build_timer(self) -> None:
