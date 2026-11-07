@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo 1: First Rapier Scene — Computeranimation Seminar 05</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:      #0d0f14;
+        --surface: #161a22;
+        --border:  #252b38;
+        --text:    #d8dce6;
+        --muted:   #5a6175;
+        --accent:  #4f9cf9;
+        --accent2: #a78bfa;
+        --green:   #34d399;
+        --orange:  #fb923c;
+        --red:     #f87171;
+        --mono: "IBM Plex Mono", monospace;
+        --sans: "IBM Plex Sans", sans-serif;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.7;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── header ── */
+      header { border-bottom: 2px solid var(--border); padding: 24px 0 20px; flex-shrink: 0; }
+      .header-inner {
+        max-width: 1200px; margin: 0 auto; padding: 0 32px;
+        display: flex; align-items: center; gap: 24px;
+      }
+      .header-logo img { width: 100px; border-radius: 10px; display: block; }
+      .header-info h1 { font-size: clamp(16px,2.5vw,22px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
+      .header-info h2 { font-size: 13px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
+      .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
+      .header-meta a { color: var(--accent); text-decoration: none; }
+      .header-meta a:hover { text-decoration: underline; }
+      .header-author {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+        font-size: 13px; color: var(--muted);
+      }
+      .header-author span { color: var(--text); font-weight: 500; }
+      .header-author .linkedin-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: rgba(79,156,249,0.1); color: var(--accent);
+        font-family: var(--mono); font-size: 11px; padding: 2px 9px;
+        border-radius: 20px; border: 1px solid rgba(79,156,249,0.25);
+        text-decoration: none; transition: background 0.15s;
+      }
+      .header-author .linkedin-badge:hover { background: rgba(79,156,249,0.2); }
+
+      /* ── breadcrumb ── */
+      .breadcrumb {
+        max-width: 1200px; margin: 0 auto; padding: 14px 32px 0;
+        font-family: var(--mono); font-size: 12px; color: var(--muted); flex-shrink: 0;
+      }
+      .breadcrumb a { color: var(--accent); text-decoration: none; }
+      .breadcrumb a:hover { text-decoration: underline; }
+      .breadcrumb span { margin: 0 6px; }
+
+      /* ── main ── */
+      main { max-width: 1200px; margin: 0 auto; padding: 24px 32px 48px; flex: 1; width: 100%; }
+
+      /* ── demo intro ── */
+      .demo-intro {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
+      }
+      .demo-intro h1 { font-size: clamp(17px,2.2vw,24px); font-weight: 500; color: #f0f2f7; margin-bottom: 8px; }
+      .demo-badge {
+        display: inline-block; background: rgba(52,211,153,0.1); color: var(--green);
+        font-family: var(--mono); font-size: 11px; padding: 2px 10px;
+        border-radius: 20px; border: 1px solid rgba(52,211,153,0.28); margin-bottom: 10px;
+      }
+      .demo-intro p { color: var(--text); margin-bottom: 6px; font-size: 14px; }
+      .demo-intro p:last-child { margin-bottom: 0; }
+
+      /* ── layout ── */
+      .demo-layout {
+        display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start;
+      }
+      @media (max-width: 900px) { .demo-layout { grid-template-columns: 1fr; } }
+
+      /* ── canvas ── */
+      .canvas-wrap {
+        position: relative; background: #0a0c11;
+        border: 1px solid var(--border); border-radius: 10px;
+        overflow: hidden; aspect-ratio: 16/10; min-height: 360px;
+      }
+      #threeCanvas { width: 100%; height: 100%; display: block; }
+
+      /* ── loading overlay ── */
+      #loadingOverlay {
+        position: absolute; inset: 0; background: rgba(13,15,20,0.93);
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 16px; z-index: 10; transition: opacity 0.4s;
+      }
+      #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
+      .loading-title { font-family: var(--mono); font-size: 14px; color: var(--text); }
+      .loading-sub   { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      progress {
+        width: 200px; height: 4px; appearance: none; -webkit-appearance: none;
+        border: none; border-radius: 2px; background: var(--border); overflow: hidden;
+      }
+      progress::-webkit-progress-bar { background: var(--border); border-radius: 2px; }
+      progress::-webkit-progress-value { background: var(--green); border-radius: 2px; transition: width 0.2s; }
+      progress::-moz-progress-bar { background: var(--green); border-radius: 2px; }
+      #loadingPct { font-family: var(--mono); font-size: 13px; color: var(--green); min-width: 40px; text-align: center; }
+      .progress-row { display: flex; align-items: center; gap: 10px; }
+
+      /* ── HUD overlay — top-left of canvas ── */
+      #physicsHud {
+        position: absolute; top: 12px; left: 12px; z-index: 6;
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .hud-pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(13,15,20,0.78); backdrop-filter: blur(4px);
+        border: 1px solid var(--border); border-radius: 20px;
+        padding: 4px 12px 4px 8px; font-family: var(--mono);
+        font-size: 11px; color: var(--muted);
+      }
+      .hud-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--green); flex-shrink: 0;
+      }
+      .hud-pill span { color: var(--green); }
+
+      /* ── click hint — bottom of canvas above controls ── */
+      #clickHint {
+        position: absolute; bottom: 56px; left: 0; right: 0;
+        text-align: center; font-family: var(--mono); font-size: 11px;
+        color: var(--muted); pointer-events: none; z-index: 5;
+        opacity: 1; transition: opacity 1s;
+      }
+      #clickHint.fade { opacity: 0; }
+
+      /* ── bottom bar ── */
+      .bottom-bar {
+        position: absolute; bottom: 0; left: 0; right: 0; height: 48px;
+        background: rgba(13,15,20,0.82); backdrop-filter: blur(6px);
+        border-top: 1px solid var(--border);
+        display: flex; align-items: center; gap: 12px; padding: 0 16px; z-index: 5;
+      }
+      .bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; }
+      .bar-val   { font-family: var(--mono); font-size: 12px; color: var(--green); flex-shrink: 0; min-width: 60px; text-align: right; }
+
+      /* gravity slider */
+      #gravitySlider {
+        flex: 1; -webkit-appearance: none; appearance: none;
+        height: 4px; border-radius: 2px; cursor: pointer;
+        background: var(--border); accent-color: var(--green);
+      }
+      #gravitySlider::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 16px; height: 16px;
+        border-radius: 50%; background: var(--green); cursor: pointer;
+        border: 2px solid var(--bg); box-shadow: 0 0 0 3px rgba(52,211,153,0.2);
+      }
+
+      /* reset button */
+      #resetBtn {
+        flex-shrink: 0; padding: 5px 14px; border-radius: 6px;
+        border: 1px solid var(--border); background: var(--bg);
+        color: var(--text); font-family: var(--mono); font-size: 12px;
+        cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      #resetBtn:hover { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.07); }
+
+      /* ── side panels ── */
+      .side-col { display: flex; flex-direction: column; gap: 12px; }
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+      .panel-header {
+        padding: 10px 16px; border-bottom: 1px solid var(--border);
+        font-family: var(--mono); font-size: 11px; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.07em;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+      .dot.green  { background: var(--green); }
+      .dot.blue   { background: var(--accent); }
+      .dot.orange { background: var(--orange); }
+      .panel-body { padding: 14px 16px; }
+
+      /* step rows in panel */
+      .step-row {
+        display: flex; gap: 10px; align-items: flex-start;
+        margin-bottom: 10px; font-size: 13px; line-height: 1.55;
+      }
+      .step-row:last-child { margin-bottom: 0; }
+      .step-num {
+        flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+        background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3);
+        font-family: var(--mono); font-size: 10px; color: var(--green);
+        display: flex; align-items: center; justify-content: center; margin-top: 1px;
+      }
+      .step-row code {
+        font-family: var(--mono); font-size: 11px;
+        background: rgba(79,156,249,0.08); color: #93c5fd;
+        padding: 1px 5px; border-radius: 3px;
+      }
+
+      /* stat rows */
+      .stat-row {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-family: var(--mono); font-size: 11px;
+        border-bottom: 1px solid rgba(37,43,56,0.5); padding: 5px 0;
+      }
+      .stat-row:last-child { border-bottom: none; }
+      .stat-label { color: var(--muted); }
+      .stat-val   { color: var(--green); }
+      .stat-val.blue { color: var(--accent); }
+
+      /* concept boxes */
+      .concept-box {
+        border-left: 4px solid var(--green);
+        background: rgba(52,211,153,0.05);
+        border-radius: 6px; padding: 12px 16px;
+        margin-top: 12px; font-size: 13px; line-height: 1.65;
+      }
+      .concept-box strong { color: var(--green); }
+      .concept-box.blue { border-left-color: var(--accent); background: rgba(79,156,249,0.05); }
+      .concept-box.blue strong { color: var(--accent); }
+      .concept-box.purple { border-left-color: var(--accent2); background: rgba(167,139,250,0.05); }
+      .concept-box.purple strong { color: var(--accent2); }
+      .concept-box code {
+        font-family: var(--mono); font-size: 12px;
+        background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px;
+      }
+
+      /* footer */
+      footer {
+        border-top: 2px solid var(--border); padding: 18px 32px 24px;
+        max-width: 1200px; margin: 0 auto; text-align: center;
+        font-size: 13px; color: var(--text); line-height: 1.7; width: 100%;
+      }
+      footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+      footer a { color: var(--accent); text-decoration: none; }
+      footer a:hover { text-decoration: underline; }
+
+      @media (max-width: 700px) {
+        .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
+        .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+      }
+      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-inner">
+        <div class="header-logo">
+          <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" />
+        </div>
+        <div class="header-info">
+          <h1>Computeranimation — Seminar 05: Physics-based Animation</h1>
+          <h2>Demo 1 — First Rapier Scene: Rigid Bodies, Colliders &amp; the Physics Loop</h2>
+          <p class="header-meta">
+            <strong>Institut für Medientechnik –
+              <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+                 target="_blank" rel="noopener">AMS Group</a>
+            </strong>
+            · Technische Universität Ilmenau
+          </p>
+          <div class="header-author">
+            Seminar materials by
+            <span>Renato Fera P.</span>
+            <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/"
+               target="_blank" rel="noopener">LinkedIn</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="breadcrumb">
+      <a href="index.html">Seminar Materials</a>
+      <span>›</span>
+      <a href="05_computeranimation_physics.html">Chapter 05: Physics-based Animation</a>
+      <span>›</span>
+      Demo 1: First Rapier Scene
+    </nav>
+
+    <main>
+      <div class="demo-intro">
+        <div class="demo-badge">
+          ▶ Rapier · RigidBody · Collider · fixed timestep · world.step() · Three.js sync
+        </div>
+        <h1>Demo 1: First Rapier Scene</h1>
+        <p>
+          A <strong>Rapier physics world</strong> runs in parallel with the Three.js scene.
+          Boxes fall under gravity, stack on a ground plane, and collide with each other —
+          all computed by Rapier's rigid body solver. <strong>Click anywhere on the ground</strong>
+          to throw a new box from the camera toward that point.
+        </p>
+        <p>
+          Read the source code of this file as a tutorial. Every line is commented with
+          numbered STEP blocks that map each Rapier concept — world creation, rigid body,
+          collider, <code>world.step()</code>, and sync to Three.js — to the matching
+          Three.js mesh. Open <strong>DevTools → Console</strong> to see body counts and
+          timestep logs.
+        </p>
+      </div>
+
+      <div class="demo-layout">
+        <!-- ── Canvas ── -->
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="threeCanvas"></canvas>
+
+          <!-- Physics HUD — top-left -->
+          <div id="physicsHud">
+            <div class="hud-pill">
+              <div class="hud-dot"></div>
+              Bodies: <span id="hudBodies">0</span>
+            </div>
+            <div class="hud-pill">
+              <div class="hud-dot"></div>
+              Steps/frame: <span id="hudSteps">0</span>
+            </div>
+          </div>
+
+          <!-- Click hint -->
+          <div id="clickHint">click on the ground to throw a box</div>
+
+          <!-- Loading overlay -->
+          <div id="loadingOverlay">
+            <div class="loading-title">Initialising Rapier WASM…</div>
+            <div class="progress-row">
+              <progress id="loadProgress" value="0" max="100"></progress>
+              <span id="loadingPct">0%</span>
+            </div>
+            <div class="loading-sub">downloading rapier3d-compat</div>
+          </div>
+
+          <!-- Bottom bar: gravity + reset -->
+          <div class="bottom-bar">
+            <span class="bar-label">Gravity</span>
+            <input type="range" id="gravitySlider" min="0" max="20" step="0.1" value="9.81" />
+            <span class="bar-val" id="gravityVal">9.81 m/s²</span>
+            <button id="resetBtn">Reset</button>
+          </div>
+        </div>
+
+        <!-- ── Side panels ── -->
+        <div class="side-col">
+
+          <!-- Pipeline steps -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot green"></div> Rapier Pipeline</div>
+            <div class="panel-body">
+              <div class="step-row">
+                <div class="step-num">0</div>
+                <div>Import &amp; <code>RAPIER.init()</code> — download + compile the WASM binary</div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">1</div>
+                <div>Create <code>new RAPIER.World(gravity)</code> — the physics simulation container</div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">2</div>
+                <div>Add <code>RigidBodyDesc.fixed()</code> ground — static body, never moves</div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">3</div>
+                <div>Spawn boxes: <code>RigidBodyDesc.dynamic()</code> + <code>ColliderDesc.cuboid()</code></div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">4</div>
+                <div>Each frame: accumulate dt → <code>world.step()</code> → <code>syncPhysicsToRender()</code></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live stats -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot green"></div> Live Stats</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Dynamic bodies</span><span class="stat-val" id="statDynamic">0</span></div>
+              <div class="stat-row"><span class="stat-label">Static bodies</span> <span class="stat-val" id="statStatic">1</span></div>
+              <div class="stat-row"><span class="stat-label">Physics Hz</span>    <span class="stat-val">60 Hz</span></div>
+              <div class="stat-row"><span class="stat-label">Fixed dt</span>      <span class="stat-val">16.67 ms</span></div>
+              <div class="stat-row"><span class="stat-label">Gravity</span>       <span class="stat-val" id="statGravity">9.81 m/s²</span></div>
+              <div class="stat-row"><span class="stat-label">Restitution</span>   <span class="stat-val">0.35</span></div>
+              <div class="stat-row"><span class="stat-label">Friction</span>      <span class="stat-val">0.60</span></div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot blue"></div> Controls</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Throw box</span>     <span class="stat-val blue">Click ground</span></div>
+              <div class="stat-row"><span class="stat-label">Orbit</span>         <span class="stat-val blue">Drag</span></div>
+              <div class="stat-row"><span class="stat-label">Zoom</span>          <span class="stat-val blue">Scroll</span></div>
+              <div class="stat-row"><span class="stat-label">Pan</span>           <span class="stat-val blue">Right-drag</span></div>
+              <div class="stat-row"><span class="stat-label">Gravity</span>       <span class="stat-val blue">Slider (bottom)</span></div>
+              <div class="stat-row"><span class="stat-label">Reset scene</span>   <span class="stat-val blue">Reset button</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Concept callouts -->
+      <div class="concept-box" style="margin-top: 20px">
+        <strong>ANIMATION CONCEPT — The physics loop vs the render loop</strong><br />
+        A physics engine runs at a <em>fixed timestep</em> (60 Hz here) that is independent
+        of the render frame rate. The <strong>fixed timestep accumulator</strong> pattern
+        solves this: each frame, real elapsed time is accumulated; fixed physics steps consume
+        it in 1/60 s chunks. If your machine runs at 30 fps, the accumulator fires
+        <em>two</em> physics steps per render frame. If it runs at 120 fps, it may fire
+        <em>zero</em> (and re-render the last physics state). This guarantees the simulation
+        is deterministic and reproducible regardless of hardware.
+      </div>
+
+      <div class="concept-box blue" style="margin-top: 12px">
+        <strong>RAPIER CONCEPT — RigidBody + Collider are always separate</strong><br />
+        A <code>RigidBody</code> holds mass, velocity, and position. A <code>Collider</code>
+        defines the shape used for collision detection. You attach one or more colliders to a
+        body after creating both. This separation lets you use a cheap convex shape (cuboid,
+        ball, capsule) for physics while rendering a detailed mesh — the collider and the
+        visual mesh never need to match exactly, only approximately.
+      </div>
+
+      <div class="concept-box purple" style="margin-top: 12px">
+        <strong>ANIMATION CONCEPT — Three.js is only the display layer</strong><br />
+        Rapier owns the ground-truth position and orientation of every body.
+        <code>syncPhysicsToRender()</code> copies <code>body.translation()</code> →
+        <code>mesh.position</code> and <code>body.rotation()</code> →
+        <code>mesh.quaternion</code> every frame, after <code>world.step()</code> completes.
+        The Three.js meshes have no physics knowledge — they are purely visual puppets
+        driven by Rapier's state. This same pattern applies to every physics engine
+        integration, not just Rapier.
+      </div>
+    </main>
+
+    <footer>
+      <p><strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau</p>
+      <p>Demo created by <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a>
+         · Physics: <a href="https://rapier.rs" target="_blank" rel="noopener">Rapier</a> (Apache 2.0)
+         · Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">Three.js r165</a> (MIT)</p>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════════════
+      STEP 0: Module imports
+      Three.js is loaded via importmap — no bundler needed.
+      Rapier is an ES module loaded from jsDelivr, pinned to 0.12.0.
+      Both are loaded at the top of the <script type="module"> block
+      so they are available to all subsequent code in the same module.
+    ═══════════════════════════════════════════════════════════ -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 0b: Import Rapier from CDN.
+      // rapier3d-compat is the compatibility build — it supports both
+      // native ES module imports and CommonJS bundler environments.
+      // We use a dynamic import here so the loading overlay is already
+      // visible before the WASM download begins.
+      // ─────────────────────────────────────────────────────────────
+      import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js";
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 1: DOM references
+      // ─────────────────────────────────────────────────────────────
+      const canvas      = document.getElementById("threeCanvas");
+      const canvasWrap  = document.getElementById("canvasWrap");
+      const overlay     = document.getElementById("loadingOverlay");
+      const progressEl  = document.getElementById("loadProgress");
+      const pctLabel    = document.getElementById("loadingPct");
+      const hudBodies   = document.getElementById("hudBodies");
+      const hudSteps    = document.getElementById("hudSteps");
+      const statDynamic = document.getElementById("statDynamic");
+      const statGravity = document.getElementById("statGravity");
+      const gravitySlider = document.getElementById("gravitySlider");
+      const gravityVal    = document.getElementById("gravityVal");
+      const resetBtn      = document.getElementById("resetBtn");
+      const clickHint     = document.getElementById("clickHint");
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 2: Three.js scene setup
+      // We set up the renderer, scene, camera, lights, and OrbitControls
+      // before Rapier is ready, so the canvas is live immediately.
+      // ─────────────────────────────────────────────────────────────
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace  = THREE.SRGBColorSpace;
+      renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c11);
+      scene.fog = new THREE.Fog(0x0a0c11, 30, 60);
+
+      // THREE.JS CONCEPT: PerspectiveCamera(fov, aspect, near, far)
+      // fov: field of view in degrees; aspect: width/height ratio.
+      // near/far: objects outside this range are not rendered.
+      const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+      camera.position.set(6, 6, 10);
+      camera.lookAt(0, 2, 0);
+
+      // OrbitControls — same pattern as seminars 02 and 04.
+      const controls = new OrbitControls(camera, canvas);
+      controls.target.set(0, 2, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.update();
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambient);
+
+      const sun = new THREE.DirectionalLight(0xfff8f0, 2.2);
+      sun.position.set(8, 14, 6);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.near = 0.5;
+      sun.shadow.camera.far  = 60;
+      sun.shadow.camera.left = sun.shadow.camera.bottom = -15;
+      sun.shadow.camera.right = sun.shadow.camera.top   =  15;
+      sun.shadow.bias = -0.001;
+      scene.add(sun);
+
+      // Grid helper — orientation reference
+      const grid = new THREE.GridHelper(30, 30, 0x252b38, 0x1a1f2a);
+      grid.position.y = 0.01; // just above the physics ground
+      scene.add(grid);
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 3: Shared materials
+      // We reuse materials across all box meshes — allocating one
+      // material per box would be wasteful. MeshStandardMaterial uses
+      // PBR (physically based rendering) — the same model used by
+      // Three.js's MeshStandardMaterial in seminars 02 and 04.
+      // ─────────────────────────────────────────────────────────────
+
+      // Box colour palette — boxes cycle through these hues
+      const BOX_COLORS = [0x4f9cf9, 0xa78bfa, 0x34d399, 0xfb923c, 0xf87171];
+      let colorIndex = 0;
+
+      function nextMaterial() {
+        const color = BOX_COLORS[colorIndex % BOX_COLORS.length];
+        colorIndex++;
+        return new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.55,
+          metalness: 0.1,
+        });
+      }
+
+      // Ground visual mesh — matches the Rapier static collider below
+      const groundMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(50, 0.2, 50),
+        new THREE.MeshStandardMaterial({ color: 0x1a1f2a, roughness: 0.9, metalness: 0.0 })
+      );
+      groundMesh.receiveShadow = true;
+      groundMesh.position.y = -0.1; // half-height below y=0 to match collider
+      scene.add(groundMesh);
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 4: Rapier initialisation
+      // RAPIER.init() downloads and compiles the .wasm binary.
+      // This is the ONLY async operation in the whole demo.
+      // Everything physics-related must come after the await.
+      // ─────────────────────────────────────────────────────────────
+
+      // Animate the loading bar while WASM is fetched
+      let loadPct = 0;
+      const fakeProgress = setInterval(() => {
+        loadPct = Math.min(loadPct + 3, 85);
+        progressEl.value = loadPct;
+        pctLabel.textContent = loadPct + "%";
+      }, 60);
+
+      await RAPIER.init();
+
+      clearInterval(fakeProgress);
+      progressEl.value = 100;
+      pctLabel.textContent = "100%";
+
+      // Small delay so students can see the 100% state before it hides
+      await new Promise((r) => setTimeout(r, 300));
+      overlay.classList.add("hidden");
+
+      console.log("Rapier WASM ready. Version:", RAPIER.version());
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 5: Create the Rapier world
+      // A World is the top-level physics container. It holds all rigid
+      // bodies, colliders, and joints. The gravity vector uses SI units:
+      // metres/s². Negative Y = downward (Y-up convention, same as Three.js).
+      //
+      // ANIMATION CONCEPT: Rapier units are SI.
+      // 1 unit = 1 metre, 1 kg, 1 second.
+      // Gravity at 9.81 m/s² matches Earth. Adjust with the slider.
+      // ─────────────────────────────────────────────────────────────
+      let gravityY = -9.81;
+      let world    = new RAPIER.World({ x: 0.0, y: gravityY, z: 0.0 });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 6: Static ground body
+      // RigidBodyDesc.fixed() → body never moves, never affected by forces.
+      // The ground plane in Three.js (100 × 0.2 × 100 m) corresponds to
+      // a Rapier cuboid with half-extents (25, 0.1, 25).
+      //
+      // ANIMATION CONCEPT: static bodies do not sleep, do not move,
+      // and are only tested for collision against dynamic bodies.
+      // Rapier skips the entire integration step for statics —
+      // they add almost zero simulation cost.
+      // ─────────────────────────────────────────────────────────────
+      const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0.0, -0.1, 0.0);
+      const groundBody     = world.createRigidBody(groundBodyDesc);
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(25.0, 0.1, 25.0).setFriction(0.6).setRestitution(0.2),
+        groundBody
+      );
+
+      console.log("Ground body created. Handle:", groundBody.handle);
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 7: Body/mesh registry
+      // We keep a parallel array of { body, mesh } pairs so that
+      // syncPhysicsToRender() can iterate them every frame.
+      // This is the central data structure of the demo.
+      //
+      // ANIMATION CONCEPT: Rapier and Three.js are independent systems.
+      // The registry is the bridge between them. The body holds
+      // physics truth; the mesh is the visual representation.
+      // ─────────────────────────────────────────────────────────────
+      const bodyMeshPairs = []; // { body: RigidBody, mesh: THREE.Mesh }[]
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 8: spawnBox() — creates one paired body+mesh
+      //
+      // Parameters:
+      //   pos   {x,y,z} — initial position in world space (metres)
+      //   size  number  — full side length of the box (metres)
+      //   vel   {x,y,z} — initial linear velocity (m/s), default zero
+      //
+      // ANIMATION CONCEPT: ColliderDesc.cuboid(hx,hy,hz) takes HALF-extents.
+      // A box of side 1 m has half-extents of 0.5 on each axis.
+      // The Three.js BoxGeometry(size, size, size) takes full dimensions.
+      // ─────────────────────────────────────────────────────────────
+
+      /**
+       * Spawn a box rigid body with a matching Three.js mesh.
+       * @param {{ x:number, y:number, z:number }} pos   World-space position (m)
+       * @param {number}                            size  Full side length (m)
+       * @param {{ x:number, y:number, z:number }} [vel] Initial velocity (m/s)
+       */
+      function spawnBox(pos, size = 1.0, vel = { x: 0, y: 0, z: 0 }) {
+        const half = size / 2;
+
+        // --- Rapier side ---
+        // RigidBodyDesc.dynamic() → affected by gravity and collisions.
+        // .setTranslation() sets the initial world-space position.
+        // .setLinvel()      sets the initial linear velocity.
+        const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+          .setTranslation(pos.x, pos.y, pos.z)
+          .setLinvel(vel.x, vel.y, vel.z);
+
+        const body = world.createRigidBody(bodyDesc);
+
+        // ColliderDesc.cuboid(hx, hy, hz) — half-extents in metres.
+        // .setDensity()     → mass = volume × density (kg/m³)
+        // .setRestitution() → bounciness (0 = no bounce, 1 = full bounce)
+        // .setFriction()    → tangential grip (0 = frictionless, high = sticky)
+        world.createCollider(
+          RAPIER.ColliderDesc.cuboid(half, half, half)
+            .setDensity(1.0)
+            .setRestitution(0.35)
+            .setFriction(0.6),
+          body
+        );
+
+        // --- Three.js side ---
+        // BoxGeometry takes FULL dimensions; half = size/2 handled by Rapier.
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(size, size, size),
+          nextMaterial()
+        );
+        mesh.castShadow    = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        // Store the pair so syncPhysicsToRender() can update this mesh
+        bodyMeshPairs.push({ body, mesh });
+
+        console.log(
+          `Box spawned at (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}) ` +
+          `vel=(${vel.x.toFixed(1)}, ${vel.y.toFixed(1)}, ${vel.z.toFixed(1)}) ` +
+          `total dynamic bodies: ${bodyMeshPairs.length}`
+        );
+
+        // Update HUD immediately
+        statDynamic.textContent = bodyMeshPairs.length;
+        hudBodies.textContent   = bodyMeshPairs.length + 1; // +1 for ground
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 9: Spawn the initial stack of boxes
+      // We place 5 boxes in a vertical stack above the origin.
+      // Different sizes add visual interest and demonstrate that
+      // the collider shape (half-extent) always matches the mesh size.
+      // ─────────────────────────────────────────────────────────────
+      function spawnInitialStack() {
+        const sizes   = [1.0, 0.85, 0.75, 0.65, 0.55];
+        let   yOffset = 0.5; // start just above the ground
+
+        for (const s of sizes) {
+          spawnBox({ x: (Math.random() - 0.5) * 0.1, y: yOffset + s / 2, z: (Math.random() - 0.5) * 0.1 }, s);
+          yOffset += s + 0.02; // small gap so they don't start interpenetrating
+        }
+      }
+
+      spawnInitialStack();
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 10: syncPhysicsToRender()
+      // This function is called every frame, after world.step().
+      // It iterates all body/mesh pairs and copies the physics body's
+      // current translation (position) and rotation (quaternion) into
+      // the Three.js mesh transforms.
+      //
+      // ANIMATION CONCEPT: This is the only place where Rapier state
+      // enters Three.js. The rest of the render loop is pure Three.js.
+      // body.translation() returns {x,y,z} in world space (metres).
+      // body.rotation()    returns {x,y,z,w} quaternion.
+      // ─────────────────────────────────────────────────────────────
+
+      /**
+       * Copy Rapier body transforms to Three.js meshes.
+       * Called once per animation frame, after world.step().
+       */
+      function syncPhysicsToRender() {
+        for (const { body, mesh } of bodyMeshPairs) {
+          const pos = body.translation(); // {x, y, z}
+          const rot = body.rotation();    // {x, y, z, w}
+
+          mesh.position.set(pos.x, pos.y, pos.z);
+          mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 11: Fixed-timestep accumulator
+      // The physics engine runs at a fixed rate (FIXED_DT = 1/60 s).
+      // The render loop runs at whatever rate the browser delivers.
+      // The accumulator bridges the two.
+      //
+      // ANIMATION CONCEPT: fixed dt = deterministic simulation.
+      // Variable dt (using the real frame time directly) would produce
+      // different collision outcomes on 30 fps vs 120 fps machines.
+      // Fixed dt ensures the same input always gives the same output.
+      // ─────────────────────────────────────────────────────────────
+      const FIXED_DT   = 1 / 60;
+      const clock      = new THREE.Clock();
+      let   accumulator = 0;
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 12: Raycasting for click-to-throw
+      // We use Three.js's Raycaster to find where the mouse click
+      // intersects the ground plane, then throw a box from the camera
+      // toward that world-space point with an initial velocity.
+      //
+      // ANIMATION CONCEPT: impulse vs velocity.
+      // We set initial velocity directly with .setLinvel() on the body.
+      // An alternative is to apply an impulse: body.applyImpulse().
+      // Both produce a thrown box; .setLinvel() is simpler for spawn.
+      // ─────────────────────────────────────────────────────────────
+      const raycaster     = new THREE.Raycaster();
+      const groundPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // y=0
+      const mouseNDC      = new THREE.Vector2();
+      const throwTarget   = new THREE.Vector3();
+      let   hintFaded     = false;
+
+      canvasWrap.addEventListener("click", (e) => {
+        // Convert mouse pixel coords → Normalised Device Coordinates (NDC)
+        const rect = canvasWrap.getBoundingClientRect();
+        mouseNDC.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+        mouseNDC.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+
+        // Cast a ray from the camera through the NDC point
+        raycaster.setFromCamera(mouseNDC, camera);
+
+        // Find where the ray intersects the y=0 ground plane
+        raycaster.ray.intersectPlane(groundPlane, throwTarget);
+
+        if (!throwTarget) return; // ray missed the plane (looking up)
+
+        // Spawn position: slightly above the camera, offset forward
+        const spawnPos = camera.position.clone().addScaledVector(
+          camera.getWorldDirection(new THREE.Vector3()), 1.5
+        );
+
+        // Throw direction: from spawn toward the target, scaled by speed
+        const throwDir = throwTarget.clone().sub(spawnPos).normalize();
+        const THROW_SPEED = 14; // m/s — fast enough to feel impactful
+
+        const size = 0.5 + Math.random() * 0.6; // random size 0.5–1.1 m
+        spawnBox(
+          { x: spawnPos.x, y: Math.max(spawnPos.y, 1.5), z: spawnPos.z },
+          size,
+          { x: throwDir.x * THROW_SPEED, y: throwDir.y * THROW_SPEED, z: throwDir.z * THROW_SPEED }
+        );
+
+        // Fade the click hint after first use
+        if (!hintFaded) {
+          clickHint.classList.add("fade");
+          hintFaded = true;
+        }
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 13: resetScene()
+      // Removes all dynamic bodies from the Rapier world and their
+      // matching meshes from the Three.js scene, then re-spawns
+      // the initial stack.
+      //
+      // ANIMATION CONCEPT: world.removeRigidBody() frees the body
+      // from the physics simulation immediately. The corresponding
+      // mesh must also be removed from the Three.js scene manually —
+      // the two systems have no automatic coupling.
+      // ─────────────────────────────────────────────────────────────
+
+      /**
+       * Remove all dynamic bodies and meshes, then reset to initial stack.
+       */
+      function resetScene() {
+        // Remove every dynamic body from Rapier and its mesh from Three.js
+        for (const { body, mesh } of bodyMeshPairs) {
+          world.removeRigidBody(body);
+          scene.remove(mesh);
+          mesh.geometry.dispose();
+          mesh.material.dispose();
+        }
+        bodyMeshPairs.length = 0; // clear the array in-place
+        colorIndex = 0;           // reset colour cycling
+
+        // Re-spawn the initial stack
+        spawnInitialStack();
+
+        console.log("Scene reset. Dynamic bodies:", bodyMeshPairs.length);
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 14: setRendererSize()
+      // Keeps the renderer resolution matched to the canvas element's
+      // actual pixel size. Called on init and on every window resize.
+      // ─────────────────────────────────────────────────────────────
+
+      /**
+       * Match renderer output resolution to the canvas DOM element size.
+       */
+      function setRendererSize() {
+        const w = canvasWrap.clientWidth;
+        const h = canvasWrap.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 15: animate() — the main render loop
+      //
+      // This is the heart of the demo. Every frame:
+      //   1. Measure real elapsed time (clock.getDelta())
+      //   2. Add it to the accumulator
+      //   3. Step the physics world for each FIXED_DT chunk consumed
+      //   4. Sync Three.js meshes to Rapier body positions
+      //   5. Update OrbitControls damping
+      //   6. Render the Three.js scene
+      //   7. Update the HUD
+      //
+      // ANIMATION CONCEPT: world.step() advances the simulation by
+      // exactly FIXED_DT seconds. It resolves all forces, integrates
+      // velocities, runs collision detection, and applies impulses.
+      // After step(), body.translation() returns the new position.
+      // ─────────────────────────────────────────────────────────────
+
+      /**
+       * Main animation loop — called by requestAnimationFrame every frame.
+       */
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const elapsed = clock.getDelta(); // real seconds since last frame
+        accumulator  += elapsed;
+
+        // Count how many physics steps we fire this frame (for HUD)
+        let stepsThisFrame = 0;
+
+        // ── Fixed-timestep loop ──────────────────────────────────
+        // Consume accumulated time in FIXED_DT chunks.
+        // If elapsed > FIXED_DT (slow frame), we may step twice.
+        // If elapsed < FIXED_DT (fast frame), we may step zero times.
+        while (accumulator >= FIXED_DT) {
+          world.step(); // RAPIER CONCEPT: advances physics by FIXED_DT seconds
+          accumulator  -= FIXED_DT;
+          stepsThisFrame++;
+        }
+
+        // ── Sync physics → render ────────────────────────────────
+        // After all physics steps, copy body positions to Three.js.
+        syncPhysicsToRender();
+
+        // ── Three.js render ──────────────────────────────────────
+        controls.update(); // apply damping to orbit camera
+        renderer.render(scene, camera);
+
+        // ── HUD update ───────────────────────────────────────────
+        hudSteps.textContent = stepsThisFrame;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 16: Gravity slider
+      // Changing gravity requires recreating the Rapier world because
+      // gravity is set on the World constructor and cannot be changed
+      // after creation on this version of Rapier.
+      // We preserve all existing bodies by clearing and respawning.
+      // ─────────────────────────────────────────────────────────────
+      gravitySlider.addEventListener("input", () => {
+        const g = parseFloat(gravitySlider.value);
+        gravityVal.textContent = g.toFixed(2) + " m/s²";
+        statGravity.textContent = g.toFixed(2) + " m/s²";
+
+        // Recreate the world with the new gravity vector.
+        // RAPIER CONCEPT: gravity is set at World construction time.
+        gravityY = -g;
+        world = new RAPIER.World({ x: 0.0, y: gravityY, z: 0.0 });
+
+        // Recreate the static ground collider in the new world
+        const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0));
+        world.createCollider(
+          RAPIER.ColliderDesc.cuboid(25, 0.1, 25).setFriction(0.6).setRestitution(0.2), gb
+        );
+
+        // Respawn all current dynamic boxes in the new world at their current positions
+        const oldPairs = [...bodyMeshPairs];
+        bodyMeshPairs.length = 0;
+        for (const { body: oldBody, mesh } of oldPairs) {
+          const pos  = oldBody.translation();
+          const size = mesh.geometry.parameters.width; // recover size from geometry
+          const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
+          const newBody  = world.createRigidBody(bodyDesc);
+          world.createCollider(
+            RAPIER.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
+              .setDensity(1.0).setRestitution(0.35).setFriction(0.6),
+            newBody
+          );
+          bodyMeshPairs.push({ body: newBody, mesh });
+        }
+
+        console.log(`Gravity changed to ${g.toFixed(2)} m/s². World recreated.`);
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 17: Reset button
+      // ─────────────────────────────────────────────────────────────
+      resetBtn.addEventListener("click", () => {
+        resetScene();
+        // If gravity was changed, reset it to 9.81 as well
+        gravitySlider.value = "9.81";
+        gravityVal.textContent = "9.81 m/s²";
+        statGravity.textContent = "9.81 m/s²";
+        gravityY = -9.81;
+        world = new RAPIER.World({ x: 0.0, y: gravityY, z: 0.0 });
+        const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0));
+        world.createCollider(
+          RAPIER.ColliderDesc.cuboid(25, 0.1, 25).setFriction(0.6).setRestitution(0.2), gb
+        );
+        // Respawn into the fresh world
+        for (const { body: oldBody, mesh } of [...bodyMeshPairs]) {
+          const pos  = oldBody.translation();
+          const size = mesh.geometry.parameters.width;
+          const bd   = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
+          const nb   = world.createRigidBody(bd);
+          world.createCollider(
+            RAPIER.ColliderDesc.cuboid(size/2, size/2, size/2).setDensity(1.0).setRestitution(0.35).setFriction(0.6), nb
+          );
+        }
+        // resetScene already repopulated bodyMeshPairs; we don't duplicate here
+        // so just log
+        console.log("Full reset complete.");
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 18: Startup
+      // ─────────────────────────────────────────────────────────────
+      window.addEventListener("resize", setRendererSize);
+      setRendererSize();
+      clock.start();
+      animate();
+
+      console.log(
+        "Demo 1 ready.\n" +
+        "  Click the ground to throw boxes.\n" +
+        "  Adjust gravity with the slider.\n" +
+        "  Press Reset to clear and respawn the initial stack.\n" +
+        "  Open this file's source to follow the STEP comments."
+      );
+    </script>
+  </body>
+</html>
