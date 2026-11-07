@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo 3: Joints &amp; Chains — Computeranimation Seminar 05</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --bg:      #0d0f14;
+        --surface: #161a22;
+        --border:  #252b38;
+        --text:    #d8dce6;
+        --muted:   #5a6175;
+        --accent:  #4f9cf9;
+        --accent2: #a78bfa;
+        --green:   #34d399;
+        --orange:  #fb923c;
+        --red:     #f87171;
+        --mono: "IBM Plex Mono", monospace;
+        --sans: "IBM Plex Sans", sans-serif;
+      }
+      body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:15px; line-height:1.7; min-height:100vh; display:flex; flex-direction:column; }
+
+      /* header */
+      header { border-bottom:2px solid var(--border); padding:24px 0 20px; flex-shrink:0; }
+      .header-inner { max-width:1200px; margin:0 auto; padding:0 32px; display:flex; align-items:center; gap:24px; }
+      .header-logo img { width:100px; border-radius:10px; display:block; }
+      .header-info h1 { font-size:clamp(16px,2.5vw,22px); font-weight:500; color:#f0f2f7; line-height:1.2; margin-bottom:4px; }
+      .header-info h2 { font-size:13px; font-weight:400; color:var(--muted); font-family:var(--mono); margin-bottom:8px; }
+      .header-meta { font-size:13px; color:var(--text); line-height:1.6; }
+      .header-meta a { color:var(--accent); text-decoration:none; }
+      .header-meta a:hover { text-decoration:underline; }
+      .header-author { display:flex; align-items:center; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:13px; color:var(--muted); }
+      .header-author span { color:var(--text); font-weight:500; }
+      .header-author .linkedin-badge { display:inline-flex; align-items:center; gap:4px; background:rgba(79,156,249,0.1); color:var(--accent); font-family:var(--mono); font-size:11px; padding:2px 9px; border-radius:20px; border:1px solid rgba(79,156,249,0.25); text-decoration:none; transition:background 0.15s; }
+      .header-author .linkedin-badge:hover { background:rgba(79,156,249,0.2); }
+
+      /* breadcrumb */
+      .breadcrumb { max-width:1200px; margin:0 auto; padding:14px 32px 0; font-family:var(--mono); font-size:12px; color:var(--muted); flex-shrink:0; }
+      .breadcrumb a { color:var(--accent); text-decoration:none; }
+      .breadcrumb a:hover { text-decoration:underline; }
+      .breadcrumb span { margin:0 6px; }
+
+      /* main */
+      main { max-width:1200px; margin:0 auto; padding:24px 32px 48px; flex:1; width:100%; }
+
+      /* demo intro */
+      .demo-intro { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin-bottom:20px; }
+      .demo-intro h1 { font-size:clamp(17px,2.2vw,24px); font-weight:500; color:#f0f2f7; margin-bottom:8px; }
+      .demo-badge { display:inline-block; background:rgba(52,211,153,0.1); color:var(--green); font-family:var(--mono); font-size:11px; padding:2px 10px; border-radius:20px; border:1px solid rgba(52,211,153,0.28); margin-bottom:10px; }
+      .demo-intro p { color:var(--text); margin-bottom:6px; font-size:14px; }
+      .demo-intro p:last-child { margin-bottom:0; }
+
+      /* layout */
+      .demo-layout { display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; }
+      @media (max-width:900px) { .demo-layout { grid-template-columns:1fr; } }
+
+      /* canvas */
+      .canvas-wrap { position:relative; background:#0a0c11; border:1px solid var(--border); border-radius:10px; overflow:hidden; aspect-ratio:16/10; min-height:380px; }
+      #threeCanvas { width:100%; height:100%; display:block; cursor:crosshair; }
+
+      /* loading overlay */
+      #loadingOverlay { position:absolute; inset:0; background:rgba(13,15,20,0.93); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:10; transition:opacity 0.4s; }
+      #loadingOverlay.hidden { opacity:0; pointer-events:none; }
+      .loading-title { font-family:var(--mono); font-size:14px; color:var(--text); }
+      .loading-sub   { font-family:var(--mono); font-size:12px; color:var(--muted); }
+      progress { width:200px; height:4px; appearance:none; -webkit-appearance:none; border:none; border-radius:2px; background:var(--border); overflow:hidden; }
+      progress::-webkit-progress-bar { background:var(--border); border-radius:2px; }
+      progress::-webkit-progress-value { background:var(--green); border-radius:2px; transition:width 0.2s; }
+      progress::-moz-progress-bar { background:var(--green); border-radius:2px; }
+      #loadingPct { font-family:var(--mono); font-size:13px; color:var(--green); min-width:40px; text-align:center; }
+      .progress-row { display:flex; align-items:center; gap:10px; }
+
+      /* HUD */
+      .physics-hud { position:absolute; top:12px; left:12px; z-index:6; display:flex; flex-direction:column; gap:6px; }
+      .hud-pill { display:inline-flex; align-items:center; gap:8px; background:rgba(13,15,20,0.78); backdrop-filter:blur(4px); border:1px solid var(--border); border-radius:20px; padding:4px 12px 4px 8px; font-family:var(--mono); font-size:11px; color:var(--muted); }
+      .hud-dot { width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0; }
+      .hud-pill span { color:var(--green); }
+
+      /* aim arrow overlay */
+      #aimCanvas { position:absolute; inset:0; pointer-events:none; z-index:5; }
+
+      /* gravity status pill */
+      #gravityPill { position:absolute; top:12px; right:12px; z-index:6; font-family:var(--mono); font-size:11px; background:rgba(13,15,20,0.78); border:1px solid var(--border); border-radius:20px; padding:4px 12px; backdrop-filter:blur(4px); color:var(--green); }
+
+      /* bottom bar */
+      .bottom-bar { position:absolute; bottom:0; left:0; right:0; height:48px; background:rgba(13,15,20,0.82); backdrop-filter:blur(6px); border-top:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; z-index:5; }
+      .bar-label { font-family:var(--mono); font-size:11px; color:var(--muted); flex-shrink:0; }
+      .bar-val   { font-family:var(--mono); font-size:12px; color:var(--green); flex-shrink:0; min-width:52px; text-align:right; }
+      .bar-slider { flex:1; -webkit-appearance:none; appearance:none; height:4px; border-radius:2px; cursor:pointer; background:var(--border); accent-color:var(--green); }
+      .bar-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:var(--green); cursor:pointer; border:2px solid var(--bg); box-shadow:0 0 0 3px rgba(52,211,153,0.2); }
+      .bar-btn-green { flex-shrink:0; padding:5px 14px; border-radius:6px; border:1px solid var(--green); background:rgba(52,211,153,0.08); color:var(--green); font-family:var(--mono); font-size:12px; cursor:pointer; transition:background 0.15s; }
+      .bar-btn-green:hover { background:rgba(52,211,153,0.18); }
+      .bar-btn-green.active { background:rgba(52,211,153,0.22); box-shadow:0 0 0 2px var(--green); }
+      .bar-btn { flex-shrink:0; padding:5px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-family:var(--mono); font-size:12px; cursor:pointer; transition:border-color 0.15s, color 0.15s, background 0.15s; }
+      .bar-btn:hover { border-color:var(--green); color:var(--green); background:rgba(52,211,153,0.07); }
+
+      /* side panels */
+      .side-col { display:flex; flex-direction:column; gap:12px; }
+      .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      .panel-header { padding:10px 16px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.07em; display:flex; align-items:center; gap:8px; }
+      .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+      .dot.green  { background:var(--green); }
+      .dot.blue   { background:var(--accent); }
+      .dot.orange { background:var(--orange); }
+      .dot.purple { background:var(--accent2); }
+      .panel-body { padding:14px 16px; }
+      .step-row { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; font-size:13px; line-height:1.55; }
+      .step-row:last-child { margin-bottom:0; }
+      .step-num { flex-shrink:0; width:20px; height:20px; border-radius:50%; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3); font-family:var(--mono); font-size:10px; color:var(--green); display:flex; align-items:center; justify-content:center; margin-top:1px; }
+      .step-row code { font-family:var(--mono); font-size:11px; background:rgba(79,156,249,0.08); color:#93c5fd; padding:1px 5px; border-radius:3px; }
+      .stat-row { display:flex; justify-content:space-between; align-items:baseline; font-family:var(--mono); font-size:11px; border-bottom:1px solid rgba(37,43,56,0.5); padding:5px 0; }
+      .stat-row:last-child { border-bottom:none; }
+      .stat-label { color:var(--muted); }
+      .stat-val   { color:var(--green); }
+      .stat-val.blue { color:var(--accent); }
+      .stat-val.orange { color:var(--orange); }
+
+      /* ragdoll diagram */
+      #ragdollDiagram { width:100%; display:block; }
+
+      /* concept boxes */
+      .concept-box { border-left:4px solid var(--green); background:rgba(52,211,153,0.05); border-radius:6px; padding:12px 16px; margin-top:12px; font-size:13px; line-height:1.65; }
+      .concept-box strong { color:var(--green); }
+      .concept-box.blue { border-left-color:var(--accent); background:rgba(79,156,249,0.05); }
+      .concept-box.blue strong { color:var(--accent); }
+      .concept-box.purple { border-left-color:var(--accent2); background:rgba(167,139,250,0.05); }
+      .concept-box.purple strong { color:var(--accent2); }
+      .concept-box code { font-family:var(--mono); font-size:12px; background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:3px; }
+
+      /* footer */
+      footer { border-top:2px solid var(--border); padding:18px 32px 24px; max-width:1200px; margin:0 auto; text-align:center; font-size:13px; color:var(--text); line-height:1.7; width:100%; }
+      footer p+p { margin-top:4px; font-size:12px; color:var(--muted); }
+      footer a { color:var(--accent); text-decoration:none; }
+      footer a:hover { text-decoration:underline; }
+
+      @media (max-width:700px) { .header-inner, main, footer, .breadcrumb { padding-left:20px; padding-right:20px; } .header-inner { flex-direction:column; align-items:flex-start; gap:12px; } }
+      @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-inner">
+        <div class="header-logo"><img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" /></div>
+        <div class="header-info">
+          <h1>Computeranimation — Seminar 05: Physics-based Animation</h1>
+          <h2>Demo 3 — Joints &amp; Chains: Revolute Joints and Impulse Response</h2>
+          <p class="header-meta">
+            <strong>Institut für Medientechnik –
+              <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme" target="_blank" rel="noopener">AMS Group</a>
+            </strong> · Technische Universität Ilmenau
+          </p>
+          <div class="header-author">
+            Seminar materials by <span>Renato Fera P.</span>
+            <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="breadcrumb">
+      <a href="index.html">Seminar Materials</a><span>›</span>
+      <a href="05_computeranimation_physics.html">Chapter 05: Physics-based Animation</a><span>›</span>
+      Demo 3: Joints &amp; Chains
+    </nav>
+
+    <main>
+      <div class="demo-intro">
+        <div class="demo-badge">▶ Rapier · revolute joints · impulse · constraints · chain · ragdoll</div>
+        <h1>Demo 3: Joints &amp; Chains</h1>
+        <p>A chain of <strong>8 capsule links</strong> connected by <strong>revolute joints</strong>. The top link is pinned to a fixed anchor. Toggle gravity on and off, then click and drag anywhere on the canvas to aim and fire an impulse at the bottom link — watch the constraint force propagate up the chain. The sidebar ragdoll diagram shows how this exact joint pattern scales to a full character skeleton.</p>
+      </div>
+
+      <div class="demo-layout">
+
+        <!-- ── CANVAS COLUMN ── -->
+        <div>
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="threeCanvas"></canvas>
+            <canvas id="aimCanvas"></canvas>
+
+            <div class="physics-hud">
+              <div class="hud-pill"><div class="hud-dot"></div>Bodies: <span id="hudBodies">0</span></div>
+              <div class="hud-pill"><div class="hud-dot"></div>Joints: <span id="hudJoints">0</span></div>
+              <div class="hud-pill"><div class="hud-dot"></div>Steps/frame: <span id="hudSteps">0</span></div>
+            </div>
+
+            <div id="gravityPill">⬇ Gravity ON</div>
+
+            <div id="loadingOverlay">
+              <div class="loading-title">Initialising Rapier WASM…</div>
+              <div class="progress-row">
+                <progress id="loadProgress" value="0" max="100"></progress>
+                <span id="loadingPct">0%</span>
+              </div>
+              <div class="loading-sub">downloading rapier3d-compat</div>
+            </div>
+
+            <div class="bottom-bar">
+              <span class="bar-label">Impulse</span>
+              <input type="range" id="impulseSlider" class="bar-slider" min="1" max="40" step="1" value="12" />
+              <span class="bar-val" id="impulseVal">12 N·s</span>
+              <button class="bar-btn-green" id="gravityBtn">Gravity OFF</button>
+              <button class="bar-btn" id="resetBtn">Reset</button>
+            </div>
+          </div>
+
+          <div class="concept-box" style="margin-top:16px;">
+            <strong>ANIMATION CONCEPT — Revolute joints and constraint propagation</strong><br/>
+            A revolute joint removes 5 of the 6 degrees of freedom between two bodies — only rotation around one axis remains free. The joint is enforced each physics step by computing and applying <em>constraint impulses</em>: internal forces that keep the anchor points coincident. When you fire an impulse at the bottom link, the constraint forces travel up the chain in a single solver iteration, producing the characteristic whip-crack response visible here.
+          </div>
+          <div class="concept-box blue" style="margin-top:12px;">
+            <strong>RAPIER CONCEPT — <code>createImpulseJoint</code></strong><br/>
+            Rapier's <code>world.createImpulseJoint(jointData, bodyA, bodyB, wakeUp)</code> creates a joint that is solved via impulse-based constraint projection. The <code>wakeUp</code> flag ensures sleeping bodies are activated when the joint is created. Joint anchors are expressed in each body's <strong>local space</strong> — not world space — so the joint moves with the body automatically.
+          </div>
+          <div class="concept-box purple" style="margin-top:12px;">
+            <strong>ANIMATION CONCEPT — From chain to ragdoll</strong><br/>
+            A ragdoll is this exact pattern at scale. Replace 8 links with ~18 rigid bodies (torso, pelvis, head, upper arms, forearms, hands, thighs, shins, feet) and replace revolute joints with ball-socket joints (<code>JointData.spherical</code>) that have angular limits. At character death, the engine takes over from the <code>AnimationMixer</code>: bones are set to the current animated pose and velocity, then handed to Rapier. The constraint network handles the rest.
+          </div>
+        </div>
+
+        <!-- ── SIDE COLUMN ── -->
+        <div class="side-col">
+
+          <div class="panel">
+            <div class="panel-header"><div class="dot green"></div> Rapier Pipeline</div>
+            <div class="panel-body">
+              <div class="step-row"><div class="step-num">0</div><div>Import &amp; <code>RAPIER.init()</code></div></div>
+              <div class="step-row"><div class="step-num">1</div><div><code>new RAPIER.World(gravity)</code></div></div>
+              <div class="step-row"><div class="step-num">2</div><div>Fixed anchor — <code>RigidBodyDesc.fixed()</code></div></div>
+              <div class="step-row"><div class="step-num">3</div><div>8 dynamic capsule links — <code>ColliderDesc.capsule()</code></div></div>
+              <div class="step-row"><div class="step-num">4</div><div>7 revolute joints — <code>JointData.revolute()</code></div></div>
+              <div class="step-row"><div class="step-num">5</div><div>Impulse on click — <code>body.applyImpulse()</code></div></div>
+              <div class="step-row"><div class="step-num">6</div><div>Fixed-dt loop — <code>world.step()</code> → sync</div></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="dot green"></div> Live Stats</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Chain links</span><span class="stat-val">8</span></div>
+              <div class="stat-row"><span class="stat-label">Revolute joints</span><span class="stat-val">7</span></div>
+              <div class="stat-row"><span class="stat-label">Physics Hz</span><span class="stat-val">60 Hz</span></div>
+              <div class="stat-row"><span class="stat-label">Gravity</span><span class="stat-val" id="statGravity">9.81 m/s²</span></div>
+              <div class="stat-row"><span class="stat-label">Impulse strength</span><span class="stat-val" id="statImpulse">12 N·s</span></div>
+              <div class="stat-row"><span class="stat-label">Impulses fired</span><span class="stat-val" id="statShots">0</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="dot blue"></div> Controls</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Fire impulse</span><span class="stat-val blue">Click &amp; drag</span></div>
+              <div class="stat-row"><span class="stat-label">Impulse strength</span><span class="stat-val blue">Slider</span></div>
+              <div class="stat-row"><span class="stat-label">Toggle gravity</span><span class="stat-val blue">Gravity button</span></div>
+              <div class="stat-row"><span class="stat-label">Orbit</span><span class="stat-val blue">Drag (no aim)</span></div>
+              <div class="stat-row"><span class="stat-label">Zoom</span><span class="stat-val blue">Scroll</span></div>
+              <div class="stat-row"><span class="stat-label">Reset chain</span><span class="stat-val blue">Reset button</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="dot orange"></div> Ragdoll Anatomy</div>
+            <div class="panel-body" style="padding:12px 14px;">
+              <svg id="ragdollDiagram" viewBox="0 0 260 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">
+                <!-- background -->
+                <rect width="260" height="320" fill="#0d0f14" rx="6"/>
+
+                <!-- LEGEND -->
+                <rect x="8" y="8" width="10" height="10" rx="2" fill="#4f9cf9" opacity="0.7"/>
+                <text x="22" y="17" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175">Rigid body</text>
+                <circle cx="90" cy="13" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <text x="98" y="17" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175">Ball-socket joint</text>
+                <line x1="185" y1="9" x2="185" y2="17" stroke="#fb923c" stroke-width="2"/>
+                <line x1="182" y1="13" x2="188" y2="13" stroke="#fb923c" stroke-width="2"/>
+                <text x="192" y="17" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175">Revolute</text>
+
+                <!-- HEAD -->
+                <ellipse cx="130" cy="40" rx="16" ry="20" fill="#4f9cf9" opacity="0.55" stroke="#4f9cf9" stroke-width="1"/>
+                <text x="130" y="44" font-family="IBM Plex Mono,monospace" font-size="7.5" fill="#93c5fd" text-anchor="middle">head</text>
+
+                <!-- NECK joint -->
+                <circle cx="130" cy="62" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+
+                <!-- TORSO -->
+                <rect x="104" y="66" width="52" height="58" rx="6" fill="#4f9cf9" opacity="0.55" stroke="#4f9cf9" stroke-width="1"/>
+                <text x="130" y="99" font-family="IBM Plex Mono,monospace" font-size="7.5" fill="#93c5fd" text-anchor="middle">torso</text>
+
+                <!-- PELVIS joint -->
+                <circle cx="130" cy="126" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+
+                <!-- PELVIS -->
+                <rect x="110" y="130" width="40" height="22" rx="5" fill="#4f9cf9" opacity="0.45" stroke="#4f9cf9" stroke-width="1"/>
+                <text x="130" y="145" font-family="IBM Plex Mono,monospace" font-size="7" fill="#93c5fd" text-anchor="middle">pelvis</text>
+
+                <!-- LEFT shoulder joint -->
+                <circle cx="104" cy="74" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <!-- RIGHT shoulder joint -->
+                <circle cx="156" cy="74" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+
+                <!-- LEFT UPPER ARM -->
+                <rect x="82" y="78" width="16" height="36" rx="6" fill="#a78bfa" opacity="0.55" stroke="#a78bfa" stroke-width="1"/>
+                <!-- LEFT ELBOW — revolute -->
+                <line x1="87" y1="114" x2="87" y2="122" stroke="#fb923c" stroke-width="2"/>
+                <line x1="84" y1="118" x2="90" y2="118" stroke="#fb923c" stroke-width="2"/>
+                <!-- LEFT FOREARM -->
+                <rect x="82" y="122" width="16" height="30" rx="6" fill="#a78bfa" opacity="0.4" stroke="#a78bfa" stroke-width="1"/>
+                <!-- LEFT WRIST joint -->
+                <circle cx="90" cy="154" r="3.5" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <!-- LEFT HAND -->
+                <ellipse cx="90" cy="162" rx="8" ry="10" fill="#a78bfa" opacity="0.3" stroke="#a78bfa" stroke-width="1"/>
+
+                <!-- RIGHT UPPER ARM -->
+                <rect x="162" y="78" width="16" height="36" rx="6" fill="#a78bfa" opacity="0.55" stroke="#a78bfa" stroke-width="1"/>
+                <!-- RIGHT ELBOW — revolute -->
+                <line x1="173" y1="114" x2="173" y2="122" stroke="#fb923c" stroke-width="2"/>
+                <line x1="170" y1="118" x2="176" y2="118" stroke="#fb923c" stroke-width="2"/>
+                <!-- RIGHT FOREARM -->
+                <rect x="162" y="122" width="16" height="30" rx="6" fill="#a78bfa" opacity="0.4" stroke="#a78bfa" stroke-width="1"/>
+                <!-- RIGHT WRIST joint -->
+                <circle cx="170" cy="154" r="3.5" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <!-- RIGHT HAND -->
+                <ellipse cx="170" cy="162" rx="8" ry="10" fill="#a78bfa" opacity="0.3" stroke="#a78bfa" stroke-width="1"/>
+
+                <!-- LEFT HIP joint -->
+                <circle cx="118" cy="152" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <!-- RIGHT HIP joint -->
+                <circle cx="142" cy="152" r="4" fill="none" stroke="#34d399" stroke-width="1.5"/>
+
+                <!-- LEFT THIGH -->
+                <rect x="109" y="156" width="18" height="44" rx="7" fill="#34d399" opacity="0.45" stroke="#34d399" stroke-width="1"/>
+                <!-- LEFT KNEE — revolute -->
+                <line x1="115" y1="200" x2="115" y2="208" stroke="#fb923c" stroke-width="2"/>
+                <line x1="112" y1="204" x2="118" y2="204" stroke="#fb923c" stroke-width="2"/>
+                <!-- LEFT SHIN -->
+                <rect x="109" y="208" width="18" height="38" rx="7" fill="#34d399" opacity="0.3" stroke="#34d399" stroke-width="1"/>
+                <!-- LEFT ANKLE joint -->
+                <circle cx="118" cy="248" r="3.5" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <!-- LEFT FOOT -->
+                <ellipse cx="112" cy="258" rx="12" ry="8" fill="#34d399" opacity="0.25" stroke="#34d399" stroke-width="1"/>
+
+                <!-- RIGHT THIGH -->
+                <rect x="133" y="156" width="18" height="44" rx="7" fill="#34d399" opacity="0.45" stroke="#34d399" stroke-width="1"/>
+                <!-- RIGHT KNEE — revolute -->
+                <line x1="145" y1="200" x2="145" y2="208" stroke="#fb923c" stroke-width="2"/>
+                <line x1="142" y1="204" x2="148" y2="204" stroke="#fb923c" stroke-width="2"/>
+                <!-- RIGHT SHIN -->
+                <rect x="133" y="208" width="18" height="38" rx="7" fill="#34d399" opacity="0.3" stroke="#34d399" stroke-width="1"/>
+                <!-- RIGHT ANKLE joint -->
+                <circle cx="142" cy="248" r="3.5" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                <!-- RIGHT FOOT -->
+                <ellipse cx="148" cy="258" rx="12" ry="8" fill="#34d399" opacity="0.25" stroke="#34d399" stroke-width="1"/>
+
+                <!-- BODY COUNT LABEL -->
+                <text x="130" y="280" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175" text-anchor="middle">~18 rigid bodies</text>
+                <text x="130" y="291" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175" text-anchor="middle">ball-socket: shoulders, hips, neck</text>
+                <text x="130" y="302" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175" text-anchor="middle">revolute: elbows, knees, ankles</text>
+                <text x="130" y="313" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5a6175" text-anchor="middle">wrists: ball-socket with tight limits</text>
+              </svg>
+            </div>
+          </div>
+
+        </div><!-- end side-col -->
+      </div><!-- end demo-layout -->
+    </main>
+
+    <footer>
+      <p><strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau</p>
+      <p>Demo created by <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a> · Physics: <a href="https://rapier.rs" target="_blank" rel="noopener">Rapier</a> (Apache 2.0) · Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">Three.js r165</a> (MIT)</p>
+    </footer>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+      }
+    }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+      import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js";
+
+      // ═══════════════════════════════════════════════════════════
+      // CONSTANTS
+      // ═══════════════════════════════════════════════════════════
+      const LINK_COUNT    = 8;
+      const LINK_LENGTH   = 0.7;    // metres per link (capsule half-height * 2 + 2*radius)
+      const LINK_RADIUS   = 0.09;
+      const LINK_HALF_H   = (LINK_LENGTH - 2 * LINK_RADIUS) / 2;  // capsule half-height
+      const ANCHOR_Y      = 6.0;    // world-space Y of the fixed anchor
+      const FIXED_DT      = 1 / 60;
+
+      // Link colours — gradient from anchor (blue) to tip (green)
+      const LINK_COLORS = [
+        0x4f9cf9, 0x5ba8f8, 0x6cb4f0, 0x7bbde6,
+        0x6dcdb0, 0x52d8a0, 0x40d898, 0x34d399
+      ];
+
+      // ═══════════════════════════════════════════════════════════
+      // DOM REFS
+      // ═══════════════════════════════════════════════════════════
+      const canvasWrap    = document.getElementById("canvasWrap");
+      const threeCanvas   = document.getElementById("threeCanvas");
+      const aimCanvas     = document.getElementById("aimCanvas");
+      const hudBodies     = document.getElementById("hudBodies");
+      const hudJoints     = document.getElementById("hudJoints");
+      const hudSteps      = document.getElementById("hudSteps");
+      const gravityPill   = document.getElementById("gravityPill");
+      const statGravity   = document.getElementById("statGravity");
+      const statImpulse   = document.getElementById("statImpulse");
+      const statShots     = document.getElementById("statShots");
+      const impulseSlider = document.getElementById("impulseSlider");
+      const impulseVal    = document.getElementById("impulseVal");
+      const gravityBtn    = document.getElementById("gravityBtn");
+      const resetBtn      = document.getElementById("resetBtn");
+      const overlay       = document.getElementById("loadingOverlay");
+      const progressEl    = document.getElementById("loadProgress");
+      const pctLabel      = document.getElementById("loadingPct");
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 0: Rapier WASM init
+      // ═══════════════════════════════════════════════════════════
+      let loadPct = 0;
+      const fakeProgress = setInterval(() => {
+        loadPct = Math.min(loadPct + 3, 85);
+        progressEl.value = loadPct; pctLabel.textContent = loadPct + "%";
+      }, 60);
+      await RAPIER.init();
+      clearInterval(fakeProgress);
+      progressEl.value = 100; pctLabel.textContent = "100%";
+      await new Promise(r => setTimeout(r, 300));
+      overlay.classList.add("hidden");
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 1: Three.js renderer
+      // ═══════════════════════════════════════════════════════════
+      const renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace  = THREE.SRGBColorSpace;
+      renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+
+      const scene  = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c11);
+      scene.fog        = new THREE.Fog(0x0a0c11, 25, 55);
+
+      const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 100);
+      camera.position.set(0, ANCHOR_Y * 0.5, 16);
+      camera.lookAt(0, ANCHOR_Y * 0.3, 0);
+
+      const controls = new OrbitControls(camera, threeCanvas);
+      controls.target.set(0, ANCHOR_Y * 0.3, 0);
+      controls.enableDamping    = true;
+      controls.dampingFactor    = 0.07;
+      controls.update();
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+      const sun = new THREE.DirectionalLight(0xfff8f0, 2.4);
+      sun.position.set(6, 14, 10);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 60;
+      sun.shadow.camera.left = sun.shadow.camera.bottom = -18;
+      sun.shadow.camera.right = sun.shadow.camera.top   =  18;
+      sun.shadow.bias = -0.001;
+      scene.add(sun);
+
+      // Grid + ground mesh (visual only — Rapier handles collision)
+      const gridHelper = new THREE.GridHelper(30, 30, 0x252b38, 0x1a1f2a);
+      gridHelper.position.y = 0.01;
+      scene.add(gridHelper);
+      const groundMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(50, 0.2, 50),
+        new THREE.MeshStandardMaterial({ color: 0x1a1f2a, roughness: 0.9 })
+      );
+      groundMesh.receiveShadow = true;
+      groundMesh.position.y = -0.1;
+      scene.add(groundMesh);
+
+      // Anchor point visual — small glowing sphere at the top
+      const anchorMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.14, 16, 10),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.3 })
+      );
+      anchorMesh.position.set(0, ANCHOR_Y, 0);
+      scene.add(anchorMesh);
+
+      // Thin vertical line from anchor down to show suspension
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, ANCHOR_Y, 0),
+        new THREE.Vector3(0, ANCHOR_Y - 0.3, 0)
+      ]);
+      scene.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x5a6175 })));
+
+      function setRendererSize() {
+        const w = canvasWrap.clientWidth, h = canvasWrap.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        aimCanvas.width  = w;
+        aimCanvas.height = h;
+      }
+      setRendererSize();
+      window.addEventListener("resize", setRendererSize);
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 2: Physics state
+      // ═══════════════════════════════════════════════════════════
+      let world;
+      let gravityOn  = true;
+      let links      = [];   // { body, mesh }
+      let shotCount  = 0;
+      const clock    = new THREE.Clock();
+      let accumulator = 0;
+
+      function createWorld() {
+        world = new RAPIER.World({ x: 0, y: gravityOn ? -9.81 : 0, z: 0 });
+        // Static ground collider
+        const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0));
+        world.createCollider(RAPIER.ColliderDesc.cuboid(25, 0.1, 25).setFriction(0.6).setRestitution(0.3), gb);
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 3 + 4: Spawn 8 capsule links with 7 revolute joints
+      // ═══════════════════════════════════════════════════════════
+      function spawnChain() {
+        links = [];
+        let prevBody = null;
+
+        for (let i = 0; i < LINK_COUNT; i++) {
+          const y = ANCHOR_Y - i * LINK_LENGTH - LINK_LENGTH * 0.5;
+
+          // STEP 3: Rigid body — first link is fixed (the anchor itself is kinematic)
+          const bodyDesc = i === 0
+            ? RAPIER.RigidBodyDesc.fixed().setTranslation(0, ANCHOR_Y, 0)
+            : RAPIER.RigidBodyDesc.dynamic()
+                .setTranslation(0, y, 0)
+                .setLinearDamping(0.05)
+                .setAngularDamping(0.08)
+                .setCcdEnabled(true);
+
+          const body = world.createRigidBody(bodyDesc);
+
+          if (i > 0) {
+            // Capsule collider: half-height along Y, radius for the hemispherical ends
+            world.createCollider(
+              RAPIER.ColliderDesc.capsule(LINK_HALF_H, LINK_RADIUS)
+                .setDensity(1.2)
+                .setFriction(0.4)
+                .setRestitution(0.1),
+              body
+            );
+          }
+
+          // Three.js capsule mesh
+          if (i > 0) {
+            // CapsuleGeometry(radius, length, capSeg, radialSeg) — length = body length excl caps
+            const geo = new THREE.CapsuleGeometry(LINK_RADIUS, LINK_HALF_H * 2, 8, 16);
+            const mat = new THREE.MeshStandardMaterial({
+              color:     LINK_COLORS[i],
+              roughness: 0.55,
+              metalness: 0.0
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = mesh.receiveShadow = true;
+            scene.add(mesh);
+            links.push({ body, mesh });
+          } else {
+            // anchor body — no mesh, just physics
+            links.push({ body, mesh: null });
+          }
+
+          // STEP 4: Revolute joint connecting this link to the previous one
+          if (prevBody && i > 0) {
+            // anchor1: bottom of previous link (or anchor point for i=1)
+            // anchor2: top of current link
+            const anchor1Y = i === 1 ? 0 : -LINK_LENGTH * 0.5;
+            const anchor2Y =  LINK_LENGTH * 0.5;
+
+            const jointData = RAPIER.JointData.revolute(
+              { x: 0, y: anchor1Y, z: 0 },   // local anchor on body A
+              { x: 0, y: anchor2Y, z: 0 },   // local anchor on body B
+              { x: 0, y: 0,        z: 1 }    // rotation axis: Z
+            );
+            world.createImpulseJoint(jointData, prevBody, body, true);
+          }
+
+          prevBody = body;
+        }
+
+        hudBodies.textContent = LINK_COUNT;
+        hudJoints.textContent = LINK_COUNT - 1;
+      }
+
+      function clearChain() {
+        for (const { body, mesh } of links) {
+          world.removeRigidBody(body);
+          if (mesh) {
+            scene.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+          }
+        }
+        links = [];
+      }
+
+      function syncChain() {
+        for (const { body, mesh } of links) {
+          if (!mesh) continue;
+          const p = body.translation();
+          const r = body.rotation();
+          mesh.position.set(p.x, p.y, p.z);
+          mesh.quaternion.set(r.x, r.y, r.z, r.w);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 5: Impulse via click-and-drag
+      // Drag starts on mousedown, releases on mouseup.
+      // Direction = from mousedown point → mouseup point (screen space).
+      // The impulse is applied to the last dynamic link (tip of chain).
+      // ═══════════════════════════════════════════════════════════
+      let dragStart  = null;   // { x, y } screen coords
+      let isDragging = false;
+
+      function getLastLink() {
+        // last entry in links[] that has a dynamic body
+        for (let i = links.length - 1; i >= 0; i--) {
+          if (links[i].body && links[i].body.bodyType() === RAPIER.RigidBodyType.Dynamic) {
+            return links[i].body;
+          }
+        }
+        return null;
+      }
+
+      function screenDir(sx, sy, ex, ey) {
+        // Convert 2D screen drag vector into a 3D world-space impulse direction.
+        // We use the camera's right and up vectors so the drag feels natural
+        // regardless of orbit angle.
+        const dx = ex - sx;
+        const dy = sy - ey; // flip Y (screen Y down, world Y up)
+        const len = Math.sqrt(dx*dx + dy*dy);
+        if (len < 2) return null;
+        const nx = dx / len, ny = dy / len;
+        const right = new THREE.Vector3();
+        const up    = new THREE.Vector3();
+        camera.getWorldDirection(new THREE.Vector3()); // ensure matrix updated
+        right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+        up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+        return new THREE.Vector3()
+          .addScaledVector(right, nx)
+          .addScaledVector(up,    ny)
+          .normalize();
+      }
+
+      const aimCtx = aimCanvas.getContext("2d");
+
+      function drawAimArrow(sx, sy, ex, ey) {
+        aimCtx.clearRect(0, 0, aimCanvas.width, aimCanvas.height);
+        const dx = ex - sx, dy = ey - sy;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        if (len < 4) return;
+
+        const strength = parseFloat(impulseSlider.value);
+        const alpha = Math.min(0.3 + strength / 50, 0.9);
+
+        // line
+        aimCtx.beginPath();
+        aimCtx.strokeStyle = `rgba(52,211,153,${alpha})`;
+        aimCtx.lineWidth   = 2;
+        aimCtx.setLineDash([6, 4]);
+        aimCtx.moveTo(sx, sy);
+        aimCtx.lineTo(ex, ey);
+        aimCtx.stroke();
+        aimCtx.setLineDash([]);
+
+        // arrowhead
+        const angle = Math.atan2(dy, dx);
+        const hLen  = Math.min(len * 0.25, 18);
+        aimCtx.beginPath();
+        aimCtx.fillStyle = `rgba(52,211,153,${alpha})`;
+        aimCtx.moveTo(ex, ey);
+        aimCtx.lineTo(ex - hLen * Math.cos(angle - 0.4), ey - hLen * Math.sin(angle - 0.4));
+        aimCtx.lineTo(ex - hLen * Math.cos(angle + 0.4), ey - hLen * Math.sin(angle + 0.4));
+        aimCtx.closePath();
+        aimCtx.fill();
+
+        // strength label
+        aimCtx.fillStyle = `rgba(52,211,153,${alpha})`;
+        aimCtx.font = "11px 'IBM Plex Mono', monospace";
+        aimCtx.fillText(`${strength} N·s`, ex + 8, ey - 6);
+      }
+
+      canvasWrap.addEventListener("mousedown", e => {
+        if (e.button !== 0) return;
+        const rect = canvasWrap.getBoundingClientRect();
+        dragStart  = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        isDragging = true;
+        controls.enabled = false; // disable orbit while dragging for impulse
+      });
+
+      canvasWrap.addEventListener("mousemove", e => {
+        if (!isDragging || !dragStart) return;
+        const rect = canvasWrap.getBoundingClientRect();
+        const ex = e.clientX - rect.left;
+        const ey = e.clientY - rect.top;
+        drawAimArrow(dragStart.x, dragStart.y, ex, ey);
+      });
+
+      canvasWrap.addEventListener("mouseup", e => {
+        if (!isDragging || !dragStart) return;
+        isDragging = false;
+        controls.enabled = true;
+
+        const rect = canvasWrap.getBoundingClientRect();
+        const ex = e.clientX - rect.left;
+        const ey = e.clientY - rect.top;
+
+        aimCtx.clearRect(0, 0, aimCanvas.width, aimCanvas.height);
+
+        const dir = screenDir(dragStart.x, dragStart.y, ex, ey);
+        dragStart = null;
+        if (!dir) return;
+
+        const strength = parseFloat(impulseSlider.value);
+        const tip = getLastLink();
+        if (!tip) return;
+
+        // STEP 5: apply impulse — wakes the body, adds linear momentum
+        tip.applyImpulse({ x: dir.x * strength, y: dir.y * strength, z: dir.z * strength }, true);
+        shotCount++;
+        statShots.textContent = shotCount;
+      });
+
+      // Cancel drag if mouse leaves canvas
+      canvasWrap.addEventListener("mouseleave", () => {
+        if (isDragging) {
+          isDragging = false;
+          dragStart  = null;
+          controls.enabled = true;
+          aimCtx.clearRect(0, 0, aimCanvas.width, aimCanvas.height);
+        }
+      });
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 6: Animation loop
+      // ═══════════════════════════════════════════════════════════
+      let rafId = null;
+
+      function animate() {
+        rafId = requestAnimationFrame(animate);
+        const el = clock.getDelta();
+        accumulator += el;
+        let steps = 0;
+        while (accumulator >= FIXED_DT) {
+          world.step();
+          accumulator -= FIXED_DT;
+          steps++;
+        }
+        hudSteps.textContent = steps;
+        syncChain();
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // Controls
+      // ═══════════════════════════════════════════════════════════
+      impulseSlider.addEventListener("input", () => {
+        const v = impulseSlider.value;
+        impulseVal.textContent  = v + " N·s";
+        statImpulse.textContent = v + " N·s";
+      });
+
+      gravityBtn.addEventListener("click", () => {
+        gravityOn = !gravityOn;
+        const g   = gravityOn ? -9.81 : 0;
+        world.gravity = { x: 0, y: g, z: 0 };
+
+        gravityBtn.textContent = gravityOn ? "Gravity OFF" : "Gravity ON";
+        gravityBtn.classList.toggle("active", !gravityOn);
+        gravityPill.textContent   = gravityOn ? "⬇ Gravity ON" : "○ Gravity OFF";
+        gravityPill.style.color   = gravityOn ? "var(--green)" : "var(--orange)";
+        statGravity.textContent   = gravityOn ? "9.81 m/s²" : "0 m/s²";
+
+        // Wake all sleeping bodies
+        for (const { body } of links) {
+          if (body && body.bodyType() === RAPIER.RigidBodyType.Dynamic) {
+            body.wakeUp();
+          }
+        }
+      });
+
+      resetBtn.addEventListener("click", () => {
+        clearChain();
+        // Recreate world so joints are fully reset
+        world.free();
+        gravityOn = true;
+        createWorld();
+        spawnChain();
+        shotCount = 0;
+        statShots.textContent   = "0";
+        statGravity.textContent = "9.81 m/s²";
+        gravityBtn.textContent  = "Gravity OFF";
+        gravityBtn.classList.remove("active");
+        gravityPill.textContent = "⬇ Gravity ON";
+        gravityPill.style.color = "var(--green)";
+        accumulator = 0;
+        clock.start();
+      });
+
+      // ═══════════════════════════════════════════════════════════
+      // Init
+      // ═══════════════════════════════════════════════════════════
+      createWorld();
+      spawnChain();
+      clock.start();
+      animate();
+
+    </script>
+  </body>
+</html>
