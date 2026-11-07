@@ -6,13 +6,9 @@
     <title>Demo 2: Bounciness Explorer — Computeranimation Seminar 05</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
       :root {
         --bg:      #0d0f14;
         --surface: #161a22;
@@ -27,461 +23,371 @@
         --mono: "IBM Plex Mono", monospace;
         --sans: "IBM Plex Sans", sans-serif;
       }
+      body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:15px; line-height:1.7; min-height:100vh; display:flex; flex-direction:column; }
 
-      body {
-        background: var(--bg);
-        color: var(--text);
-        font-family: var(--sans);
-        font-size: 15px;
-        line-height: 1.7;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
+      /* header */
+      header { border-bottom:2px solid var(--border); padding:24px 0 20px; flex-shrink:0; }
+      .header-inner { max-width:1200px; margin:0 auto; padding:0 32px; display:flex; align-items:center; gap:24px; }
+      .header-logo img { width:100px; border-radius:10px; display:block; }
+      .header-info h1 { font-size:clamp(16px,2.5vw,22px); font-weight:500; color:#f0f2f7; line-height:1.2; margin-bottom:4px; }
+      .header-info h2 { font-size:13px; font-weight:400; color:var(--muted); font-family:var(--mono); margin-bottom:8px; }
+      .header-meta { font-size:13px; color:var(--text); line-height:1.6; }
+      .header-meta a { color:var(--accent); text-decoration:none; }
+      .header-meta a:hover { text-decoration:underline; }
+      .header-author { display:flex; align-items:center; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:13px; color:var(--muted); }
+      .header-author span { color:var(--text); font-weight:500; }
+      .header-author .linkedin-badge { display:inline-flex; align-items:center; gap:4px; background:rgba(79,156,249,0.1); color:var(--accent); font-family:var(--mono); font-size:11px; padding:2px 9px; border-radius:20px; border:1px solid rgba(79,156,249,0.25); text-decoration:none; transition:background 0.15s; }
+      .header-author .linkedin-badge:hover { background:rgba(79,156,249,0.2); }
 
-      /* ── header ── */
-      header { border-bottom: 2px solid var(--border); padding: 24px 0 20px; flex-shrink: 0; }
-      .header-inner {
-        max-width: 1200px; margin: 0 auto; padding: 0 32px;
-        display: flex; align-items: center; gap: 24px;
-      }
-      .header-logo img { width: 100px; border-radius: 10px; display: block; }
-      .header-info h1 { font-size: clamp(16px,2.5vw,22px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
-      .header-info h2 { font-size: 13px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
-      .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
-      .header-meta a { color: var(--accent); text-decoration: none; }
-      .header-meta a:hover { text-decoration: underline; }
-      .header-author {
-        display: flex; align-items: center; gap: 10px;
-        margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
-        font-size: 13px; color: var(--muted);
-      }
-      .header-author span { color: var(--text); font-weight: 500; }
-      .header-author .linkedin-badge {
-        display: inline-flex; align-items: center; gap: 4px;
-        background: rgba(79,156,249,0.1); color: var(--accent);
-        font-family: var(--mono); font-size: 11px; padding: 2px 9px;
-        border-radius: 20px; border: 1px solid rgba(79,156,249,0.25);
-        text-decoration: none; transition: background 0.15s;
-      }
-      .header-author .linkedin-badge:hover { background: rgba(79,156,249,0.2); }
+      /* breadcrumb */
+      .breadcrumb { max-width:1200px; margin:0 auto; padding:14px 32px 0; font-family:var(--mono); font-size:12px; color:var(--muted); flex-shrink:0; }
+      .breadcrumb a { color:var(--accent); text-decoration:none; }
+      .breadcrumb a:hover { text-decoration:underline; }
+      .breadcrumb span { margin:0 6px; }
 
-      /* ── breadcrumb ── */
-      .breadcrumb {
-        max-width: 1200px; margin: 0 auto; padding: 14px 32px 0;
-        font-family: var(--mono); font-size: 12px; color: var(--muted); flex-shrink: 0;
-      }
-      .breadcrumb a { color: var(--accent); text-decoration: none; }
-      .breadcrumb a:hover { text-decoration: underline; }
-      .breadcrumb span { margin: 0 6px; }
+      /* main */
+      main { max-width:1200px; margin:0 auto; padding:24px 32px 48px; flex:1; width:100%; }
 
-      /* ── main ── */
-      main { max-width: 1200px; margin: 0 auto; padding: 24px 32px 48px; flex: 1; width: 100%; }
+      /* demo intro */
+      .demo-intro { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin-bottom:20px; }
+      .demo-intro h1 { font-size:clamp(17px,2.2vw,24px); font-weight:500; color:#f0f2f7; margin-bottom:8px; }
+      .demo-badge { display:inline-block; background:rgba(52,211,153,0.1); color:var(--green); font-family:var(--mono); font-size:11px; padding:2px 10px; border-radius:20px; border:1px solid rgba(52,211,153,0.28); margin-bottom:10px; }
+      .demo-intro p { color:var(--text); margin-bottom:6px; font-size:14px; }
+      .demo-intro p:last-child { margin-bottom:0; }
 
-      /* ── demo intro ── */
-      .demo-intro {
-        background: var(--surface); border: 1px solid var(--border);
-        border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
+      /* ── TAB BAR ── */
+      .tab-bar { display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--border); }
+      .tab-btn {
+        padding:9px 20px; font-family:var(--mono); font-size:12px; color:var(--muted);
+        background:none; border:none; border-bottom:2px solid transparent;
+        cursor:pointer; margin-bottom:-2px; transition:color 0.15s, border-color 0.15s;
+        letter-spacing:0.04em;
       }
-      .demo-intro h1 { font-size: clamp(17px,2.2vw,24px); font-weight: 500; color: #f0f2f7; margin-bottom: 8px; }
-      .demo-badge {
-        display: inline-block; background: rgba(52,211,153,0.1); color: var(--green);
-        font-family: var(--mono); font-size: 11px; padding: 2px 10px;
-        border-radius: 20px; border: 1px solid rgba(52,211,153,0.28); margin-bottom: 10px;
-      }
-      .demo-intro p { color: var(--text); margin-bottom: 6px; font-size: 14px; }
-      .demo-intro p:last-child { margin-bottom: 0; }
+      .tab-btn:hover { color:var(--text); }
+      .tab-btn.active { color:var(--green); border-bottom-color:var(--green); }
 
-      /* ── layout ── */
-      .demo-layout {
-        display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start;
-      }
-      @media (max-width: 900px) { .demo-layout { grid-template-columns: 1fr; } }
+      /* tab panels */
+      .tab-panel { display:none; }
+      .tab-panel.active { display:block; }
 
-      /* ── canvas ── */
-      .canvas-wrap {
-        position: relative; background: #0a0c11;
-        border: 1px solid var(--border); border-radius: 10px;
-        overflow: hidden; aspect-ratio: 16/10; min-height: 360px;
-      }
-      #threeCanvas { width: 100%; height: 100%; display: block; }
+      /* layout */
+      .demo-layout { display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; }
+      @media (max-width:900px) { .demo-layout { grid-template-columns:1fr; } }
 
-      /* ── loading overlay ── */
-      #loadingOverlay {
-        position: absolute; inset: 0; background: rgba(13,15,20,0.93);
-        display: flex; flex-direction: column; align-items: center;
-        justify-content: center; gap: 16px; z-index: 10; transition: opacity 0.4s;
-      }
-      #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
-      .loading-title { font-family: var(--mono); font-size: 14px; color: var(--text); }
-      .loading-sub   { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-      progress {
-        width: 200px; height: 4px; appearance: none; -webkit-appearance: none;
-        border: none; border-radius: 2px; background: var(--border); overflow: hidden;
-      }
-      progress::-webkit-progress-bar { background: var(--border); border-radius: 2px; }
-      progress::-webkit-progress-value { background: var(--green); border-radius: 2px; transition: width 0.2s; }
-      progress::-moz-progress-bar { background: var(--green); border-radius: 2px; }
-      #loadingPct { font-family: var(--mono); font-size: 13px; color: var(--green); min-width: 40px; text-align: center; }
-      .progress-row { display: flex; align-items: center; gap: 10px; }
+      /* canvas */
+      .canvas-wrap { position:relative; background:#0a0c11; border:1px solid var(--border); border-radius:10px; overflow:hidden; aspect-ratio:16/10; min-height:360px; }
+      #threeCanvas { width:100%; height:100%; display:block; }
 
-      /* ── HUD overlay — top-left of canvas ── */
-      #physicsHud {
-        position: absolute; top: 12px; left: 12px; z-index: 6;
-        display: flex; flex-direction: column; gap: 6px;
-      }
-      .hud-pill {
-        display: inline-flex; align-items: center; gap: 8px;
-        background: rgba(13,15,20,0.78); backdrop-filter: blur(4px);
-        border: 1px solid var(--border); border-radius: 20px;
-        padding: 4px 12px 4px 8px; font-family: var(--mono);
-        font-size: 11px; color: var(--muted);
-      }
-      .hud-dot {
-        width: 7px; height: 7px; border-radius: 50%;
-        background: var(--green); flex-shrink: 0;
-      }
-      .hud-pill span { color: var(--green); }
+      /* loading overlay */
+      #loadingOverlay { position:absolute; inset:0; background:rgba(13,15,20,0.93); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:10; transition:opacity 0.4s; }
+      #loadingOverlay.hidden { opacity:0; pointer-events:none; }
+      .loading-title { font-family:var(--mono); font-size:14px; color:var(--text); }
+      .loading-sub   { font-family:var(--mono); font-size:12px; color:var(--muted); }
+      progress { width:200px; height:4px; appearance:none; -webkit-appearance:none; border:none; border-radius:2px; background:var(--border); overflow:hidden; }
+      progress::-webkit-progress-bar { background:var(--border); border-radius:2px; }
+      progress::-webkit-progress-value { background:var(--green); border-radius:2px; transition:width 0.2s; }
+      progress::-moz-progress-bar { background:var(--green); border-radius:2px; }
+      #loadingPct { font-family:var(--mono); font-size:13px; color:var(--green); min-width:40px; text-align:center; }
+      .progress-row { display:flex; align-items:center; gap:10px; }
 
-      /* ── bottom bar ── */
-      .bottom-bar {
-        position: absolute; bottom: 0; left: 0; right: 0; height: 48px;
-        background: rgba(13,15,20,0.82); backdrop-filter: blur(6px);
-        border-top: 1px solid var(--border);
-        display: flex; align-items: center; gap: 12px; padding: 0 16px; z-index: 5;
-      }
-      .bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; }
-      .bar-val   { font-family: var(--mono); font-size: 12px; color: var(--green); flex-shrink: 0; min-width: 60px; text-align: right; }
+      /* HUD */
+      .physics-hud { position:absolute; top:12px; left:12px; z-index:6; display:flex; flex-direction:column; gap:6px; }
+      .hud-pill { display:inline-flex; align-items:center; gap:8px; background:rgba(13,15,20,0.78); backdrop-filter:blur(4px); border:1px solid var(--border); border-radius:20px; padding:4px 12px 4px 8px; font-family:var(--mono); font-size:11px; color:var(--muted); }
+      .hud-dot { width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0; }
+      .hud-pill span { color:var(--green); }
 
-      /* sliders */
-      .bar-slider {
-        flex: 1; -webkit-appearance: none; appearance: none;
-        height: 4px; border-radius: 2px; cursor: pointer;
-        background: var(--border); accent-color: var(--green);
-      }
-      .bar-slider::-webkit-slider-thumb {
-        -webkit-appearance: none; width: 16px; height: 16px;
-        border-radius: 50%; background: var(--green); cursor: pointer;
-        border: 2px solid var(--bg); box-shadow: 0 0 0 3px rgba(52,211,153,0.2);
-      }
+      /* bottom bar */
+      .bottom-bar { position:absolute; bottom:0; left:0; right:0; height:48px; background:rgba(13,15,20,0.82); backdrop-filter:blur(6px); border-top:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; z-index:5; }
+      .bar-label { font-family:var(--mono); font-size:11px; color:var(--muted); flex-shrink:0; }
+      .bar-val   { font-family:var(--mono); font-size:12px; color:var(--green); flex-shrink:0; min-width:60px; text-align:right; }
+      .bar-slider { flex:1; -webkit-appearance:none; appearance:none; height:4px; border-radius:2px; cursor:pointer; background:var(--border); accent-color:var(--green); }
+      .bar-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:var(--green); cursor:pointer; border:2px solid var(--bg); box-shadow:0 0 0 3px rgba(52,211,153,0.2); }
+      .bar-btn-green { flex-shrink:0; padding:5px 14px; border-radius:6px; border:1px solid var(--green); background:rgba(52,211,153,0.08); color:var(--green); font-family:var(--mono); font-size:12px; cursor:pointer; transition:background 0.15s; }
+      .bar-btn-green:hover { background:rgba(52,211,153,0.18); }
+      .bar-btn-green:disabled { opacity:0.4; cursor:not-allowed; }
+      .bar-btn { flex-shrink:0; padding:5px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-family:var(--mono); font-size:12px; cursor:pointer; transition:border-color 0.15s, color 0.15s, background 0.15s; }
+      .bar-btn:hover { border-color:var(--green); color:var(--green); background:rgba(52,211,153,0.07); }
 
-      /* drop button */
-      #dropBtn {
-        flex-shrink: 0; padding: 5px 14px; border-radius: 6px;
-        border: 1px solid var(--green); background: rgba(52,211,153,0.08);
-        color: var(--green); font-family: var(--mono); font-size: 12px;
-        cursor: pointer; transition: border-color 0.15s, background 0.15s;
-      }
-      #dropBtn:hover { background: rgba(52,211,153,0.18); }
-
-      /* reset button */
-      #resetBtn {
-        flex-shrink: 0; padding: 5px 14px; border-radius: 6px;
-        border: 1px solid var(--border); background: var(--bg);
-        color: var(--text); font-family: var(--mono); font-size: 12px;
-        cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
-      }
-      #resetBtn:hover { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.07); }
-
-      /* ── side panels ── */
-      .side-col { display: flex; flex-direction: column; gap: 12px; }
-      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-      .panel-header {
-        padding: 10px 16px; border-bottom: 1px solid var(--border);
-        font-family: var(--mono); font-size: 11px; color: var(--muted);
-        text-transform: uppercase; letter-spacing: 0.07em;
-        display: flex; align-items: center; gap: 8px;
-      }
-      .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-      .dot.green  { background: var(--green); }
-      .dot.blue   { background: var(--accent); }
-      .dot.orange { background: var(--orange); }
-      .panel-body { padding: 14px 16px; }
-
-      /* step rows in panel */
-      .step-row {
-        display: flex; gap: 10px; align-items: flex-start;
-        margin-bottom: 10px; font-size: 13px; line-height: 1.55;
-      }
-      .step-row:last-child { margin-bottom: 0; }
-      .step-num {
-        flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
-        background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3);
-        font-family: var(--mono); font-size: 10px; color: var(--green);
-        display: flex; align-items: center; justify-content: center; margin-top: 1px;
-      }
-      .step-row code {
-        font-family: var(--mono); font-size: 11px;
-        background: rgba(79,156,249,0.08); color: #93c5fd;
-        padding: 1px 5px; border-radius: 3px;
-      }
-
-      /* stat rows */
-      .stat-row {
-        display: flex; justify-content: space-between; align-items: baseline;
-        font-family: var(--mono); font-size: 11px;
-        border-bottom: 1px solid rgba(37,43,56,0.5); padding: 5px 0;
-      }
-      .stat-row:last-child { border-bottom: none; }
-      .stat-label { color: var(--muted); }
-      .stat-val   { color: var(--green); }
-      .stat-val.blue { color: var(--accent); }
+      /* side panels */
+      .side-col { display:flex; flex-direction:column; gap:12px; }
+      .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      .panel-header { padding:10px 16px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.07em; display:flex; align-items:center; gap:8px; }
+      .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+      .dot.green  { background:var(--green); }
+      .dot.blue   { background:var(--accent); }
+      .dot.orange { background:var(--orange); }
+      .panel-body { padding:14px 16px; }
+      .step-row { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; font-size:13px; line-height:1.55; }
+      .step-row:last-child { margin-bottom:0; }
+      .step-num { flex-shrink:0; width:20px; height:20px; border-radius:50%; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3); font-family:var(--mono); font-size:10px; color:var(--green); display:flex; align-items:center; justify-content:center; margin-top:1px; }
+      .step-row code { font-family:var(--mono); font-size:11px; background:rgba(79,156,249,0.08); color:#93c5fd; padding:1px 5px; border-radius:3px; }
+      .stat-row { display:flex; justify-content:space-between; align-items:baseline; font-family:var(--mono); font-size:11px; border-bottom:1px solid rgba(37,43,56,0.5); padding:5px 0; }
+      .stat-row:last-child { border-bottom:none; }
+      .stat-label { color:var(--muted); }
+      .stat-val   { color:var(--green); }
+      .stat-val.blue { color:var(--accent); }
 
       /* concept boxes */
-      .concept-box {
-        border-left: 4px solid var(--green);
-        background: rgba(52,211,153,0.05);
-        border-radius: 6px; padding: 12px 16px;
-        margin-top: 12px; font-size: 13px; line-height: 1.65;
-      }
-      .concept-box strong { color: var(--green); }
-      .concept-box.blue { border-left-color: var(--accent); background: rgba(79,156,249,0.05); }
-      .concept-box.blue strong { color: var(--accent); }
-      .concept-box.purple { border-left-color: var(--accent2); background: rgba(167,139,250,0.05); }
-      .concept-box.purple strong { color: var(--accent2); }
-      .concept-box code {
-        font-family: var(--mono); font-size: 12px;
-        background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px;
-      }
+      .concept-box { border-left:4px solid var(--green); background:rgba(52,211,153,0.05); border-radius:6px; padding:12px 16px; margin-top:12px; font-size:13px; line-height:1.65; }
+      .concept-box strong { color:var(--green); }
+      .concept-box.blue { border-left-color:var(--accent); background:rgba(79,156,249,0.05); }
+      .concept-box.blue strong { color:var(--accent); }
+      .concept-box.purple { border-left-color:var(--accent2); background:rgba(167,139,250,0.05); }
+      .concept-box.purple strong { color:var(--accent2); }
+      .concept-box code { font-family:var(--mono); font-size:12px; background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:3px; }
+
+      /* ── TAB 2 specific ── */
+
+      /* bounce bar panel */
+      #bounceBarCanvas { width:100%; height:120px; display:block; }
+
+      /* all-balls timeline */
+      #timelineCanvas { width:100%; height:140px; display:block; }
+
+      /* live measure table */
+      .measure-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
+      .measure-table th { color:var(--muted); font-weight:400; text-align:right; padding:4px 8px 6px; border-bottom:1px solid var(--border); }
+      .measure-table th:first-child { text-align:left; }
+      .measure-table td { padding:5px 8px; text-align:right; border-bottom:1px solid rgba(37,43,56,0.4); vertical-align:middle; }
+      .measure-table td:first-child { text-align:left; }
+      .measure-table tr:last-child td { border-bottom:none; }
+      .measure-swatch { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; flex-shrink:0; }
+      .measure-val { color:var(--green); }
+      .measure-val.dim { color:var(--muted); }
+      .measure-val.blue { color:var(--accent); }
+      .measure-energy-bar { display:inline-block; height:6px; border-radius:3px; vertical-align:middle; transition:width 0.1s; min-width:2px; }
+
+      /* phase label on canvas */
+      #phaseLabel { position:absolute; top:12px; right:12px; z-index:6; font-family:var(--mono); font-size:11px; color:var(--accent); background:rgba(13,15,20,0.78); border:1px solid var(--border); border-radius:20px; padding:4px 12px; backdrop-filter:blur(4px); }
 
       /* footer */
-      footer {
-        border-top: 2px solid var(--border); padding: 18px 32px 24px;
-        max-width: 1200px; margin: 0 auto; text-align: center;
-        font-size: 13px; color: var(--text); line-height: 1.7; width: 100%;
-      }
-      footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
-      footer a { color: var(--accent); text-decoration: none; }
-      footer a:hover { text-decoration: underline; }
+      footer { border-top:2px solid var(--border); padding:18px 32px 24px; max-width:1200px; margin:0 auto; text-align:center; font-size:13px; color:var(--text); line-height:1.7; width:100%; }
+      footer p+p { margin-top:4px; font-size:12px; color:var(--muted); }
+      footer a { color:var(--accent); text-decoration:none; }
+      footer a:hover { text-decoration:underline; }
 
-      @media (max-width: 700px) {
-        .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
-        .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
-      }
-      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+      @media (max-width:700px) { .header-inner, main, footer, .breadcrumb { padding-left:20px; padding-right:20px; } .header-inner { flex-direction:column; align-items:flex-start; gap:12px; } }
+      @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
     </style>
   </head>
   <body>
 
     <header>
       <div class="header-inner">
-        <div class="header-logo">
-          <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" />
-        </div>
+        <div class="header-logo"><img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" /></div>
         <div class="header-info">
           <h1>Computeranimation — Seminar 05: Physics-based Animation</h1>
           <h2>Demo 2 — Bounciness Explorer: Restitution &amp; Friction</h2>
           <p class="header-meta">
             <strong>Institut für Medientechnik –
-              <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
-                 target="_blank" rel="noopener">AMS Group</a>
-            </strong>
-            · Technische Universität Ilmenau
+              <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme" target="_blank" rel="noopener">AMS Group</a>
+            </strong> · Technische Universität Ilmenau
           </p>
           <div class="header-author">
-            Seminar materials by
-            <span>Renato Fera P.</span>
-            <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/"
-               target="_blank" rel="noopener">LinkedIn</a>
+            Seminar materials by <span>Renato Fera P.</span>
+            <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">LinkedIn</a>
           </div>
         </div>
       </div>
     </header>
 
     <nav class="breadcrumb">
-      <a href="index.html">Seminar Materials</a>
-      <span>›</span>
-      <a href="05_computeranimation_physics.html">Chapter 05: Physics-based Animation</a>
-      <span>›</span>
+      <a href="index.html">Seminar Materials</a><span>›</span>
+      <a href="05_computeranimation_physics.html">Chapter 05: Physics-based Animation</a><span>›</span>
       Demo 2: Bounciness Explorer
     </nav>
 
     <main>
       <div class="demo-intro">
-        <div class="demo-badge">
-          ▶ Rapier · restitution · friction · ColliderDesc.ball() · combine rules
-        </div>
+        <div class="demo-badge">▶ Rapier · restitution · friction · energy · ColliderDesc.ball() · combine rules</div>
         <h1>Demo 2: Bounciness Explorer</h1>
-        <p>
-          A <strong>5 × 5 grid of balls</strong> drops simultaneously from the same height.
-          Each column has a different <strong>restitution coefficient</strong> (0.0 → 1.0 in
-          0.25 steps) and each row a different <strong>friction coefficient</strong>
-          (0.05 → 0.9). Watch the grid settle: the leftmost column lies flat while the
-          rightmost is still bouncing. Labels above each ball show its exact restitution value.
-        </p>
-        <p>
-          Use the sliders to change <strong>gravity</strong> and <strong>drop height</strong>,
-          then press <strong>Drop</strong> to re-run the experiment. Read the source as a
-          tutorial — every STEP block maps a Rapier concept to the matching Three.js code.
-        </p>
+        <p>Two tabs. <strong>Tab 1 — Grid</strong>: a 5×5 matrix of balls varying restitution (columns) and friction (rows) simultaneously — the full parameter space at once. <strong>Tab 2 — Lab</strong>: an interactive single-row experiment with energy colouring, bounce-height bars, a y-position timeline, and a predict-then-verify challenge. Switching tabs restarts the simulation.</p>
       </div>
 
-      <div class="demo-layout">
-        <!-- ── Canvas ── -->
-        <div class="canvas-wrap" id="canvasWrap">
-          <canvas id="threeCanvas"></canvas>
+      <!-- TAB BAR -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="grid">① Grid View — 5×5 matrix</button>
+        <button class="tab-btn"        data-tab="lab">② Lab — Interactive Experiment</button>
+      </div>
 
-          <!-- Physics HUD — top-left -->
-          <div id="physicsHud">
-            <div class="hud-pill">
-              <div class="hud-dot"></div>
-              Bodies: <span id="hudBodies">0</span>
+      <!-- ══════════════════════════════════════════════════════════
+           TAB 1 — GRID VIEW (original demo, unchanged)
+      ══════════════════════════════════════════════════════════ -->
+      <div class="tab-panel active" id="panel-grid">
+        <div class="demo-layout">
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="threeCanvas"></canvas>
+            <div class="physics-hud" id="physicsHudGrid">
+              <div class="hud-pill"><div class="hud-dot"></div>Bodies: <span id="hudBodiesGrid">0</span></div>
+              <div class="hud-pill"><div class="hud-dot"></div>Steps/frame: <span id="hudStepsGrid">0</span></div>
             </div>
-            <div class="hud-pill">
-              <div class="hud-dot"></div>
-              Steps/frame: <span id="hudSteps">0</span>
+            <div id="loadingOverlay">
+              <div class="loading-title">Initialising Rapier WASM…</div>
+              <div class="progress-row">
+                <progress id="loadProgress" value="0" max="100"></progress>
+                <span id="loadingPct">0%</span>
+              </div>
+              <div class="loading-sub">downloading rapier3d-compat</div>
+            </div>
+            <div class="bottom-bar">
+              <span class="bar-label">Gravity</span>
+              <input type="range" id="gravitySliderGrid" class="bar-slider" min="1" max="20" step="0.1" value="9.81" />
+              <span class="bar-val" id="gravityValGrid">9.81 m/s²</span>
+              <span class="bar-label">Height</span>
+              <input type="range" id="heightSliderGrid" class="bar-slider" min="2" max="14" step="0.5" value="6" />
+              <span class="bar-val" id="heightValGrid">6.0 m</span>
+              <button class="bar-btn-green" id="dropBtnGrid">Drop</button>
+              <button class="bar-btn" id="resetBtnGrid">Reset</button>
+            </div>
+          </div>
+          <div class="side-col">
+            <div class="panel">
+              <div class="panel-header"><div class="dot green"></div> Rapier Pipeline</div>
+              <div class="panel-body">
+                <div class="step-row"><div class="step-num">0</div><div>Import &amp; <code>RAPIER.init()</code> — WASM ready</div></div>
+                <div class="step-row"><div class="step-num">1</div><div>Create <code>new RAPIER.World(gravity)</code></div></div>
+                <div class="step-row"><div class="step-num">2</div><div>Static ground — <code>RigidBodyDesc.fixed()</code></div></div>
+                <div class="step-row"><div class="step-num">3</div><div>Grid of balls — <code>ColliderDesc.ball(r)</code> with varying <code>.setRestitution(e)</code></div></div>
+                <div class="step-row"><div class="step-num">4</div><div>Each frame: accumulate dt → <code>world.step()</code> → sync</div></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><div class="dot green"></div> Live Stats</div>
+              <div class="panel-body">
+                <div class="stat-row"><span class="stat-label">Dynamic bodies</span><span class="stat-val" id="statDynamicGrid">0</span></div>
+                <div class="stat-row"><span class="stat-label">Static bodies</span><span class="stat-val">1</span></div>
+                <div class="stat-row"><span class="stat-label">Physics Hz</span><span class="stat-val">60 Hz</span></div>
+                <div class="stat-row"><span class="stat-label">Gravity</span><span class="stat-val" id="statGravityGrid">9.81 m/s²</span></div>
+                <div class="stat-row"><span class="stat-label">Grid</span><span class="stat-val">5×5 balls</span></div>
+                <div class="stat-row"><span class="stat-label">Restitution range</span><span class="stat-val">0.0 → 1.0</span></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><div class="dot blue"></div> Controls</div>
+              <div class="panel-body">
+                <div class="stat-row"><span class="stat-label">Drop balls</span><span class="stat-val blue">Drop button</span></div>
+                <div class="stat-row"><span class="stat-label">Reset scene</span><span class="stat-val blue">Reset button</span></div>
+                <div class="stat-row"><span class="stat-label">Orbit</span><span class="stat-val blue">Drag</span></div>
+                <div class="stat-row"><span class="stat-label">Zoom</span><span class="stat-val blue">Scroll</span></div>
+                <div class="stat-row"><span class="stat-label">Gravity / Height</span><span class="stat-val blue">Sliders</span></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><div class="dot orange"></div> Column Key (restitution e)</div>
+              <div class="panel-body">
+                <div class="stat-row"><span class="stat-label">Col 1 — e=0.00</span><span class="stat-val" style="color:var(--red)">Dead flat</span></div>
+                <div class="stat-row"><span class="stat-label">Col 2 — e=0.25</span><span class="stat-val" style="color:var(--orange)">Slight bounce</span></div>
+                <div class="stat-row"><span class="stat-label">Col 3 — e=0.50</span><span class="stat-val" style="color:var(--accent2)">Half energy</span></div>
+                <div class="stat-row"><span class="stat-label">Col 4 — e=0.75</span><span class="stat-val" style="color:var(--accent)">High bounce</span></div>
+                <div class="stat-row"><span class="stat-label">Col 5 — e=1.00</span><span class="stat-val" style="color:var(--green)">Near elastic</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="concept-box" style="margin-top:20px">
+          <strong>ANIMATION CONCEPT — Restitution: the coefficient of elasticity</strong><br/>
+          Restitution <code>e</code> (0–1) controls how much kinetic energy survives a collision. At <code>e=0</code> the ball stops dead; at <code>e=1</code> it bounces back to its original height indefinitely. Real materials: rubber ≈ 0.8, wood ≈ 0.3, clay ≈ 0.05. In Rapier restitution lives on the <code>ColliderDesc</code> — it is a surface property, not a mass property.
+        </div>
+        <div class="concept-box blue" style="margin-top:12px">
+          <strong>RAPIER CONCEPT — Combine rules</strong><br/>
+          When two colliders meet, Rapier combines their values. This demo uses <code>CoefficientCombineRule.Max</code> on each ball so its own restitution dominates regardless of the ground's value — making the grid's variation clean and direct to observe.
+        </div>
+      </div><!-- end panel-grid -->
+
+      <!-- ══════════════════════════════════════════════════════════
+           TAB 2 — LAB
+      ══════════════════════════════════════════════════════════ -->
+      <div class="tab-panel" id="panel-lab">
+        <div class="demo-layout">
+
+          <!-- canvas (reuses the same canvas element via JS) -->
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="canvas-wrap" id="labCanvasWrap" style="aspect-ratio:16/9;">
+              <!-- threeCanvas is moved here by JS when lab tab is active -->
+              <div class="physics-hud" id="physicsHudLab">
+                <div class="hud-pill"><div class="hud-dot"></div>Bodies: <span id="hudBodiesLab">0</span></div>
+                <div class="hud-pill"><div class="hud-dot"></div>Steps/frame: <span id="hudStepsLab">0</span></div>
+              </div>
+              <div id="phaseLabel">① Ready</div>
+              <div class="bottom-bar">
+                <span class="bar-label">Height</span>
+                <input type="range" id="heightSliderLab" class="bar-slider" min="2" max="14" step="0.5" value="8" />
+                <span class="bar-val" id="heightValLab">8.0 m</span>
+                <span class="bar-label">Gravity</span>
+                <input type="range" id="gravitySliderLab" class="bar-slider" min="1" max="20" step="0.1" value="9.81" />
+                <span class="bar-val" id="gravityValLab">9.81 m/s²</span>
+                <button class="bar-btn-green" id="dropBtnLab">Drop</button>
+                <button class="bar-btn" id="resetBtnLab">Reset</button>
+              </div>
             </div>
           </div>
 
-          <!-- Loading overlay -->
-          <div id="loadingOverlay">
-            <div class="loading-title">Initialising Rapier WASM…</div>
-            <div class="progress-row">
-              <progress id="loadProgress" value="0" max="100"></progress>
-              <span id="loadingPct">0%</span>
+          <!-- side col -->
+          <div class="side-col">
+            <div class="panel">
+              <div class="panel-header"><div class="dot green"></div> Live Measurements</div>
+              <div class="panel-body" style="padding:10px 12px;">
+                <table class="measure-table" id="measureTable">
+                  <thead>
+                    <tr>
+                      <th>Ball</th>
+                      <th>Height</th>
+                      <th>Bounces</th>
+                      <th>Energy %</th>
+                    </tr>
+                  </thead>
+                  <tbody id="measureBody"></tbody>
+                </table>
+              </div>
             </div>
-            <div class="loading-sub">downloading rapier3d-compat</div>
-          </div>
-
-          <!-- Bottom bar: gravity + drop height + buttons -->
-          <div class="bottom-bar">
-            <span class="bar-label">Gravity</span>
-            <input type="range" id="gravitySlider" class="bar-slider" min="1" max="20" step="0.1" value="9.81" />
-            <span class="bar-val" id="gravityVal">9.81 m/s²</span>
-            <span class="bar-label">Height</span>
-            <input type="range" id="heightSlider" class="bar-slider" min="2" max="14" step="0.5" value="6" />
-            <span class="bar-val" id="heightVal">6.0 m</span>
-            <button id="dropBtn">Drop</button>
-            <button id="resetBtn">Reset</button>
+            <div class="panel">
+              <div class="panel-header"><div class="dot green"></div> Max Bounce Height</div>
+              <div class="panel-body" style="padding:10px 12px;">
+                <canvas id="bounceBarCanvas"></canvas>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><div class="dot blue"></div> y-Position Timeline — all balls</div>
+              <div class="panel-body" style="padding:10px 12px;">
+                <canvas id="timelineCanvas"></canvas>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><div class="dot blue"></div> Controls</div>
+              <div class="panel-body">
+                <div class="stat-row"><span class="stat-label">Drop balls</span><span class="stat-val blue">Drop button</span></div>
+                <div class="stat-row"><span class="stat-label">Orbit</span><span class="stat-val blue">Drag</span></div>
+                <div class="stat-row"><span class="stat-label">Zoom</span><span class="stat-val blue">Scroll</span></div>
+                <div class="stat-row"><span class="stat-label">Reset</span><span class="stat-val blue">Reset button</span></div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- ── Side panels ── -->
-        <div class="side-col">
-
-          <!-- Pipeline steps -->
-          <div class="panel">
-            <div class="panel-header"><div class="dot green"></div> Rapier Pipeline</div>
-            <div class="panel-body">
-              <div class="step-row">
-                <div class="step-num">0</div>
-                <div>Import &amp; <code>RAPIER.init()</code> — WASM ready</div>
-              </div>
-              <div class="step-row">
-                <div class="step-num">1</div>
-                <div>Create <code>new RAPIER.World(gravity)</code></div>
-              </div>
-              <div class="step-row">
-                <div class="step-num">2</div>
-                <div>Static ground — <code>RigidBodyDesc.fixed()</code></div>
-              </div>
-              <div class="step-row">
-                <div class="step-num">3</div>
-                <div>Grid of balls — <code>ColliderDesc.ball(r)</code> with varying <code>.setRestitution(e)</code></div>
-              </div>
-              <div class="step-row">
-                <div class="step-num">4</div>
-                <div>Each frame: accumulate dt → <code>world.step()</code> → sync</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Live stats -->
-          <div class="panel">
-            <div class="panel-header"><div class="dot green"></div> Live Stats</div>
-            <div class="panel-body">
-              <div class="stat-row"><span class="stat-label">Dynamic bodies</span><span class="stat-val" id="statDynamic">0</span></div>
-              <div class="stat-row"><span class="stat-label">Static bodies</span> <span class="stat-val">1</span></div>
-              <div class="stat-row"><span class="stat-label">Physics Hz</span>    <span class="stat-val">60 Hz</span></div>
-              <div class="stat-row"><span class="stat-label">Fixed dt</span>      <span class="stat-val">16.67 ms</span></div>
-              <div class="stat-row"><span class="stat-label">Gravity</span>       <span class="stat-val" id="statGravity">9.81 m/s²</span></div>
-              <div class="stat-row"><span class="stat-label">Grid</span>          <span class="stat-val">5 × 5 balls</span></div>
-              <div class="stat-row"><span class="stat-label">Restitution range</span><span class="stat-val">0.0 → 1.0</span></div>
-              <div class="stat-row"><span class="stat-label">Friction range</span>   <span class="stat-val">0.05 → 0.9</span></div>
-            </div>
-          </div>
-
-          <!-- Controls -->
-          <div class="panel">
-            <div class="panel-header"><div class="dot blue"></div> Controls</div>
-            <div class="panel-body">
-              <div class="stat-row"><span class="stat-label">Drop balls</span>    <span class="stat-val blue">Drop button</span></div>
-              <div class="stat-row"><span class="stat-label">Reset scene</span>   <span class="stat-val blue">Reset button</span></div>
-              <div class="stat-row"><span class="stat-label">Orbit</span>         <span class="stat-val blue">Drag</span></div>
-              <div class="stat-row"><span class="stat-label">Zoom</span>          <span class="stat-val blue">Scroll</span></div>
-              <div class="stat-row"><span class="stat-label">Pan</span>           <span class="stat-val blue">Right-drag</span></div>
-              <div class="stat-row"><span class="stat-label">Gravity</span>       <span class="stat-val blue">Slider (bottom)</span></div>
-              <div class="stat-row"><span class="stat-label">Drop height</span>   <span class="stat-val blue">Slider (bottom)</span></div>
-            </div>
-          </div>
-
-          <!-- Restitution key -->
-          <div class="panel">
-            <div class="panel-header"><div class="dot orange"></div> Column Key (restitution e)</div>
-            <div class="panel-body">
-              <div class="stat-row"><span class="stat-label">Col 1 — e = 0.00</span><span class="stat-val" style="color:var(--red)">Dead flat</span></div>
-              <div class="stat-row"><span class="stat-label">Col 2 — e = 0.25</span><span class="stat-val" style="color:var(--orange)">Slight bounce</span></div>
-              <div class="stat-row"><span class="stat-label">Col 3 — e = 0.50</span><span class="stat-val" style="color:var(--accent2)">Half energy</span></div>
-              <div class="stat-row"><span class="stat-label">Col 4 — e = 0.75</span><span class="stat-val" style="color:var(--accent)">High bounce</span></div>
-              <div class="stat-row"><span class="stat-label">Col 5 — e = 1.00</span><span class="stat-val" style="color:var(--green)">Near elastic</span></div>
-            </div>
-          </div>
-
+        <div class="concept-box" style="margin-top:20px">
+          <strong>ANIMATION CONCEPT — Energy decay per bounce</strong><br/>
+          Each bounce multiplies the ball's speed by <code>e</code>. After <code>n</code> bounces, the ball retains <code>eⁿ</code> of its original kinetic energy. The y-position timeline shows the classic <em>decaying oscillation</em> envelope — the same curve that describes a critically damped spring settling to rest.
         </div>
-      </div>
+        <div class="concept-box blue" style="margin-top:12px">
+          <strong>ANIMATION CONCEPT — Energy colouring</strong><br/>
+          Ball colour maps to current kinetic energy: <strong style="color:var(--red)">red/warm = high KE</strong> (fast, just bounced), <strong style="color:var(--accent)">blue/cool = low KE</strong> (nearly at rest). This makes an abstract quantity directly visible — watch the low-restitution balls go cold on first impact while the high-restitution ball stays warm for many bounces.
+        </div>
+      </div><!-- end panel-lab -->
 
-      <!-- Concept callouts -->
-      <div class="concept-box" style="margin-top: 20px">
-        <strong>ANIMATION CONCEPT — Restitution: the coefficient of elasticity</strong><br />
-        Restitution <code>e</code> (0.0–1.0) controls how much kinetic energy is preserved
-        after a collision. At <code>e = 0</code> (perfectly inelastic) no energy bounces back —
-        the ball stops dead. At <code>e = 1</code> (perfectly elastic) all energy is preserved
-        and the ball bounces back to its original drop height indefinitely. Real materials sit
-        between: rubber ≈ 0.8, wood ≈ 0.3, clay ≈ 0.05. In Rapier, restitution is set on the
-        <code>ColliderDesc</code>, not the <code>RigidBodyDesc</code> — it is a surface
-        property, not a mass property.
-      </div>
-
-      <div class="concept-box blue" style="margin-top: 12px">
-        <strong>RAPIER CONCEPT — Combine rules for restitution and friction</strong><br />
-        When two colliders meet, Rapier must combine their individual values into one contact
-        value. The default rule for restitution is <strong>average</strong>: the ground here
-        has <code>e = 0.0</code>, so the effective restitution for a ball with <code>e = 1.0</code>
-        is <code>(1.0 + 0.0) / 2 = 0.5</code>. To make the ball's value authoritative, set the
-        ground to <code>e = 1.0</code> and use <code>setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min)</code>
-        — or set the ground's rule to <code>Multiply</code>. This demo uses the
-        <strong>Max</strong> rule on each ball's collider so its restitution dominates the contact,
-        making the grid's variation clean and direct to observe.
-      </div>
-
-      <div class="concept-box purple" style="margin-top: 12px">
-        <strong>ANIMATION CONCEPT — Sphere colliders vs box colliders</strong><br />
-        This demo uses <code>ColliderDesc.ball(radius)</code> — a sphere shape. Spheres are the
-        cheapest possible collider: Rapier resolves sphere–plane contact in a single distance
-        check, with no edge or corner ambiguity. This is why billard balls, marbles, and
-        projectiles are almost always spheres in physics simulations even when their visual mesh
-        is not. The Three.js render mesh is a <code>SphereGeometry</code> sized to match.
-      </div>
     </main>
 
     <footer>
       <p><strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau</p>
-      <p>Demo created by <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a>
-         · Physics: <a href="https://rapier.rs" target="_blank" rel="noopener">Rapier</a> (Apache 2.0)
-         · Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">Three.js r165</a> (MIT)</p>
+      <p>Demo created by <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a> · Physics: <a href="https://rapier.rs" target="_blank" rel="noopener">Rapier</a> (Apache 2.0) · Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">Three.js r165</a> (MIT)</p>
     </footer>
 
-    <!-- ═══════════════════════════════════════════════════════════
-      STEP 0: Module imports
-      Three.js via importmap (no bundler). Rapier from jsDelivr, pinned to 0.12.0.
-    ═══════════════════════════════════════════════════════════ -->
     <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-          "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
-        }
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
       }
+    }
     </script>
 
     <script type="module">
@@ -489,456 +395,817 @@
       import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
       import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js";
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 1: DOM references
-      // ─────────────────────────────────────────────────────────────
-      const canvas         = document.getElementById("threeCanvas");
-      const canvasWrap     = document.getElementById("canvasWrap");
-      const overlay        = document.getElementById("loadingOverlay");
-      const progressEl     = document.getElementById("loadProgress");
-      const pctLabel       = document.getElementById("loadingPct");
-      const hudBodies      = document.getElementById("hudBodies");
-      const hudSteps       = document.getElementById("hudSteps");
-      const statDynamic    = document.getElementById("statDynamic");
-      const statGravity    = document.getElementById("statGravity");
-      const gravitySlider  = document.getElementById("gravitySlider");
-      const gravityVal     = document.getElementById("gravityVal");
-      const heightSlider   = document.getElementById("heightSlider");
-      const heightVal      = document.getElementById("heightVal");
-      const dropBtn        = document.getElementById("dropBtn");
-      const resetBtn       = document.getElementById("resetBtn");
+      // ═══════════════════════════════════════════════════════════
+      // STEP 0: Shared constants — colours used by both tabs
+      // ═══════════════════════════════════════════════════════════
+      const RESTITUTIONS = [0.0, 0.25, 0.5, 0.75, 1.0];
+      const COL_COLORS   = [0xf87171, 0xfb923c, 0xa78bfa, 0x4f9cf9, 0x34d399];
+      const COL_HEX      = ["#f87171","#fb923c","#a78bfa","#4f9cf9","#34d399"];
+      const COL_NAMES    = ["e=0.00","e=0.25","e=0.50","e=0.75","e=1.00"];
+      const BALL_RADIUS  = 0.4;
+      const FIXED_DT     = 1 / 60;
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 2: Three.js scene setup — identical pattern to Demo 1
-      // ─────────────────────────────────────────────────────────────
+      // ═══════════════════════════════════════════════════════════
+      // STEP 1: Shared Three.js renderer + clock
+      // One renderer, one canvas — both tabs share it.
+      // Tab switching tears everything down and restarts cleanly.
+      // ═══════════════════════════════════════════════════════════
+      const canvas   = document.getElementById("threeCanvas");
+      const clock    = new THREE.Clock();
+      let   accumulator = 0;
+
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-      renderer.outputColorSpace  = THREE.SRGBColorSpace;
-      renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      renderer.shadowMap.enabled  = true;
+      renderer.shadowMap.type     = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace   = THREE.SRGBColorSpace;
+      renderer.toneMapping        = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.1;
 
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x0a0c11);
-      scene.fog = new THREE.Fog(0x0a0c11, 30, 60);
+      // ═══════════════════════════════════════════════════════════
+      // STEP 2: Rapier init + loading bar
+      // ═══════════════════════════════════════════════════════════
+      const overlay    = document.getElementById("loadingOverlay");
+      const progressEl = document.getElementById("loadProgress");
+      const pctLabel   = document.getElementById("loadingPct");
 
-      // Camera positioned to see the full 5×5 grid face-on from a slight angle.
-      const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
-      camera.position.set(0, 8, 18);
-      camera.lookAt(0, 3, 0);
-
-      const controls = new OrbitControls(camera, canvas);
-      controls.target.set(0, 3, 0);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.07;
-      controls.update();
-
-      // Lights
-      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-      scene.add(ambient);
-
-      const sun = new THREE.DirectionalLight(0xfff8f0, 2.2);
-      sun.position.set(8, 14, 10);
-      sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
-      sun.shadow.camera.near = 0.5;
-      sun.shadow.camera.far  = 60;
-      sun.shadow.camera.left = sun.shadow.camera.bottom = -20;
-      sun.shadow.camera.right = sun.shadow.camera.top   =  20;
-      sun.shadow.bias = -0.001;
-      scene.add(sun);
-
-      // Grid helper
-      const grid = new THREE.GridHelper(30, 30, 0x252b38, 0x1a1f2a);
-      grid.position.y = 0.01;
-      scene.add(grid);
-
-      // ─────────────────────────────────────────────────────────────
-      // STEP 3: Grid configuration
-      //
-      // GRID CONCEPT: 5 columns × 5 rows of balls.
-      //   Columns vary RESTITUTION  (0.00, 0.25, 0.50, 0.75, 1.00)
-      //   Rows    vary FRICTION     (0.05, 0.25, 0.50, 0.70, 0.90)
-      //
-      // This lets students isolate each variable visually:
-      //   • scan left→right to see the effect of restitution
-      //   • scan top→bottom to see the effect of friction
-      //
-      // The column spacing is wide enough to see each ball independently.
-      // ─────────────────────────────────────────────────────────────
-
-      const COLS          = 5;
-      const ROWS          = 5;
-      const BALL_RADIUS   = 0.35;       // metres — radius for both physics and render
-      const COL_SPACING   = 2.6;        // metres between columns (X axis)
-      const ROW_SPACING   = 2.0;        // metres between rows (Z axis)
-
-      // Restitution values for each column (left → right)
-      const RESTITUTIONS  = [0.0, 0.25, 0.5, 0.75, 1.0];
-
-      // Friction values for each row (front → back)
-      const FRICTIONS     = [0.05, 0.25, 0.5, 0.7, 0.9];
-
-      // Visual colour per column so each restitution tier is instantly readable
-      // cold (red = no bounce) → hot (green = full bounce)
-      const COL_COLORS    = [0xf87171, 0xfb923c, 0xa78bfa, 0x4f9cf9, 0x34d399];
-
-      // Grid centre offset so the whole grid is symmetric around the origin
-      const GRID_OFFSET_X = -((COLS - 1) * COL_SPACING) / 2;  // centres columns on X=0
-      const GRID_OFFSET_Z = -((ROWS - 1) * ROW_SPACING)  / 2;  // centres rows on Z=0
-
-      // ─────────────────────────────────────────────────────────────
-      // STEP 4: Ground visual mesh
-      // ─────────────────────────────────────────────────────────────
-      const groundMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(50, 0.2, 50),
-        new THREE.MeshStandardMaterial({ color: 0x1a1f2a, roughness: 0.9, metalness: 0.0 })
-      );
-      groundMesh.receiveShadow = true;
-      groundMesh.position.y = -0.1;
-      scene.add(groundMesh);
-
-      // ─────────────────────────────────────────────────────────────
-      // STEP 5: Rapier init — identical loading-bar pattern to Demo 1
-      // ─────────────────────────────────────────────────────────────
       let loadPct = 0;
       const fakeProgress = setInterval(() => {
         loadPct = Math.min(loadPct + 3, 85);
-        progressEl.value = loadPct;
+        progressEl.value     = loadPct;
         pctLabel.textContent = loadPct + "%";
       }, 60);
 
       await RAPIER.init();
-
       clearInterval(fakeProgress);
-      progressEl.value = 100;
+      progressEl.value     = 100;
       pctLabel.textContent = "100%";
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 300));
       overlay.classList.add("hidden");
 
-      console.log("Rapier WASM ready. Version:", RAPIER.version());
+      // ═══════════════════════════════════════════════════════════
+      // STEP 3: Active-tab state
+      // activeTab drives which world gets stepped each frame.
+      // ═══════════════════════════════════════════════════════════
+      let activeTab = "grid"; // "grid" | "lab"
+      let rafId     = null;   // current requestAnimationFrame handle
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 6: Create the Rapier world
-      // ─────────────────────────────────────────────────────────────
-      let gravityY = -9.81;
-      let world    = new RAPIER.World({ x: 0.0, y: gravityY, z: 0.0 });
+      // ═══════════════════════════════════════════════════════════
+      // ───────────────────────────────────────────────────────────
+      //  TAB 1 — GRID
+      // ───────────────────────────────────────────────────────────
+      // ═══════════════════════════════════════════════════════════
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 7: Static ground body
-      //
-      // ANIMATION CONCEPT: the ground collider's restitution is set to
-      // 0.0 so that the ball's own restitution (not the ground's) drives
-      // the bounce. We then override the combine rule on the BALL's
-      // collider to CoefficientCombineRule.Max — this makes Rapier use
-      // whichever value is higher (the ball's), giving us clean, direct
-      // control over the per-ball bounce without interference from the
-      // ground surface value.
-      // ─────────────────────────────────────────────────────────────
-      function createGround() {
-        const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0.0, -0.1, 0.0);
-        const groundBody     = world.createRigidBody(groundBodyDesc);
-        world.createCollider(
-          RAPIER.ColliderDesc.cuboid(25.0, 0.1, 25.0)
-            .setFriction(0.3)
-            .setRestitution(0.0),   // ground contributes 0 — ball value dominates via Max rule
-          groundBody
+      // DOM refs — grid tab
+      const canvasWrap       = document.getElementById("canvasWrap");
+      const hudBodiesGrid    = document.getElementById("hudBodiesGrid");
+      const hudStepsGrid     = document.getElementById("hudStepsGrid");
+      const statDynamicGrid  = document.getElementById("statDynamicGrid");
+      const statGravityGrid  = document.getElementById("statGravityGrid");
+      const gravitySliderGrid = document.getElementById("gravitySliderGrid");
+      const gravityValGrid   = document.getElementById("gravityValGrid");
+      const heightSliderGrid = document.getElementById("heightSliderGrid");
+      const heightValGrid    = document.getElementById("heightValGrid");
+      const dropBtnGrid      = document.getElementById("dropBtnGrid");
+      const resetBtnGrid     = document.getElementById("resetBtnGrid");
+
+      // Grid scene state
+      let gridScene, gridCamera, gridControls, gridWorld;
+      let gridGravityY   = -9.81;
+      let gridBodyMeshPairs = [];
+      let gridLabelSprites  = [];
+
+      function buildGridScene() {
+        gridScene = new THREE.Scene();
+        gridScene.background = new THREE.Color(0x0a0c11);
+        gridScene.fog = new THREE.Fog(0x0a0c11, 30, 60);
+
+        gridCamera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+        gridCamera.position.set(0, 8, 18);
+        gridCamera.lookAt(0, 3, 0);
+
+        gridControls = new OrbitControls(gridCamera, canvas);
+        gridControls.target.set(0, 3, 0);
+        gridControls.enableDamping = true;
+        gridControls.dampingFactor = 0.07;
+        gridControls.update();
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        gridScene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xfff8f0, 2.2);
+        sun.position.set(8, 14, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 60;
+        sun.shadow.camera.left = sun.shadow.camera.bottom = -20;
+        sun.shadow.camera.right = sun.shadow.camera.top   =  20;
+        sun.shadow.bias = -0.001;
+        gridScene.add(sun);
+
+        const grid = new THREE.GridHelper(30, 30, 0x252b38, 0x1a1f2a);
+        grid.position.y = 0.01;
+        gridScene.add(grid);
+
+        const groundMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(50, 0.2, 50),
+          new THREE.MeshStandardMaterial({ color:0x1a1f2a, roughness:0.9 })
         );
+        groundMesh.receiveShadow = true;
+        groundMesh.position.y = -0.1;
+        gridScene.add(groundMesh);
       }
-      createGround();
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 8: Body/mesh registry — same pattern as Demo 1
-      //
-      // We also keep a parallel array of Three.js sprite labels so we
-      // can remove them cleanly on reset. The labels show the restitution
-      // value above each ball.
-      // ─────────────────────────────────────────────────────────────
-      const bodyMeshPairs = [];  // { body: RigidBody, mesh: THREE.Mesh }[]
-      const labelSprites  = [];  // THREE.Sprite[]
+      function createGridWorld(gY) {
+        gridWorld = new RAPIER.World({ x:0, y:gY, z:0 });
+        const gb = gridWorld.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,-0.1,0));
+        gridWorld.createCollider(RAPIER.ColliderDesc.cuboid(25,0.1,25).setFriction(0.3).setRestitution(0.0), gb);
+      }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 9: makeLabel()
-      // Renders a restitution value as a canvas texture on a THREE.Sprite.
-      // Sprites always face the camera — perfect for floating labels.
-      //
-      // THREE.JS CONCEPT: Sprite + CanvasTexture
-      // A Sprite is a quad that always faces the camera. We paint text
-      // onto a 2D canvas, create a texture from it, and apply it to the
-      // sprite's material. No geometry needed — simpler than a mesh.
-      // ─────────────────────────────────────────────────────────────
       function makeLabel(text, color) {
-        const size    = 128;
-        const cvs     = document.createElement("canvas");
-        cvs.width     = size;
-        cvs.height    = size / 2;
-        const ctx     = cvs.getContext("2d");
-
-        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        const cvs = document.createElement("canvas");
+        cvs.width = 128; cvs.height = 64;
+        const ctx = cvs.getContext("2d");
+        ctx.clearRect(0,0,128,64);
         ctx.fillStyle = color;
-        ctx.font      = "bold 32px 'IBM Plex Mono', monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(text, size / 2, cvs.height / 2);
-
-        const texture  = new THREE.CanvasTexture(cvs);
-        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
-        const sprite   = new THREE.Sprite(material);
-        sprite.scale.set(0.9, 0.45, 1);
-        return sprite;
+        ctx.font = "bold 28px 'IBM Plex Mono', monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(text, 64, 32);
+        const tex = new THREE.CanvasTexture(cvs);
+        const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false });
+        const spr = new THREE.Sprite(mat);
+        spr.scale.set(0.9, 0.45, 1);
+        return spr;
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 10: spawnBall()
-      // Creates one Rapier sphere body + collider + Three.js sphere mesh.
-      //
-      // Parameters:
-      //   pos         {x,y,z}  — initial world-space position
-      //   restitution number   — coefficient of restitution (0.0–1.0)
-      //   friction    number   — surface friction coefficient
-      //   colIndex    number   — column index (drives colour and label)
-      //
-      // RAPIER CONCEPT: ColliderDesc.ball(radius) — a sphere collider.
-      // .setRestitution(e)      sets the ball's own restitution value.
-      // .setRestitutionCombineRule(Max) → Rapier uses max(ball.e, ground.e)
-      //   as the effective contact restitution, so the ball's value is
-      //   authoritative regardless of what the ground has.
-      // .setCcdEnabled(true)    prevents fast-moving balls from tunneling
-      //   through the ground at high drop heights (same fix as Demo 1).
-      // ─────────────────────────────────────────────────────────────
-      function spawnBall(pos, restitution, friction, colIndex) {
-        // --- Rapier side ---
+      function spawnGridBall(scene, world, pairs, labels, pos, restitution, friction, colIndex) {
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
           .setTranslation(pos.x, pos.y, pos.z)
-          .setCcdEnabled(true);     // prevent tunneling at high drop heights
-
+          .setCcdEnabled(true);
         const body = world.createRigidBody(bodyDesc);
-
         world.createCollider(
           RAPIER.ColliderDesc.ball(BALL_RADIUS)
             .setDensity(1.0)
             .setRestitution(restitution)
             .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max)
-            // ↑ ANIMATION CONCEPT: Max rule → Rapier picks the higher of the
-            //   two colliders' restitution values as the contact restitution.
-            //   Ground has e=0.0, so ball's value always wins.
             .setFriction(friction)
             .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Average),
           body
         );
-
-        // --- Three.js side ---
         const mesh = new THREE.Mesh(
           new THREE.SphereGeometry(BALL_RADIUS, 24, 16),
-          new THREE.MeshStandardMaterial({
-            color:     COL_COLORS[colIndex],
-            roughness: 0.4,
-            metalness: 0.15,
-          })
+          new THREE.MeshStandardMaterial({ color:COL_COLORS[colIndex], roughness:0.4, metalness:0.15 })
         );
-        mesh.castShadow    = true;
-        mesh.receiveShadow = true;
+        mesh.castShadow = mesh.receiveShadow = true;
         scene.add(mesh);
 
-        // Label sprite — shows the restitution value above the ball
-        const hexColor = "#" + COL_COLORS[colIndex].toString(16).padStart(6, "0");
-        const label    = makeLabel("e=" + restitution.toFixed(2), hexColor);
+        const label = makeLabel(COL_NAMES[colIndex], COL_HEX[colIndex]);
         label.position.set(pos.x, pos.y + BALL_RADIUS + 0.35, pos.z);
         scene.add(label);
-        labelSprites.push(label);
-
-        bodyMeshPairs.push({ body, mesh, labelSprite: label });
+        labels.push(label);
+        pairs.push({ body, mesh, labelSprite:label });
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 11: spawnGrid()
-      // Drops the full 5×5 grid from the current drop height.
-      //
-      // We offset each ball slightly in X and Z (± a few mm of jitter)
-      // so identical balls in the same column don't stack with zero
-      // contact — this prevents interpenetration artefacts on spawn.
-      // ─────────────────────────────────────────────────────────────
-      function spawnGrid() {
-        const dropHeight = parseFloat(heightSlider.value);
+      function spawnGridAll() {
+        const COLS=5, ROWS=5, COL_SP=2.6, ROW_SP=2.0;
+        const FRICTIONS=[0.05,0.25,0.5,0.7,0.9];
+        const ox = -((COLS-1)*COL_SP)/2, oz = -((ROWS-1)*ROW_SP)/2;
+        const h  = parseFloat(heightSliderGrid.value);
+        for (let c=0;c<COLS;c++) for (let r=0;r<ROWS;r++) {
+          spawnGridBall(gridScene, gridWorld, gridBodyMeshPairs, gridLabelSprites,
+            { x: ox+c*COL_SP+(Math.random()-0.5)*0.02,
+              y: h+BALL_RADIUS,
+              z: oz+r*ROW_SP+(Math.random()-0.5)*0.02 },
+            RESTITUTIONS[c], FRICTIONS[r], c);
+        }
+        statDynamicGrid.textContent = gridBodyMeshPairs.length;
+        hudBodiesGrid.textContent   = gridBodyMeshPairs.length+1;
+      }
 
-        for (let col = 0; col < COLS; col++) {
-          for (let row = 0; row < ROWS; row++) {
-            const x   = GRID_OFFSET_X + col * COL_SPACING;
-            const z   = GRID_OFFSET_Z + row * ROW_SPACING;
-            const y   = dropHeight + BALL_RADIUS;
-            // tiny jitter avoids perfect column alignment that can produce
-            // unstable stacks when all balls fall simultaneously
-            const jx  = (Math.random() - 0.5) * 0.02;
-            const jz  = (Math.random() - 0.5) * 0.02;
+      function clearGridScene() {
+        for (const {body,mesh,labelSprite} of gridBodyMeshPairs) {
+          gridWorld.removeRigidBody(body);
+          gridScene.remove(mesh); gridScene.remove(labelSprite);
+          mesh.geometry.dispose(); mesh.material.dispose();
+          labelSprite.material.map.dispose(); labelSprite.material.dispose();
+        }
+        gridBodyMeshPairs.length = 0;
+        gridLabelSprites.length  = 0;
+      }
 
-            spawnBall(
-              { x: x + jx, y, z: z + jz },
-              RESTITUTIONS[col],
-              FRICTIONS[row],
-              col
-            );
+      function syncGrid() {
+        for (const {body,mesh,labelSprite} of gridBodyMeshPairs) {
+          const p=body.translation(), r=body.rotation();
+          mesh.position.set(p.x,p.y,p.z);
+          mesh.quaternion.set(r.x,r.y,r.z,r.w);
+          labelSprite.position.set(p.x, p.y+BALL_RADIUS+0.35, p.z);
+        }
+      }
+
+      function setGridRendererSize() {
+        const w=canvasWrap.clientWidth, h=canvasWrap.clientHeight;
+        renderer.setSize(w,h,false);
+        gridCamera.aspect=w/h; gridCamera.updateProjectionMatrix();
+      }
+
+      function initGridTab() {
+        buildGridScene();
+        createGridWorld(gridGravityY);
+        spawnGridAll();
+        setGridRendererSize();
+        clock.start(); accumulator=0;
+      }
+
+      function animateGrid() {
+        if (activeTab !== "grid") return;
+        rafId = requestAnimationFrame(animateGrid);
+        const el = clock.getDelta();
+        accumulator += el;
+        let steps=0;
+        while (accumulator >= FIXED_DT) { gridWorld.step(); accumulator-=FIXED_DT; steps++; }
+        syncGrid();
+        gridControls.update();
+        renderer.render(gridScene, gridCamera);
+        hudStepsGrid.textContent = steps;
+      }
+
+      function destroyGridTab() {
+        clearGridScene();
+        // dispose scene objects
+        gridScene.clear();
+      }
+
+      // Grid UI listeners
+      gravitySliderGrid.addEventListener("input", () => {
+        const g=parseFloat(gravitySliderGrid.value);
+        gravityValGrid.textContent=statGravityGrid.textContent=g.toFixed(2)+" m/s²";
+        gridGravityY=-g;
+        clearGridScene();
+        createGridWorld(gridGravityY);
+        spawnGridAll();
+      });
+      heightSliderGrid.addEventListener("input", () => {
+        heightValGrid.textContent=parseFloat(heightSliderGrid.value).toFixed(1)+" m";
+      });
+      dropBtnGrid.addEventListener("click", () => { clearGridScene(); spawnGridAll(); });
+      resetBtnGrid.addEventListener("click", () => {
+        gravitySliderGrid.value="9.81"; gravityValGrid.textContent=statGravityGrid.textContent="9.81 m/s²";
+        heightSliderGrid.value="6"; heightValGrid.textContent="6.0 m";
+        gridGravityY=-9.81;
+        clearGridScene(); createGridWorld(gridGravityY); spawnGridAll();
+      });
+
+      // ═══════════════════════════════════════════════════════════
+      // ───────────────────────────────────────────────────────────
+      //  TAB 2 — LAB
+      // ───────────────────────────────────────────────────────────
+      // ═══════════════════════════════════════════════════════════
+
+      const labCanvasWrap    = document.getElementById("labCanvasWrap");
+      const hudBodiesLab     = document.getElementById("hudBodiesLab");
+      const hudStepsLab      = document.getElementById("hudStepsLab");
+      const phaseLabel       = document.getElementById("phaseLabel");
+      const heightSliderLab  = document.getElementById("heightSliderLab");
+      const heightValLab     = document.getElementById("heightValLab");
+      const gravitySliderLab = document.getElementById("gravitySliderLab");
+      const gravityValLab    = document.getElementById("gravityValLab");
+      const dropBtnLab       = document.getElementById("dropBtnLab");
+      const resetBtnLab      = document.getElementById("resetBtnLab");
+      const bounceBarCanvas  = document.getElementById("bounceBarCanvas");
+      const timelineCanvas   = document.getElementById("timelineCanvas");
+      const measureBody      = document.getElementById("measureBody");
+
+      // Lab scene state
+      let labScene, labCamera, labControls, labWorld;
+      let labGravityY      = -9.81;
+      let labBalls         = [];      // { body, mesh, restitution, colIndex, maxBounceY, lastY, bounceCount, prevVelY, kineticHistory[], timelineHistory[] }
+      let labDropped       = false;
+      let labPhase         = "ready"; // "ready" | "falling" | "done"
+      const MAX_TIMELINE   = 300;
+
+      // ── Lab scene build ──
+      function buildLabScene() {
+        labScene = new THREE.Scene();
+        labScene.background = new THREE.Color(0x0a0c11);
+        labScene.fog = new THREE.Fog(0x0a0c11, 25, 50);
+
+        labCamera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+        labCamera.position.set(0, 5, 14);
+        labCamera.lookAt(0, 2, 0);
+
+        labControls = new OrbitControls(labCamera, canvas);
+        labControls.target.set(0, 2, 0);
+        labControls.enableDamping = true;
+        labControls.dampingFactor = 0.07;
+        labControls.update();
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        labScene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xfff8f0, 2.5);
+        sun.position.set(5, 12, 8);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048,2048);
+        sun.shadow.camera.near=0.5; sun.shadow.camera.far=50;
+        sun.shadow.camera.left=sun.shadow.camera.bottom=-15;
+        sun.shadow.camera.right=sun.shadow.camera.top=15;
+        sun.shadow.bias=-0.001;
+        labScene.add(sun);
+
+        const grid = new THREE.GridHelper(20,20,0x252b38,0x1a1f2a);
+        grid.position.y=0.01; labScene.add(grid);
+
+        const gm = new THREE.Mesh(
+          new THREE.BoxGeometry(40,0.2,40),
+          new THREE.MeshStandardMaterial({color:0x1a1f2a,roughness:0.9})
+        );
+        gm.receiveShadow=true; gm.position.y=-0.1; labScene.add(gm);
+
+        // drop height line — a thin horizontal plane indicator
+        const lineGeo  = new THREE.PlaneGeometry(12, 0.04);
+        const lineMat  = new THREE.MeshBasicMaterial({ color:0x34d399, transparent:true, opacity:0.35, side:THREE.DoubleSide });
+        const lineMesh = new THREE.Mesh(lineGeo, lineMat);
+        lineMesh.rotation.x = -Math.PI/2;
+        lineMesh.name = "dropLine";
+        labScene.add(lineMesh);
+      }
+
+      function createLabWorld(gY) {
+        labWorld = new RAPIER.World({ x:0, y:gY, z:0 });
+        const gb = labWorld.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,-0.1,0));
+        labWorld.createCollider(RAPIER.ColliderDesc.cuboid(20,0.1,20).setFriction(0.4).setRestitution(0.0), gb);
+      }
+
+      // ── Lab balls ──
+      // Spacing: 5 balls evenly spread on X, all at z=0
+      const LAB_SPACING = 2.4;
+      const LAB_OFFSET_X = -((5-1)*LAB_SPACING)/2;
+
+      function spawnLabBalls() {
+        const h = parseFloat(heightSliderLab.value);
+        // update drop line
+        const dl = labScene.getObjectByName("dropLine");
+        if (dl) dl.position.y = h + BALL_RADIUS;
+
+        for (let i=0; i<5; i++) {
+          const x = LAB_OFFSET_X + i*LAB_SPACING;
+          const y = h + BALL_RADIUS;
+
+          const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(x, y, 0)
+            .setCcdEnabled(true)
+            .setLinvel(0,0,0);
+          // Start as kinematic until drop so balls hold position
+          const body = labWorld.createRigidBody(bodyDesc);
+          // Lock in place until drop by making kinematic
+          body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+
+          labWorld.createCollider(
+            RAPIER.ColliderDesc.ball(BALL_RADIUS)
+              .setDensity(1.0)
+              .setRestitution(RESTITUTIONS[i])
+              .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max)
+              .setFriction(0.4),
+            body
+          );
+
+          const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(BALL_RADIUS, 32, 20),
+            new THREE.MeshStandardMaterial({ color:COL_COLORS[i], roughness:0.3, metalness:0.2 })
+          );
+          mesh.castShadow=mesh.receiveShadow=true;
+          mesh.position.set(x,y,0);
+          labScene.add(mesh);
+
+          labBalls.push({
+            body, mesh,
+            restitution: RESTITUTIONS[i],
+            colIndex: i,
+            maxBounceY: 0,
+            lastY: y,
+            prevVelY: 0,
+            bounceCount: 0,
+            kineticHistory: [],
+            timelineHistory: []
+          });
+        }
+        hudBodiesLab.textContent = labBalls.length+1;
+      }
+
+      function clearLabScene() {
+        for (const {body,mesh} of labBalls) {
+          labWorld.removeRigidBody(body);
+          labScene.remove(mesh);
+          mesh.geometry.dispose(); mesh.material.dispose();
+        }
+        labBalls.length = 0;
+        labDropped = false;
+        labPhase   = "ready";
+      }
+
+      // ── Energy colouring ──
+      // Maps kinetic energy (clamped 0–1) to a colour:
+      //   0 KE → cool blue (#4f9cf9)
+      //   1 KE → hot red  (#f87171)
+      function keToColor(ke01) {
+        const r = Math.round(0x4f + (0xf8-0x4f)*ke01);
+        const g = Math.round(0x9c + (0x71-0x9c)*ke01);
+        const b = Math.round(0xf9 + (0x71-0xf9)*ke01);
+        return new THREE.Color(r/255, g/255, b/255);
+      }
+
+      // ── Lab sync + per-frame analytics ──
+      function syncLab() {
+        for (let i=0; i<labBalls.length; i++) {
+          const ball = labBalls[i];
+          const p = ball.body.translation();
+          const v = ball.body.linvel ? ball.body.linvel() : {x:0,y:0,z:0};
+
+          ball.mesh.position.set(p.x, p.y, p.z);
+
+          if (labDropped) {
+            const vy   = v.y;
+            const ke01 = Math.min(vy*vy / 100, 1.0); // normalise; 10 m/s ≈ max
+            ball.mesh.material.color.copy(keToColor(ke01));
+            ball.kineticHistory.push(ke01);
+            if (ball.kineticHistory.length > 200) ball.kineticHistory.shift();
+
+            // Detect bounce: vy crossed zero upward
+            if (ball.prevVelY < -0.5 && vy >= 0) {
+              ball.bounceCount++;
+              const bounceH = p.y - BALL_RADIUS;
+              if (bounceH > ball.maxBounceY) ball.maxBounceY = bounceH;
+            }
+            ball.prevVelY = vy;
+            ball.lastY    = p.y;
+
+            // Per-ball timeline
+            ball.timelineHistory.push(p.y - BALL_RADIUS);
+            if (ball.timelineHistory.length > MAX_TIMELINE) ball.timelineHistory.shift();
+          }
+        }
+      }
+
+      // ── 2D charts ──
+      function drawBounceBar() {
+        const cvs = bounceBarCanvas;
+        const w = cvs.clientWidth || cvs.parentElement.clientWidth || 260;
+        const h = 120;
+        cvs.width  = w * window.devicePixelRatio;
+        cvs.height = h * window.devicePixelRatio;
+        const ctx = cvs.getContext("2d");
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        ctx.clearRect(0,0,w,h);
+        const maxH = parseFloat(heightSliderLab.value) || 8;
+        const barW = Math.floor((w - 40) / 5) - 4;
+        const chartH = h - 24;
+
+        for (let i=0; i<5; i++) {
+          const ball = labBalls[i];
+          const frac = ball ? Math.min(ball.maxBounceY / maxH, 1.0) : 0;
+          const bh   = Math.max(frac * chartH, 2);
+          const x    = 20 + i*(barW+4);
+          const y    = chartH - bh;
+
+          // bar
+          ctx.fillStyle = COL_HEX[i] + "88";
+          ctx.fillRect(x, y, barW, bh);
+          ctx.fillStyle = COL_HEX[i];
+          ctx.fillRect(x, y, barW, 3);
+
+          // label
+          ctx.fillStyle = COL_HEX[i];
+          ctx.font = "9px 'IBM Plex Mono', monospace";
+          ctx.textAlign = "center";
+          if (ball && ball.maxBounceY > 0.05) {
+            ctx.fillText(ball.maxBounceY.toFixed(2)+"m", x+barW/2, y-3);
+          }
+          ctx.fillStyle = "#5a6175";
+          ctx.fillText(COL_NAMES[i], x+barW/2, h-4);
+        }
+
+        // drop height reference line
+        ctx.strokeStyle = "#34d39944";
+        ctx.setLineDash([3,3]);
+        ctx.beginPath();
+        ctx.moveTo(20, 1); ctx.lineTo(w-20, 1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle="#34d39966";
+        ctx.font="9px 'IBM Plex Mono',monospace";
+        ctx.textAlign="right";
+        ctx.fillText("drop height", w-22, 10);
+      }
+
+      function drawTimeline() {
+        const cvs = timelineCanvas;
+        const w = cvs.clientWidth || cvs.parentElement.clientWidth || 260;
+        const h = 140;
+        cvs.width  = w * window.devicePixelRatio;
+        cvs.height = h * window.devicePixelRatio;
+        const ctx  = cvs.getContext("2d");
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        ctx.clearRect(0,0,w,h);
+
+        const maxH   = parseFloat(heightSliderLab.value) || 8;
+        const padL   = 26; // left margin for y-axis label
+        const padR   = 6;
+        const padT   = 10;
+        const padB   = 18; // bottom margin for legend
+        const cw     = w - padL - padR;
+        const ch     = h - padT - padB;
+
+        // background grid lines
+        ctx.strokeStyle = "#1e2330";
+        ctx.lineWidth   = 1;
+        for (let g=0; g<=4; g++) {
+          const gy = padT + ch - (g/4)*ch;
+          ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(padL+cw, gy); ctx.stroke();
+          ctx.fillStyle = "#3a4055";
+          ctx.font = "8px 'IBM Plex Mono',monospace";
+          ctx.textAlign = "right";
+          ctx.fillText(((g/4)*maxH).toFixed(1), padL-3, gy+3);
+        }
+
+        // axes
+        ctx.strokeStyle = "#252b38"; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, padT); ctx.lineTo(padL, padT+ch); ctx.lineTo(padL+cw, padT+ch);
+        ctx.stroke();
+
+        const hasData = labBalls.some(b => b.timelineHistory.length >= 2);
+
+        if (!hasData) {
+          ctx.fillStyle = "#5a6175";
+          ctx.font = "10px 'IBM Plex Mono',monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("waiting for drop…", padL + cw/2, padT + ch/2 + 4);
+        } else {
+          // draw each ball's curve
+          for (let i=0; i<labBalls.length; i++) {
+            const ball = labBalls[i];
+            const hist = ball.timelineHistory;
+            if (hist.length < 2) continue;
+
+            const col = COL_HEX[ball.colIndex];
+            ctx.beginPath();
+            ctx.strokeStyle = col;
+            ctx.lineWidth   = 1.5;
+            for (let j=0; j<hist.length; j++) {
+              const x = padL + (j/(MAX_TIMELINE-1))*cw;
+              const y = padT + ch - Math.max(0, Math.min(hist[j]/maxH, 1))*ch;
+              if (j===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
           }
         }
 
-        statDynamic.textContent = bodyMeshPairs.length;
-        hudBodies.textContent   = bodyMeshPairs.length + 1; // +1 for ground
-        console.log(`Grid spawned: ${bodyMeshPairs.length} balls from height ${dropHeight.toFixed(1)} m`);
-      }
+        // y-axis label
+        ctx.save();
+        ctx.fillStyle = "#5a6175";
+        ctx.font = "8px 'IBM Plex Mono',monospace";
+        ctx.textAlign = "center";
+        ctx.translate(9, padT + ch/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.fillText("height (m)", 0, 0);
+        ctx.restore();
 
-      spawnGrid();
-
-      // ─────────────────────────────────────────────────────────────
-      // STEP 12: syncPhysicsToRender()
-      // Copies Rapier body transforms to Three.js meshes each frame.
-      // The label sprite tracks the mesh's position with a Y offset
-      // so it floats above the ball as it bounces.
-      //
-      // ANIMATION CONCEPT: same sync pattern as Demo 1.
-      // body.translation() → mesh.position
-      // body.rotation()    → mesh.quaternion   (rotation matters for
-      //   friction: a ball rolling on the ground will spin visually)
-      // ─────────────────────────────────────────────────────────────
-      function syncPhysicsToRender() {
-        for (const { body, mesh, labelSprite } of bodyMeshPairs) {
-          const pos = body.translation();
-          const rot = body.rotation();
-
-          mesh.position.set(pos.x, pos.y, pos.z);
-          mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
-
-          // Keep label above the ball at all times
-          labelSprite.position.set(pos.x, pos.y + BALL_RADIUS + 0.35, pos.z);
+        // legend row at bottom
+        const legendY = h - 5;
+        const slotW   = cw / 5;
+        ctx.font = "8px 'IBM Plex Mono',monospace";
+        ctx.textAlign = "center";
+        for (let i=0; i<5; i++) {
+          const lx = padL + slotW*i + slotW/2;
+          ctx.fillStyle = COL_HEX[i];
+          ctx.beginPath();
+          ctx.arc(lx - 14, legendY - 3, 3, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillText(COL_NAMES[i], lx - 2, legendY);
         }
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 13: clearScene()
-      // Removes all dynamic bodies and their meshes + labels.
-      // ─────────────────────────────────────────────────────────────
-      function clearScene() {
-        for (const { body, mesh, labelSprite } of bodyMeshPairs) {
-          world.removeRigidBody(body);
-          scene.remove(mesh);
-          scene.remove(labelSprite);
-          mesh.geometry.dispose();
-          mesh.material.dispose();
-          labelSprite.material.map.dispose();
-          labelSprite.material.dispose();
-        }
-        bodyMeshPairs.length = 0;
-        labelSprites.length  = 0;
-      }
+      // ── Live measure table ──
+      function updateMeasureTable() {
+        const dropH = parseFloat(heightSliderLab.value) || 8;
+        // initial KE ∝ h (mgh); we normalise to drop height
+        // after n bounces, retained energy fraction = e^(2n) × (currentH / dropH)
+        // simpler proxy: energy% = (currentBounceHeight / dropH) × 100 after each bounce
+        // during fall: use current height as proxy
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 14: Fixed-timestep accumulator — identical to Demo 1
-      // ─────────────────────────────────────────────────────────────
-      const FIXED_DT    = 1 / 60;
-      const clock       = new THREE.Clock();
-      let   accumulator = 0;
+        if (!measureBody) return;
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 15: setRendererSize() — keeps resolution matched to canvas
-      // ─────────────────────────────────────────────────────────────
-      function setRendererSize() {
-        const w = canvasWrap.clientWidth;
-        const h = canvasWrap.clientHeight;
-        renderer.setSize(w, h, false);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-      }
-
-      // ─────────────────────────────────────────────────────────────
-      // STEP 16: animate() — the main render loop
-      // ─────────────────────────────────────────────────────────────
-      function animate() {
-        requestAnimationFrame(animate);
-
-        const elapsed = clock.getDelta();
-        accumulator  += elapsed;
-
-        let stepsThisFrame = 0;
-
-        while (accumulator >= FIXED_DT) {
-          world.step();
-          accumulator  -= FIXED_DT;
-          stepsThisFrame++;
+        // Build rows on first call or if empty
+        if (measureBody.children.length === 0) {
+          for (let i=0; i<5; i++) {
+            const tr = document.createElement("tr");
+            tr.id = "mrow-"+i;
+            measureBody.appendChild(tr);
+          }
         }
 
-        syncPhysicsToRender();
-        controls.update();
-        renderer.render(scene, camera);
+        for (let i=0; i<5; i++) {
+          const ball = labBalls[i];
+          const tr   = document.getElementById("mrow-"+i);
+          if (!tr) continue;
 
-        hudSteps.textContent = stepsThisFrame;
+          if (!ball) {
+            tr.innerHTML = "";
+            continue;
+          }
+
+          const currentH = labDropped ? Math.max(0, ball.lastY - BALL_RADIUS) : dropH;
+          const energyPct = labDropped
+            ? Math.round(Math.min((currentH / dropH) * 100, 100))
+            : 100;
+          const barW = Math.round(energyPct * 0.6); // max ~60px
+          const heightStr = labDropped
+            ? (Math.max(0, ball.lastY - BALL_RADIUS)).toFixed(2) + " m"
+            : dropH.toFixed(1) + " m";
+          const bouncesStr = labDropped ? ball.bounceCount : "—";
+          const energyDim  = !labDropped || energyPct > 5 ? "" : " dim";
+
+          tr.innerHTML = `
+            <td><span class="measure-swatch" style="background:${COL_HEX[i]}"></span>${COL_NAMES[i]}</td>
+            <td class="measure-val">${heightStr}</td>
+            <td class="measure-val">${bouncesStr}</td>
+            <td>
+              <span class="measure-energy-bar" style="width:${barW}px;background:${COL_HEX[i]};opacity:0.7;"></span>
+              <span class="measure-val${energyDim}" style="margin-left:4px;">${energyPct}%</span>
+            </td>`;
+        }
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 17: recreateWorld()
-      // Rebuilds the Rapier World when gravity changes (gravity is
-      // constructor-only in this version of Rapier, same constraint
-      // as Demo 1) and re-spawns all bodies.
-      // ─────────────────────────────────────────────────────────────
-      function recreateWorld(newGravityY) {
-        clearScene();
-        world = new RAPIER.World({ x: 0.0, y: newGravityY, z: 0.0 });
-        createGround();
-        spawnGrid();
+
+
+      // ── Lab renderer size ──
+      function setLabRendererSize() {
+        const w=labCanvasWrap.clientWidth, h=labCanvasWrap.clientHeight;
+        renderer.setSize(w,h,false);
+        labCamera.aspect=w/h; labCamera.updateProjectionMatrix();
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 18: UI event listeners
-      // ─────────────────────────────────────────────────────────────
+      // ── Lab init ──
+      function initLabTab() {
+        buildLabScene();
+        createLabWorld(labGravityY);
+        spawnLabBalls();
+        setLabRendererSize();
+        phaseLabel.textContent="① Ready";
+        phaseLabel.style.color="var(--accent)";
+        clock.start(); accumulator=0;
+      }
 
-      // Gravity slider — same recreate-world pattern as Demo 1
-      gravitySlider.addEventListener("input", () => {
-        const g = parseFloat(gravitySlider.value);
-        gravityVal.textContent  = g.toFixed(2) + " m/s²";
-        statGravity.textContent = g.toFixed(2) + " m/s²";
-        gravityY = -g;
-        recreateWorld(gravityY);
-        console.log(`Gravity changed to ${g.toFixed(2)} m/s². World recreated.`);
+      function animateLab() {
+        if (activeTab !== "lab") return;
+        rafId = requestAnimationFrame(animateLab);
+        const el = clock.getDelta();
+
+        if (labDropped) {
+          accumulator += el;
+          let steps=0;
+          while (accumulator>=FIXED_DT) { labWorld.step(); accumulator-=FIXED_DT; steps++; }
+          hudStepsLab.textContent=steps;
+        }
+
+        syncLab();
+        drawBounceBar();
+        drawTimeline();
+        updateMeasureTable();
+        labControls.update();
+        renderer.render(labScene, labCamera);
+
+        // Check if experiment is "done" — all balls nearly at rest
+        if (labDropped && labPhase==="falling") {
+          const allResting = labBalls.every(b => {
+            const v = b.body.linvel();
+            return Math.abs(v.y)<0.05 && Math.abs(b.body.translation().y - BALL_RADIUS)<0.05;
+          });
+          if (allResting) {
+            labPhase="done";
+            phaseLabel.textContent="③ Done";
+            phaseLabel.style.color="var(--green)";
+          }
+        }
+      }
+
+      function destroyLabTab() {
+        clearLabScene();
+        labScene.clear();
+      }
+
+      // Lab UI listeners
+      dropBtnLab.addEventListener("click", () => {
+        if (labPhase!=="ready") return;
+        for (const ball of labBalls) {
+          ball.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        }
+        labDropped=true;
+        labPhase="falling";
+        phaseLabel.textContent="② Falling…";
+        phaseLabel.style.color="var(--orange)";
+        dropBtnLab.disabled=true;
       });
 
-      // Height slider — just updates the display label; Drop applies it
-      heightSlider.addEventListener("input", () => {
-        const h = parseFloat(heightSlider.value);
-        heightVal.textContent = h.toFixed(1) + " m";
+      heightSliderLab.addEventListener("input", () => {
+        heightValLab.textContent=parseFloat(heightSliderLab.value).toFixed(1)+" m";
       });
 
-      // Drop button — clears and re-spawns at the current height
-      dropBtn.addEventListener("click", () => {
-        clearScene();
-        spawnGrid();
+      gravitySliderLab.addEventListener("input", () => {
+        const g=parseFloat(gravitySliderLab.value);
+        gravityValLab.textContent=g.toFixed(2)+" m/s²";
+        labGravityY=-g;
+        clearLabScene();
+        createLabWorld(labGravityY);
+        spawnLabBalls();
+        dropBtnLab.disabled=false;
+        phaseLabel.textContent="① Ready";
+        phaseLabel.style.color="var(--accent)";
+        if (measureBody) measureBody.innerHTML="";
       });
 
-      // Reset button — also resets gravity and height sliders
-      resetBtn.addEventListener("click", () => {
-        gravitySlider.value     = "9.81";
-        gravityVal.textContent  = "9.81 m/s²";
-        statGravity.textContent = "9.81 m/s²";
-        gravityY = -9.81;
-        heightSlider.value    = "6";
-        heightVal.textContent = "6.0 m";
-        recreateWorld(gravityY);
-        console.log("Full reset complete.");
+      resetBtnLab.addEventListener("click", () => {
+        heightSliderLab.value="8"; heightValLab.textContent="8.0 m";
+        gravitySliderLab.value="9.81"; gravityValLab.textContent="9.81 m/s²";
+        labGravityY=-9.81;
+        clearLabScene();
+        createLabWorld(labGravityY);
+        spawnLabBalls();
+        dropBtnLab.disabled=false;
+        phaseLabel.textContent="① Ready";
+        phaseLabel.style.color="var(--accent)";
+        if (measureBody) measureBody.innerHTML="";
       });
 
-      // ─────────────────────────────────────────────────────────────
-      // STEP 19: Startup
-      // ─────────────────────────────────────────────────────────────
-      window.addEventListener("resize", setRendererSize);
-      setRendererSize();
-      clock.start();
-      animate();
+      // ═══════════════════════════════════════════════════════════
+      // STEP 4: Tab switching
+      // On switch: cancel RAF, destroy active scene, move canvas
+      // element to new wrapper, init new tab, restart RAF.
+      // ═══════════════════════════════════════════════════════════
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.tab;
+          if (target === activeTab) return;
+
+          // stop current loop
+          if (rafId) { cancelAnimationFrame(rafId); rafId=null; }
+
+          // destroy current tab
+          if (activeTab==="grid") destroyGridTab();
+          else                     destroyLabTab();
+
+          // swap UI
+          document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+          document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+          btn.classList.add("active");
+          document.getElementById("panel-"+target).classList.add("active");
+
+          // move canvas to correct wrapper
+          if (target==="grid") {
+            canvasWrap.insertBefore(canvas, canvasWrap.firstChild);
+          } else {
+            labCanvasWrap.insertBefore(canvas, labCanvasWrap.firstChild);
+          }
+
+          activeTab = target;
+          accumulator = 0;
+
+          // init and start new tab
+          if (target==="grid") {
+            // reset grid state
+            gridBodyMeshPairs=[]; gridLabelSprites=[];
+            gridGravityY=-9.81;
+            gravitySliderGrid.value="9.81"; gravityValGrid.textContent=statGravityGrid.textContent="9.81 m/s²";
+            heightSliderGrid.value="6"; heightValGrid.textContent="6.0 m";
+            initGridTab();
+            animateGrid();
+          } else {
+            labBalls=[]; labDropped=false; labPhase="ready";
+            labGravityY=-9.81;
+            initLabTab();
+            animateLab();
+          }
+        });
+      });
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 5: Window resize
+      // ═══════════════════════════════════════════════════════════
+      window.addEventListener("resize", () => {
+        if (activeTab==="grid") setGridRendererSize();
+        else                     setLabRendererSize();
+      });
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 6: Startup — begin on grid tab
+      // ═══════════════════════════════════════════════════════════
+      initGridTab();
+      animateGrid();
 
       console.log(
-        "Demo 2 ready.\n" +
-        "  Press Drop to drop all 25 balls simultaneously.\n" +
-        "  Columns (left→right): restitution 0.00 → 1.00\n" +
-        "  Rows (front→back):    friction    0.05 → 0.90\n" +
-        "  Adjust gravity and drop height with the sliders.\n" +
-        "  Press Reset to restore defaults.\n" +
-        "  Open this file's source to follow the STEP comments."
+        "Demo 2 ready.\n"+
+        "  Tab 1 (Grid): 5×5 ball matrix — columns vary restitution, rows vary friction.\n"+
+        "  Tab 2 (Lab): predict-then-verify, energy colouring, bounce bars, timeline.\n"+
+        "  Switching tabs restarts the simulation cleanly."
       );
     </script>
   </body>
