@@ -305,7 +305,7 @@
         <p>
           A <strong>Rapier physics world</strong> runs in parallel with the Three.js scene.
           Boxes fall under gravity, stack on a ground plane, and collide with each other —
-          all computed by Rapier's rigid body solver. <strong>Click anywhere on the ground</strong>
+          all computed by Rapier's rigid body solver. <strong>Right-click anywhere on the ground</strong>
           to throw a new box from the camera toward that point.
         </p>
         <p>
@@ -335,7 +335,7 @@
           </div>
 
           <!-- Click hint -->
-          <div id="clickHint">click on the ground to throw a box</div>
+          <div id="clickHint">right-click on the ground to throw a box</div>
 
           <!-- Loading overlay -->
           <div id="loadingOverlay">
@@ -682,9 +682,15 @@
         // RigidBodyDesc.dynamic() → affected by gravity and collisions.
         // .setTranslation() sets the initial world-space position.
         // .setLinvel()      sets the initial linear velocity.
+        // .setCcdEnabled()  enables Continuous Collision Detection (CCD).
+        //   Without CCD, fast-moving boxes can "tunnel" through each other
+        //   because discrete collision detection only checks positions at
+        //   each fixed timestep. CCD sweeps the body's motion path between
+        //   steps, catching collisions that discrete detection would miss.
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
           .setTranslation(pos.x, pos.y, pos.z)
-          .setLinvel(vel.x, vel.y, vel.z);
+          .setLinvel(vel.x, vel.y, vel.z)
+          .setCcdEnabled(true);
 
         const body = world.createRigidBody(bodyDesc);
 
@@ -785,10 +791,15 @@
       let   accumulator = 0;
 
       // ─────────────────────────────────────────────────────────────
-      // STEP 12: Raycasting for click-to-throw
-      // We use Three.js's Raycaster to find where the mouse click
+      // STEP 12: Raycasting for right-click-to-throw
+      // We use Three.js's Raycaster to find where the right-click
       // intersects the ground plane, then throw a box from the camera
       // toward that world-space point with an initial velocity.
+      //
+      // We use "contextmenu" instead of "click" so that orbiting with
+      // the left mouse button (OrbitControls) does not accidentally
+      // trigger a throw when the mouse is released. Right-click is
+      // ignored by OrbitControls, so there is no conflict.
       //
       // ANIMATION CONCEPT: impulse vs velocity.
       // We set initial velocity directly with .setLinvel() on the body.
@@ -801,7 +812,9 @@
       const throwTarget   = new THREE.Vector3();
       let   hintFaded     = false;
 
-      canvasWrap.addEventListener("click", (e) => {
+      canvasWrap.addEventListener("contextmenu", (e) => {
+        e.preventDefault(); // suppress the browser's right-click context menu
+
         // Convert mouse pixel coords → Normalised Device Coordinates (NDC)
         const rect = canvasWrap.getBoundingClientRect();
         mouseNDC.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
@@ -968,7 +981,7 @@
         for (const { body: oldBody, mesh } of oldPairs) {
           const pos  = oldBody.translation();
           const size = mesh.geometry.parameters.width; // recover size from geometry
-          const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
+          const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z).setCcdEnabled(true);
           const newBody  = world.createRigidBody(bodyDesc);
           world.createCollider(
             RAPIER.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
@@ -1000,7 +1013,7 @@
         for (const { body: oldBody, mesh } of [...bodyMeshPairs]) {
           const pos  = oldBody.translation();
           const size = mesh.geometry.parameters.width;
-          const bd   = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
+          const bd   = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z).setCcdEnabled(true);
           const nb   = world.createRigidBody(bd);
           world.createCollider(
             RAPIER.ColliderDesc.cuboid(size/2, size/2, size/2).setDensity(1.0).setRestitution(0.35).setFriction(0.6), nb
@@ -1021,7 +1034,8 @@
 
       console.log(
         "Demo 1 ready.\n" +
-        "  Click the ground to throw boxes.\n" +
+        "  Right-click the ground to throw boxes (CCD enabled — no tunneling).\n" +
+        "  Left-click + drag to orbit the camera.\n" +
         "  Adjust gravity with the slider.\n" +
         "  Press Reset to clear and respawn the initial stack.\n" +
         "  Open this file's source to follow the STEP comments."
