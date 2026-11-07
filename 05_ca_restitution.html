@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo 2: Bounciness Explorer — Computeranimation Seminar 05</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:      #0d0f14;
+        --surface: #161a22;
+        --border:  #252b38;
+        --text:    #d8dce6;
+        --muted:   #5a6175;
+        --accent:  #4f9cf9;
+        --accent2: #a78bfa;
+        --green:   #34d399;
+        --orange:  #fb923c;
+        --red:     #f87171;
+        --mono: "IBM Plex Mono", monospace;
+        --sans: "IBM Plex Sans", sans-serif;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.7;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── header ── */
+      header { border-bottom: 2px solid var(--border); padding: 24px 0 20px; flex-shrink: 0; }
+      .header-inner {
+        max-width: 1200px; margin: 0 auto; padding: 0 32px;
+        display: flex; align-items: center; gap: 24px;
+      }
+      .header-logo img { width: 100px; border-radius: 10px; display: block; }
+      .header-info h1 { font-size: clamp(16px,2.5vw,22px); font-weight: 500; color: #f0f2f7; line-height: 1.2; margin-bottom: 4px; }
+      .header-info h2 { font-size: 13px; font-weight: 400; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; }
+      .header-meta { font-size: 13px; color: var(--text); line-height: 1.6; }
+      .header-meta a { color: var(--accent); text-decoration: none; }
+      .header-meta a:hover { text-decoration: underline; }
+      .header-author {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+        font-size: 13px; color: var(--muted);
+      }
+      .header-author span { color: var(--text); font-weight: 500; }
+      .header-author .linkedin-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: rgba(79,156,249,0.1); color: var(--accent);
+        font-family: var(--mono); font-size: 11px; padding: 2px 9px;
+        border-radius: 20px; border: 1px solid rgba(79,156,249,0.25);
+        text-decoration: none; transition: background 0.15s;
+      }
+      .header-author .linkedin-badge:hover { background: rgba(79,156,249,0.2); }
+
+      /* ── breadcrumb ── */
+      .breadcrumb {
+        max-width: 1200px; margin: 0 auto; padding: 14px 32px 0;
+        font-family: var(--mono); font-size: 12px; color: var(--muted); flex-shrink: 0;
+      }
+      .breadcrumb a { color: var(--accent); text-decoration: none; }
+      .breadcrumb a:hover { text-decoration: underline; }
+      .breadcrumb span { margin: 0 6px; }
+
+      /* ── main ── */
+      main { max-width: 1200px; margin: 0 auto; padding: 24px 32px 48px; flex: 1; width: 100%; }
+
+      /* ── demo intro ── */
+      .demo-intro {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
+      }
+      .demo-intro h1 { font-size: clamp(17px,2.2vw,24px); font-weight: 500; color: #f0f2f7; margin-bottom: 8px; }
+      .demo-badge {
+        display: inline-block; background: rgba(52,211,153,0.1); color: var(--green);
+        font-family: var(--mono); font-size: 11px; padding: 2px 10px;
+        border-radius: 20px; border: 1px solid rgba(52,211,153,0.28); margin-bottom: 10px;
+      }
+      .demo-intro p { color: var(--text); margin-bottom: 6px; font-size: 14px; }
+      .demo-intro p:last-child { margin-bottom: 0; }
+
+      /* ── layout ── */
+      .demo-layout {
+        display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start;
+      }
+      @media (max-width: 900px) { .demo-layout { grid-template-columns: 1fr; } }
+
+      /* ── canvas ── */
+      .canvas-wrap {
+        position: relative; background: #0a0c11;
+        border: 1px solid var(--border); border-radius: 10px;
+        overflow: hidden; aspect-ratio: 16/10; min-height: 360px;
+      }
+      #threeCanvas { width: 100%; height: 100%; display: block; }
+
+      /* ── loading overlay ── */
+      #loadingOverlay {
+        position: absolute; inset: 0; background: rgba(13,15,20,0.93);
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 16px; z-index: 10; transition: opacity 0.4s;
+      }
+      #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
+      .loading-title { font-family: var(--mono); font-size: 14px; color: var(--text); }
+      .loading-sub   { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      progress {
+        width: 200px; height: 4px; appearance: none; -webkit-appearance: none;
+        border: none; border-radius: 2px; background: var(--border); overflow: hidden;
+      }
+      progress::-webkit-progress-bar { background: var(--border); border-radius: 2px; }
+      progress::-webkit-progress-value { background: var(--green); border-radius: 2px; transition: width 0.2s; }
+      progress::-moz-progress-bar { background: var(--green); border-radius: 2px; }
+      #loadingPct { font-family: var(--mono); font-size: 13px; color: var(--green); min-width: 40px; text-align: center; }
+      .progress-row { display: flex; align-items: center; gap: 10px; }
+
+      /* ── HUD overlay — top-left of canvas ── */
+      #physicsHud {
+        position: absolute; top: 12px; left: 12px; z-index: 6;
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .hud-pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(13,15,20,0.78); backdrop-filter: blur(4px);
+        border: 1px solid var(--border); border-radius: 20px;
+        padding: 4px 12px 4px 8px; font-family: var(--mono);
+        font-size: 11px; color: var(--muted);
+      }
+      .hud-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--green); flex-shrink: 0;
+      }
+      .hud-pill span { color: var(--green); }
+
+      /* ── bottom bar ── */
+      .bottom-bar {
+        position: absolute; bottom: 0; left: 0; right: 0; height: 48px;
+        background: rgba(13,15,20,0.82); backdrop-filter: blur(6px);
+        border-top: 1px solid var(--border);
+        display: flex; align-items: center; gap: 12px; padding: 0 16px; z-index: 5;
+      }
+      .bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; }
+      .bar-val   { font-family: var(--mono); font-size: 12px; color: var(--green); flex-shrink: 0; min-width: 60px; text-align: right; }
+
+      /* sliders */
+      .bar-slider {
+        flex: 1; -webkit-appearance: none; appearance: none;
+        height: 4px; border-radius: 2px; cursor: pointer;
+        background: var(--border); accent-color: var(--green);
+      }
+      .bar-slider::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 16px; height: 16px;
+        border-radius: 50%; background: var(--green); cursor: pointer;
+        border: 2px solid var(--bg); box-shadow: 0 0 0 3px rgba(52,211,153,0.2);
+      }
+
+      /* drop button */
+      #dropBtn {
+        flex-shrink: 0; padding: 5px 14px; border-radius: 6px;
+        border: 1px solid var(--green); background: rgba(52,211,153,0.08);
+        color: var(--green); font-family: var(--mono); font-size: 12px;
+        cursor: pointer; transition: border-color 0.15s, background 0.15s;
+      }
+      #dropBtn:hover { background: rgba(52,211,153,0.18); }
+
+      /* reset button */
+      #resetBtn {
+        flex-shrink: 0; padding: 5px 14px; border-radius: 6px;
+        border: 1px solid var(--border); background: var(--bg);
+        color: var(--text); font-family: var(--mono); font-size: 12px;
+        cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      #resetBtn:hover { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.07); }
+
+      /* ── side panels ── */
+      .side-col { display: flex; flex-direction: column; gap: 12px; }
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+      .panel-header {
+        padding: 10px 16px; border-bottom: 1px solid var(--border);
+        font-family: var(--mono); font-size: 11px; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.07em;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+      .dot.green  { background: var(--green); }
+      .dot.blue   { background: var(--accent); }
+      .dot.orange { background: var(--orange); }
+      .panel-body { padding: 14px 16px; }
+
+      /* step rows in panel */
+      .step-row {
+        display: flex; gap: 10px; align-items: flex-start;
+        margin-bottom: 10px; font-size: 13px; line-height: 1.55;
+      }
+      .step-row:last-child { margin-bottom: 0; }
+      .step-num {
+        flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+        background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3);
+        font-family: var(--mono); font-size: 10px; color: var(--green);
+        display: flex; align-items: center; justify-content: center; margin-top: 1px;
+      }
+      .step-row code {
+        font-family: var(--mono); font-size: 11px;
+        background: rgba(79,156,249,0.08); color: #93c5fd;
+        padding: 1px 5px; border-radius: 3px;
+      }
+
+      /* stat rows */
+      .stat-row {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-family: var(--mono); font-size: 11px;
+        border-bottom: 1px solid rgba(37,43,56,0.5); padding: 5px 0;
+      }
+      .stat-row:last-child { border-bottom: none; }
+      .stat-label { color: var(--muted); }
+      .stat-val   { color: var(--green); }
+      .stat-val.blue { color: var(--accent); }
+
+      /* concept boxes */
+      .concept-box {
+        border-left: 4px solid var(--green);
+        background: rgba(52,211,153,0.05);
+        border-radius: 6px; padding: 12px 16px;
+        margin-top: 12px; font-size: 13px; line-height: 1.65;
+      }
+      .concept-box strong { color: var(--green); }
+      .concept-box.blue { border-left-color: var(--accent); background: rgba(79,156,249,0.05); }
+      .concept-box.blue strong { color: var(--accent); }
+      .concept-box.purple { border-left-color: var(--accent2); background: rgba(167,139,250,0.05); }
+      .concept-box.purple strong { color: var(--accent2); }
+      .concept-box code {
+        font-family: var(--mono); font-size: 12px;
+        background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px;
+      }
+
+      /* footer */
+      footer {
+        border-top: 2px solid var(--border); padding: 18px 32px 24px;
+        max-width: 1200px; margin: 0 auto; text-align: center;
+        font-size: 13px; color: var(--text); line-height: 1.7; width: 100%;
+      }
+      footer p + p { margin-top: 4px; font-size: 12px; color: var(--muted); }
+      footer a { color: var(--accent); text-decoration: none; }
+      footer a:hover { text-decoration: underline; }
+
+      @media (max-width: 700px) {
+        .header-inner, main, footer, .breadcrumb { padding-left: 20px; padding-right: 20px; }
+        .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+      }
+      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <div class="header-inner">
+        <div class="header-logo">
+          <img src="ams_group_tui.png" alt="AMS Group – TU Ilmenau" />
+        </div>
+        <div class="header-info">
+          <h1>Computeranimation — Seminar 05: Physics-based Animation</h1>
+          <h2>Demo 2 — Bounciness Explorer: Restitution &amp; Friction</h2>
+          <p class="header-meta">
+            <strong>Institut für Medientechnik –
+              <a href="https://www.tu-ilmenau.de/universitaet/fakultaeten/fakultaet-elektrotechnik-und-informationstechnik/profil/institute-und-fachgebiete/fachgebiet-angewandte-mediensysteme"
+                 target="_blank" rel="noopener">AMS Group</a>
+            </strong>
+            · Technische Universität Ilmenau
+          </p>
+          <div class="header-author">
+            Seminar materials by
+            <span>Renato Fera P.</span>
+            <a class="linkedin-badge" href="https://www.linkedin.com/in/renato-profeta/"
+               target="_blank" rel="noopener">LinkedIn</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="breadcrumb">
+      <a href="index.html">Seminar Materials</a>
+      <span>›</span>
+      <a href="05_computeranimation_physics.html">Chapter 05: Physics-based Animation</a>
+      <span>›</span>
+      Demo 2: Bounciness Explorer
+    </nav>
+
+    <main>
+      <div class="demo-intro">
+        <div class="demo-badge">
+          ▶ Rapier · restitution · friction · ColliderDesc.ball() · combine rules
+        </div>
+        <h1>Demo 2: Bounciness Explorer</h1>
+        <p>
+          A <strong>5 × 5 grid of balls</strong> drops simultaneously from the same height.
+          Each column has a different <strong>restitution coefficient</strong> (0.0 → 1.0 in
+          0.25 steps) and each row a different <strong>friction coefficient</strong>
+          (0.05 → 0.9). Watch the grid settle: the leftmost column lies flat while the
+          rightmost is still bouncing. Labels above each ball show its exact restitution value.
+        </p>
+        <p>
+          Use the sliders to change <strong>gravity</strong> and <strong>drop height</strong>,
+          then press <strong>Drop</strong> to re-run the experiment. Read the source as a
+          tutorial — every STEP block maps a Rapier concept to the matching Three.js code.
+        </p>
+      </div>
+
+      <div class="demo-layout">
+        <!-- ── Canvas ── -->
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="threeCanvas"></canvas>
+
+          <!-- Physics HUD — top-left -->
+          <div id="physicsHud">
+            <div class="hud-pill">
+              <div class="hud-dot"></div>
+              Bodies: <span id="hudBodies">0</span>
+            </div>
+            <div class="hud-pill">
+              <div class="hud-dot"></div>
+              Steps/frame: <span id="hudSteps">0</span>
+            </div>
+          </div>
+
+          <!-- Loading overlay -->
+          <div id="loadingOverlay">
+            <div class="loading-title">Initialising Rapier WASM…</div>
+            <div class="progress-row">
+              <progress id="loadProgress" value="0" max="100"></progress>
+              <span id="loadingPct">0%</span>
+            </div>
+            <div class="loading-sub">downloading rapier3d-compat</div>
+          </div>
+
+          <!-- Bottom bar: gravity + drop height + buttons -->
+          <div class="bottom-bar">
+            <span class="bar-label">Gravity</span>
+            <input type="range" id="gravitySlider" class="bar-slider" min="1" max="20" step="0.1" value="9.81" />
+            <span class="bar-val" id="gravityVal">9.81 m/s²</span>
+            <span class="bar-label">Height</span>
+            <input type="range" id="heightSlider" class="bar-slider" min="2" max="14" step="0.5" value="6" />
+            <span class="bar-val" id="heightVal">6.0 m</span>
+            <button id="dropBtn">Drop</button>
+            <button id="resetBtn">Reset</button>
+          </div>
+        </div>
+
+        <!-- ── Side panels ── -->
+        <div class="side-col">
+
+          <!-- Pipeline steps -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot green"></div> Rapier Pipeline</div>
+            <div class="panel-body">
+              <div class="step-row">
+                <div class="step-num">0</div>
+                <div>Import &amp; <code>RAPIER.init()</code> — WASM ready</div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">1</div>
+                <div>Create <code>new RAPIER.World(gravity)</code></div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">2</div>
+                <div>Static ground — <code>RigidBodyDesc.fixed()</code></div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">3</div>
+                <div>Grid of balls — <code>ColliderDesc.ball(r)</code> with varying <code>.setRestitution(e)</code></div>
+              </div>
+              <div class="step-row">
+                <div class="step-num">4</div>
+                <div>Each frame: accumulate dt → <code>world.step()</code> → sync</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live stats -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot green"></div> Live Stats</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Dynamic bodies</span><span class="stat-val" id="statDynamic">0</span></div>
+              <div class="stat-row"><span class="stat-label">Static bodies</span> <span class="stat-val">1</span></div>
+              <div class="stat-row"><span class="stat-label">Physics Hz</span>    <span class="stat-val">60 Hz</span></div>
+              <div class="stat-row"><span class="stat-label">Fixed dt</span>      <span class="stat-val">16.67 ms</span></div>
+              <div class="stat-row"><span class="stat-label">Gravity</span>       <span class="stat-val" id="statGravity">9.81 m/s²</span></div>
+              <div class="stat-row"><span class="stat-label">Grid</span>          <span class="stat-val">5 × 5 balls</span></div>
+              <div class="stat-row"><span class="stat-label">Restitution range</span><span class="stat-val">0.0 → 1.0</span></div>
+              <div class="stat-row"><span class="stat-label">Friction range</span>   <span class="stat-val">0.05 → 0.9</span></div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot blue"></div> Controls</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Drop balls</span>    <span class="stat-val blue">Drop button</span></div>
+              <div class="stat-row"><span class="stat-label">Reset scene</span>   <span class="stat-val blue">Reset button</span></div>
+              <div class="stat-row"><span class="stat-label">Orbit</span>         <span class="stat-val blue">Drag</span></div>
+              <div class="stat-row"><span class="stat-label">Zoom</span>          <span class="stat-val blue">Scroll</span></div>
+              <div class="stat-row"><span class="stat-label">Pan</span>           <span class="stat-val blue">Right-drag</span></div>
+              <div class="stat-row"><span class="stat-label">Gravity</span>       <span class="stat-val blue">Slider (bottom)</span></div>
+              <div class="stat-row"><span class="stat-label">Drop height</span>   <span class="stat-val blue">Slider (bottom)</span></div>
+            </div>
+          </div>
+
+          <!-- Restitution key -->
+          <div class="panel">
+            <div class="panel-header"><div class="dot orange"></div> Column Key (restitution e)</div>
+            <div class="panel-body">
+              <div class="stat-row"><span class="stat-label">Col 1 — e = 0.00</span><span class="stat-val" style="color:var(--red)">Dead flat</span></div>
+              <div class="stat-row"><span class="stat-label">Col 2 — e = 0.25</span><span class="stat-val" style="color:var(--orange)">Slight bounce</span></div>
+              <div class="stat-row"><span class="stat-label">Col 3 — e = 0.50</span><span class="stat-val" style="color:var(--accent2)">Half energy</span></div>
+              <div class="stat-row"><span class="stat-label">Col 4 — e = 0.75</span><span class="stat-val" style="color:var(--accent)">High bounce</span></div>
+              <div class="stat-row"><span class="stat-label">Col 5 — e = 1.00</span><span class="stat-val" style="color:var(--green)">Near elastic</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Concept callouts -->
+      <div class="concept-box" style="margin-top: 20px">
+        <strong>ANIMATION CONCEPT — Restitution: the coefficient of elasticity</strong><br />
+        Restitution <code>e</code> (0.0–1.0) controls how much kinetic energy is preserved
+        after a collision. At <code>e = 0</code> (perfectly inelastic) no energy bounces back —
+        the ball stops dead. At <code>e = 1</code> (perfectly elastic) all energy is preserved
+        and the ball bounces back to its original drop height indefinitely. Real materials sit
+        between: rubber ≈ 0.8, wood ≈ 0.3, clay ≈ 0.05. In Rapier, restitution is set on the
+        <code>ColliderDesc</code>, not the <code>RigidBodyDesc</code> — it is a surface
+        property, not a mass property.
+      </div>
+
+      <div class="concept-box blue" style="margin-top: 12px">
+        <strong>RAPIER CONCEPT — Combine rules for restitution and friction</strong><br />
+        When two colliders meet, Rapier must combine their individual values into one contact
+        value. The default rule for restitution is <strong>average</strong>: the ground here
+        has <code>e = 0.0</code>, so the effective restitution for a ball with <code>e = 1.0</code>
+        is <code>(1.0 + 0.0) / 2 = 0.5</code>. To make the ball's value authoritative, set the
+        ground to <code>e = 1.0</code> and use <code>setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min)</code>
+        — or set the ground's rule to <code>Multiply</code>. This demo uses the
+        <strong>Max</strong> rule on each ball's collider so its restitution dominates the contact,
+        making the grid's variation clean and direct to observe.
+      </div>
+
+      <div class="concept-box purple" style="margin-top: 12px">
+        <strong>ANIMATION CONCEPT — Sphere colliders vs box colliders</strong><br />
+        This demo uses <code>ColliderDesc.ball(radius)</code> — a sphere shape. Spheres are the
+        cheapest possible collider: Rapier resolves sphere–plane contact in a single distance
+        check, with no edge or corner ambiguity. This is why billard balls, marbles, and
+        projectiles are almost always spheres in physics simulations even when their visual mesh
+        is not. The Three.js render mesh is a <code>SphereGeometry</code> sized to match.
+      </div>
+    </main>
+
+    <footer>
+      <p><strong>Computeranimation</strong> · Institut für Medientechnik · AMS Group · Technische Universität Ilmenau</p>
+      <p>Demo created by <a href="https://www.linkedin.com/in/renato-profeta/" target="_blank" rel="noopener">Renato Fera P.</a>
+         · Physics: <a href="https://rapier.rs" target="_blank" rel="noopener">Rapier</a> (Apache 2.0)
+         · Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">Three.js r165</a> (MIT)</p>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════════════
+      STEP 0: Module imports
+      Three.js via importmap (no bundler). Rapier from jsDelivr, pinned to 0.12.0.
+    ═══════════════════════════════════════════════════════════ -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+      import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js";
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 1: DOM references
+      // ─────────────────────────────────────────────────────────────
+      const canvas         = document.getElementById("threeCanvas");
+      const canvasWrap     = document.getElementById("canvasWrap");
+      const overlay        = document.getElementById("loadingOverlay");
+      const progressEl     = document.getElementById("loadProgress");
+      const pctLabel       = document.getElementById("loadingPct");
+      const hudBodies      = document.getElementById("hudBodies");
+      const hudSteps       = document.getElementById("hudSteps");
+      const statDynamic    = document.getElementById("statDynamic");
+      const statGravity    = document.getElementById("statGravity");
+      const gravitySlider  = document.getElementById("gravitySlider");
+      const gravityVal     = document.getElementById("gravityVal");
+      const heightSlider   = document.getElementById("heightSlider");
+      const heightVal      = document.getElementById("heightVal");
+      const dropBtn        = document.getElementById("dropBtn");
+      const resetBtn       = document.getElementById("resetBtn");
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 2: Three.js scene setup — identical pattern to Demo 1
+      // ─────────────────────────────────────────────────────────────
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace  = THREE.SRGBColorSpace;
+      renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c11);
+      scene.fog = new THREE.Fog(0x0a0c11, 30, 60);
+
+      // Camera positioned to see the full 5×5 grid face-on from a slight angle.
+      const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+      camera.position.set(0, 8, 18);
+      camera.lookAt(0, 3, 0);
+
+      const controls = new OrbitControls(camera, canvas);
+      controls.target.set(0, 3, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.update();
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambient);
+
+      const sun = new THREE.DirectionalLight(0xfff8f0, 2.2);
+      sun.position.set(8, 14, 10);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.near = 0.5;
+      sun.shadow.camera.far  = 60;
+      sun.shadow.camera.left = sun.shadow.camera.bottom = -20;
+      sun.shadow.camera.right = sun.shadow.camera.top   =  20;
+      sun.shadow.bias = -0.001;
+      scene.add(sun);
+
+      // Grid helper
+      const grid = new THREE.GridHelper(30, 30, 0x252b38, 0x1a1f2a);
+      grid.position.y = 0.01;
+      scene.add(grid);
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 3: Grid configuration
+      //
+      // GRID CONCEPT: 5 columns × 5 rows of balls.
+      //   Columns vary RESTITUTION  (0.00, 0.25, 0.50, 0.75, 1.00)
+      //   Rows    vary FRICTION     (0.05, 0.25, 0.50, 0.70, 0.90)
+      //
+      // This lets students isolate each variable visually:
+      //   • scan left→right to see the effect of restitution
+      //   • scan top→bottom to see the effect of friction
+      //
+      // The column spacing is wide enough to see each ball independently.
+      // ─────────────────────────────────────────────────────────────
+
+      const COLS          = 5;
+      const ROWS          = 5;
+      const BALL_RADIUS   = 0.35;       // metres — radius for both physics and render
+      const COL_SPACING   = 2.6;        // metres between columns (X axis)
+      const ROW_SPACING   = 2.0;        // metres between rows (Z axis)
+
+      // Restitution values for each column (left → right)
+      const RESTITUTIONS  = [0.0, 0.25, 0.5, 0.75, 1.0];
+
+      // Friction values for each row (front → back)
+      const FRICTIONS     = [0.05, 0.25, 0.5, 0.7, 0.9];
+
+      // Visual colour per column so each restitution tier is instantly readable
+      // cold (red = no bounce) → hot (green = full bounce)
+      const COL_COLORS    = [0xf87171, 0xfb923c, 0xa78bfa, 0x4f9cf9, 0x34d399];
+
+      // Grid centre offset so the whole grid is symmetric around the origin
+      const GRID_OFFSET_X = -((COLS - 1) * COL_SPACING) / 2;  // centres columns on X=0
+      const GRID_OFFSET_Z = -((ROWS - 1) * ROW_SPACING)  / 2;  // centres rows on Z=0
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 4: Ground visual mesh
+      // ─────────────────────────────────────────────────────────────
+      const groundMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(50, 0.2, 50),
+        new THREE.MeshStandardMaterial({ color: 0x1a1f2a, roughness: 0.9, metalness: 0.0 })
+      );
+      groundMesh.receiveShadow = true;
+      groundMesh.position.y = -0.1;
+      scene.add(groundMesh);
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 5: Rapier init — identical loading-bar pattern to Demo 1
+      // ─────────────────────────────────────────────────────────────
+      let loadPct = 0;
+      const fakeProgress = setInterval(() => {
+        loadPct = Math.min(loadPct + 3, 85);
+        progressEl.value = loadPct;
+        pctLabel.textContent = loadPct + "%";
+      }, 60);
+
+      await RAPIER.init();
+
+      clearInterval(fakeProgress);
+      progressEl.value = 100;
+      pctLabel.textContent = "100%";
+      await new Promise((r) => setTimeout(r, 300));
+      overlay.classList.add("hidden");
+
+      console.log("Rapier WASM ready. Version:", RAPIER.version());
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 6: Create the Rapier world
+      // ─────────────────────────────────────────────────────────────
+      let gravityY = -9.81;
+      let world    = new RAPIER.World({ x: 0.0, y: gravityY, z: 0.0 });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 7: Static ground body
+      //
+      // ANIMATION CONCEPT: the ground collider's restitution is set to
+      // 0.0 so that the ball's own restitution (not the ground's) drives
+      // the bounce. We then override the combine rule on the BALL's
+      // collider to CoefficientCombineRule.Max — this makes Rapier use
+      // whichever value is higher (the ball's), giving us clean, direct
+      // control over the per-ball bounce without interference from the
+      // ground surface value.
+      // ─────────────────────────────────────────────────────────────
+      function createGround() {
+        const groundBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0.0, -0.1, 0.0);
+        const groundBody     = world.createRigidBody(groundBodyDesc);
+        world.createCollider(
+          RAPIER.ColliderDesc.cuboid(25.0, 0.1, 25.0)
+            .setFriction(0.3)
+            .setRestitution(0.0),   // ground contributes 0 — ball value dominates via Max rule
+          groundBody
+        );
+      }
+      createGround();
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 8: Body/mesh registry — same pattern as Demo 1
+      //
+      // We also keep a parallel array of Three.js sprite labels so we
+      // can remove them cleanly on reset. The labels show the restitution
+      // value above each ball.
+      // ─────────────────────────────────────────────────────────────
+      const bodyMeshPairs = [];  // { body: RigidBody, mesh: THREE.Mesh }[]
+      const labelSprites  = [];  // THREE.Sprite[]
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 9: makeLabel()
+      // Renders a restitution value as a canvas texture on a THREE.Sprite.
+      // Sprites always face the camera — perfect for floating labels.
+      //
+      // THREE.JS CONCEPT: Sprite + CanvasTexture
+      // A Sprite is a quad that always faces the camera. We paint text
+      // onto a 2D canvas, create a texture from it, and apply it to the
+      // sprite's material. No geometry needed — simpler than a mesh.
+      // ─────────────────────────────────────────────────────────────
+      function makeLabel(text, color) {
+        const size    = 128;
+        const cvs     = document.createElement("canvas");
+        cvs.width     = size;
+        cvs.height    = size / 2;
+        const ctx     = cvs.getContext("2d");
+
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        ctx.fillStyle = color;
+        ctx.font      = "bold 32px 'IBM Plex Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, size / 2, cvs.height / 2);
+
+        const texture  = new THREE.CanvasTexture(cvs);
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+        const sprite   = new THREE.Sprite(material);
+        sprite.scale.set(0.9, 0.45, 1);
+        return sprite;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 10: spawnBall()
+      // Creates one Rapier sphere body + collider + Three.js sphere mesh.
+      //
+      // Parameters:
+      //   pos         {x,y,z}  — initial world-space position
+      //   restitution number   — coefficient of restitution (0.0–1.0)
+      //   friction    number   — surface friction coefficient
+      //   colIndex    number   — column index (drives colour and label)
+      //
+      // RAPIER CONCEPT: ColliderDesc.ball(radius) — a sphere collider.
+      // .setRestitution(e)      sets the ball's own restitution value.
+      // .setRestitutionCombineRule(Max) → Rapier uses max(ball.e, ground.e)
+      //   as the effective contact restitution, so the ball's value is
+      //   authoritative regardless of what the ground has.
+      // .setCcdEnabled(true)    prevents fast-moving balls from tunneling
+      //   through the ground at high drop heights (same fix as Demo 1).
+      // ─────────────────────────────────────────────────────────────
+      function spawnBall(pos, restitution, friction, colIndex) {
+        // --- Rapier side ---
+        const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+          .setTranslation(pos.x, pos.y, pos.z)
+          .setCcdEnabled(true);     // prevent tunneling at high drop heights
+
+        const body = world.createRigidBody(bodyDesc);
+
+        world.createCollider(
+          RAPIER.ColliderDesc.ball(BALL_RADIUS)
+            .setDensity(1.0)
+            .setRestitution(restitution)
+            .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max)
+            // ↑ ANIMATION CONCEPT: Max rule → Rapier picks the higher of the
+            //   two colliders' restitution values as the contact restitution.
+            //   Ground has e=0.0, so ball's value always wins.
+            .setFriction(friction)
+            .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Average),
+          body
+        );
+
+        // --- Three.js side ---
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(BALL_RADIUS, 24, 16),
+          new THREE.MeshStandardMaterial({
+            color:     COL_COLORS[colIndex],
+            roughness: 0.4,
+            metalness: 0.15,
+          })
+        );
+        mesh.castShadow    = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        // Label sprite — shows the restitution value above the ball
+        const hexColor = "#" + COL_COLORS[colIndex].toString(16).padStart(6, "0");
+        const label    = makeLabel("e=" + restitution.toFixed(2), hexColor);
+        label.position.set(pos.x, pos.y + BALL_RADIUS + 0.35, pos.z);
+        scene.add(label);
+        labelSprites.push(label);
+
+        bodyMeshPairs.push({ body, mesh, labelSprite: label });
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 11: spawnGrid()
+      // Drops the full 5×5 grid from the current drop height.
+      //
+      // We offset each ball slightly in X and Z (± a few mm of jitter)
+      // so identical balls in the same column don't stack with zero
+      // contact — this prevents interpenetration artefacts on spawn.
+      // ─────────────────────────────────────────────────────────────
+      function spawnGrid() {
+        const dropHeight = parseFloat(heightSlider.value);
+
+        for (let col = 0; col < COLS; col++) {
+          for (let row = 0; row < ROWS; row++) {
+            const x   = GRID_OFFSET_X + col * COL_SPACING;
+            const z   = GRID_OFFSET_Z + row * ROW_SPACING;
+            const y   = dropHeight + BALL_RADIUS;
+            // tiny jitter avoids perfect column alignment that can produce
+            // unstable stacks when all balls fall simultaneously
+            const jx  = (Math.random() - 0.5) * 0.02;
+            const jz  = (Math.random() - 0.5) * 0.02;
+
+            spawnBall(
+              { x: x + jx, y, z: z + jz },
+              RESTITUTIONS[col],
+              FRICTIONS[row],
+              col
+            );
+          }
+        }
+
+        statDynamic.textContent = bodyMeshPairs.length;
+        hudBodies.textContent   = bodyMeshPairs.length + 1; // +1 for ground
+        console.log(`Grid spawned: ${bodyMeshPairs.length} balls from height ${dropHeight.toFixed(1)} m`);
+      }
+
+      spawnGrid();
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 12: syncPhysicsToRender()
+      // Copies Rapier body transforms to Three.js meshes each frame.
+      // The label sprite tracks the mesh's position with a Y offset
+      // so it floats above the ball as it bounces.
+      //
+      // ANIMATION CONCEPT: same sync pattern as Demo 1.
+      // body.translation() → mesh.position
+      // body.rotation()    → mesh.quaternion   (rotation matters for
+      //   friction: a ball rolling on the ground will spin visually)
+      // ─────────────────────────────────────────────────────────────
+      function syncPhysicsToRender() {
+        for (const { body, mesh, labelSprite } of bodyMeshPairs) {
+          const pos = body.translation();
+          const rot = body.rotation();
+
+          mesh.position.set(pos.x, pos.y, pos.z);
+          mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
+
+          // Keep label above the ball at all times
+          labelSprite.position.set(pos.x, pos.y + BALL_RADIUS + 0.35, pos.z);
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 13: clearScene()
+      // Removes all dynamic bodies and their meshes + labels.
+      // ─────────────────────────────────────────────────────────────
+      function clearScene() {
+        for (const { body, mesh, labelSprite } of bodyMeshPairs) {
+          world.removeRigidBody(body);
+          scene.remove(mesh);
+          scene.remove(labelSprite);
+          mesh.geometry.dispose();
+          mesh.material.dispose();
+          labelSprite.material.map.dispose();
+          labelSprite.material.dispose();
+        }
+        bodyMeshPairs.length = 0;
+        labelSprites.length  = 0;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 14: Fixed-timestep accumulator — identical to Demo 1
+      // ─────────────────────────────────────────────────────────────
+      const FIXED_DT    = 1 / 60;
+      const clock       = new THREE.Clock();
+      let   accumulator = 0;
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 15: setRendererSize() — keeps resolution matched to canvas
+      // ─────────────────────────────────────────────────────────────
+      function setRendererSize() {
+        const w = canvasWrap.clientWidth;
+        const h = canvasWrap.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 16: animate() — the main render loop
+      // ─────────────────────────────────────────────────────────────
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const elapsed = clock.getDelta();
+        accumulator  += elapsed;
+
+        let stepsThisFrame = 0;
+
+        while (accumulator >= FIXED_DT) {
+          world.step();
+          accumulator  -= FIXED_DT;
+          stepsThisFrame++;
+        }
+
+        syncPhysicsToRender();
+        controls.update();
+        renderer.render(scene, camera);
+
+        hudSteps.textContent = stepsThisFrame;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 17: recreateWorld()
+      // Rebuilds the Rapier World when gravity changes (gravity is
+      // constructor-only in this version of Rapier, same constraint
+      // as Demo 1) and re-spawns all bodies.
+      // ─────────────────────────────────────────────────────────────
+      function recreateWorld(newGravityY) {
+        clearScene();
+        world = new RAPIER.World({ x: 0.0, y: newGravityY, z: 0.0 });
+        createGround();
+        spawnGrid();
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 18: UI event listeners
+      // ─────────────────────────────────────────────────────────────
+
+      // Gravity slider — same recreate-world pattern as Demo 1
+      gravitySlider.addEventListener("input", () => {
+        const g = parseFloat(gravitySlider.value);
+        gravityVal.textContent  = g.toFixed(2) + " m/s²";
+        statGravity.textContent = g.toFixed(2) + " m/s²";
+        gravityY = -g;
+        recreateWorld(gravityY);
+        console.log(`Gravity changed to ${g.toFixed(2)} m/s². World recreated.`);
+      });
+
+      // Height slider — just updates the display label; Drop applies it
+      heightSlider.addEventListener("input", () => {
+        const h = parseFloat(heightSlider.value);
+        heightVal.textContent = h.toFixed(1) + " m";
+      });
+
+      // Drop button — clears and re-spawns at the current height
+      dropBtn.addEventListener("click", () => {
+        clearScene();
+        spawnGrid();
+      });
+
+      // Reset button — also resets gravity and height sliders
+      resetBtn.addEventListener("click", () => {
+        gravitySlider.value     = "9.81";
+        gravityVal.textContent  = "9.81 m/s²";
+        statGravity.textContent = "9.81 m/s²";
+        gravityY = -9.81;
+        heightSlider.value    = "6";
+        heightVal.textContent = "6.0 m";
+        recreateWorld(gravityY);
+        console.log("Full reset complete.");
+      });
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 19: Startup
+      // ─────────────────────────────────────────────────────────────
+      window.addEventListener("resize", setRendererSize);
+      setRendererSize();
+      clock.start();
+      animate();
+
+      console.log(
+        "Demo 2 ready.\n" +
+        "  Press Drop to drop all 25 balls simultaneously.\n" +
+        "  Columns (left→right): restitution 0.00 → 1.00\n" +
+        "  Rows (front→back):    friction    0.05 → 0.90\n" +
+        "  Adjust gravity and drop height with the sliders.\n" +
+        "  Press Reset to restore defaults.\n" +
+        "  Open this file's source to follow the STEP comments."
+      );
+    </script>
+  </body>
+</html>

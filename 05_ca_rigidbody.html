@@ -735,14 +735,29 @@
       // We place 5 boxes in a vertical stack above the origin.
       // Different sizes add visual interest and demonstrate that
       // the collider shape (half-extent) always matches the mesh size.
+      //
+      // IMPORTANT — ground surface math:
+      // The static ground body sits at y = -0.1 with half-extent 0.1,
+      // so its top surface is exactly at y = 0.0.
+      // yOffset tracks the TOP of the previously placed box.
+      // Each new box centre = yOffset + s/2  (half its own height up).
+      // After placing: yOffset += s + GAP  (advance by full size + gap).
+      // Starting yOffset at 0.0 means the first box bottom face sits
+      // precisely on y = 0.0 — no floating, no interpenetration.
       // ─────────────────────────────────────────────────────────────
       function spawnInitialStack() {
-        const sizes   = [1.0, 0.85, 0.75, 0.65, 0.55];
-        let   yOffset = 0.5; // start just above the ground
+        const sizes  = [1.0, 0.85, 0.75, 0.65, 0.55];
+        const GAP    = 0.05; // gap between boxes — large enough to avoid
+                             // any contact on spawn, small enough to look stacked
+        let yOffset  = 0.0;  // y = top surface of the ground (y=0)
 
         for (const s of sizes) {
-          spawnBox({ x: (Math.random() - 0.5) * 0.1, y: yOffset + s / 2, z: (Math.random() - 0.5) * 0.1 }, s);
-          yOffset += s + 0.02; // small gap so they don't start interpenetrating
+          // Centre of this box = top of previous surface + half this box's height
+          spawnBox(
+            { x: (Math.random() - 0.5) * 0.1, y: yOffset + s / 2, z: (Math.random() - 0.5) * 0.1 },
+            s
+          );
+          yOffset += s + GAP; // advance cursor to top of this box + gap
         }
       }
 
@@ -828,18 +843,27 @@
 
         if (!throwTarget) return; // ray missed the plane (looking up)
 
-        // Spawn position: slightly above the camera, offset forward
-        const spawnPos = camera.position.clone().addScaledVector(
-          camera.getWorldDirection(new THREE.Vector3()), 1.5
-        );
-
-        // Throw direction: from spawn toward the target, scaled by speed
-        const throwDir = throwTarget.clone().sub(spawnPos).normalize();
-        const THROW_SPEED = 14; // m/s — fast enough to feel impactful
+        // Spawn position: 1.5 m in front of the camera along its look direction.
+        const camDir   = camera.getWorldDirection(new THREE.Vector3());
+        const spawnPos = camera.position.clone().addScaledVector(camDir, 1.5);
 
         const size = 0.5 + Math.random() * 0.6; // random size 0.5–1.1 m
+
+        // INTERPENETRATION GUARD: the box centre must be at least (size/2 + margin)
+        // above the ground surface (y = 0). Without this, a low camera angle can
+        // place the spawn point below the ground, causing the box to start already
+        // overlapping the ground collider. Rapier's depenetration solver then pushes
+        // it sideways — the physically impossible "half-sunk" box in the screenshot.
+        const MIN_SPAWN_Y = size / 2 + 0.1; // bottom face at least 0.1 m above ground
+        spawnPos.y = Math.max(spawnPos.y, MIN_SPAWN_Y);
+
+        // Throw direction: from the corrected spawn toward the target.
+        // Recompute AFTER clamping spawnPos so the trajectory is consistent.
+        const throwDir    = throwTarget.clone().sub(spawnPos).normalize();
+        const THROW_SPEED = 14; // m/s — fast enough to feel impactful
+
         spawnBox(
-          { x: spawnPos.x, y: Math.max(spawnPos.y, 1.5), z: spawnPos.z },
+          { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
           size,
           { x: throwDir.x * THROW_SPEED, y: throwDir.y * THROW_SPEED, z: throwDir.z * THROW_SPEED }
         );
@@ -957,12 +981,26 @@
       // Changing gravity requires recreating the Rapier world because
       // gravity is set on the World constructor and cannot be changed
       // after creation on this version of Rapier.
-      // We preserve all existing bodies by clearing and respawning.
+      //
+      // We discard all current bodies and respawn the initial stack
+      // in the new world. Attempting to migrate bodies by reading their
+      // positions from the old world is fragile — bodies mid-fall get
+      // respawned at arbitrary heights and can interpenetrate the ground.
+      // A clean respawn is more robust and educationally clearer.
       // ─────────────────────────────────────────────────────────────
       gravitySlider.addEventListener("input", () => {
         const g = parseFloat(gravitySlider.value);
-        gravityVal.textContent = g.toFixed(2) + " m/s²";
+        gravityVal.textContent  = g.toFixed(2) + " m/s²";
         statGravity.textContent = g.toFixed(2) + " m/s²";
+
+        // Clear all Three.js meshes
+        for (const { mesh } of bodyMeshPairs) {
+          scene.remove(mesh);
+          mesh.geometry.dispose();
+          mesh.material.dispose();
+        }
+        bodyMeshPairs.length = 0;
+        colorIndex = 0;
 
         // Recreate the world with the new gravity vector.
         // RAPIER CONCEPT: gravity is set at World construction time.
@@ -975,53 +1013,53 @@
           RAPIER.ColliderDesc.cuboid(25, 0.1, 25).setFriction(0.6).setRestitution(0.2), gb
         );
 
-        // Respawn all current dynamic boxes in the new world at their current positions
-        const oldPairs = [...bodyMeshPairs];
-        bodyMeshPairs.length = 0;
-        for (const { body: oldBody, mesh } of oldPairs) {
-          const pos  = oldBody.translation();
-          const size = mesh.geometry.parameters.width; // recover size from geometry
-          const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z).setCcdEnabled(true);
-          const newBody  = world.createRigidBody(bodyDesc);
-          world.createCollider(
-            RAPIER.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
-              .setDensity(1.0).setRestitution(0.35).setFriction(0.6),
-            newBody
-          );
-          bodyMeshPairs.push({ body: newBody, mesh });
-        }
+        // Respawn the initial stack cleanly into the new world
+        spawnInitialStack();
 
-        console.log(`Gravity changed to ${g.toFixed(2)} m/s². World recreated.`);
+        console.log(`Gravity changed to ${g.toFixed(2)} m/s². World recreated with fresh stack.`);
       });
 
       // ─────────────────────────────────────────────────────────────
       // STEP 17: Reset button
+      // Order matters:
+      //   1. Reset slider values + gravityY
+      //   2. Clear all Three.js meshes and Rapier bodies from the OLD world
+      //   3. Create a brand-new Rapier world (gravity is constructor-only)
+      //   4. Add the static ground to the new world
+      //   5. Respawn the initial stack into the new world
+      // resetScene() (step 2 + 5) must run AFTER the new world exists,
+      // otherwise spawnInitialStack creates bodies in the old world.
       // ─────────────────────────────────────────────────────────────
       resetBtn.addEventListener("click", () => {
-        resetScene();
-        // If gravity was changed, reset it to 9.81 as well
-        gravitySlider.value = "9.81";
-        gravityVal.textContent = "9.81 m/s²";
+        // 1. Reset UI
+        gravitySlider.value     = "9.81";
+        gravityVal.textContent  = "9.81 m/s²";
         statGravity.textContent = "9.81 m/s²";
         gravityY = -9.81;
+
+        // 2. Remove all existing Three.js meshes (don't touch the old world —
+        //    we are about to discard it entirely)
+        for (const { mesh } of bodyMeshPairs) {
+          scene.remove(mesh);
+          mesh.geometry.dispose();
+          mesh.material.dispose();
+        }
+        bodyMeshPairs.length = 0;
+        colorIndex = 0;
+
+        // 3. Create the new world
         world = new RAPIER.World({ x: 0.0, y: gravityY, z: 0.0 });
+
+        // 4. Add the static ground to the new world
         const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0));
         world.createCollider(
           RAPIER.ColliderDesc.cuboid(25, 0.1, 25).setFriction(0.6).setRestitution(0.2), gb
         );
-        // Respawn into the fresh world
-        for (const { body: oldBody, mesh } of [...bodyMeshPairs]) {
-          const pos  = oldBody.translation();
-          const size = mesh.geometry.parameters.width;
-          const bd   = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z).setCcdEnabled(true);
-          const nb   = world.createRigidBody(bd);
-          world.createCollider(
-            RAPIER.ColliderDesc.cuboid(size/2, size/2, size/2).setDensity(1.0).setRestitution(0.35).setFriction(0.6), nb
-          );
-        }
-        // resetScene already repopulated bodyMeshPairs; we don't duplicate here
-        // so just log
-        console.log("Full reset complete.");
+
+        // 5. Spawn the initial stack into the fresh world
+        spawnInitialStack();
+
+        console.log("Full reset complete. Dynamic bodies:", bodyMeshPairs.length);
       });
 
       // ─────────────────────────────────────────────────────────────
