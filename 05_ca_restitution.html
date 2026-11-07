@@ -677,7 +677,7 @@
       // Lab scene state
       let labScene, labCamera, labControls, labWorld;
       let labGravityY      = -9.81;
-      let labBalls         = [];      // { body, mesh, restitution, colIndex, maxBounceY, lastY, bounceCount, prevVelY, kineticHistory[], timelineHistory[] }
+      let labBalls         = [];      // { body, mesh, restitution, colIndex, maxBounceY, lastY, bounceCount, prevVelY, timelineHistory[] }
       let labDropped       = false;
       let labPhase         = "ready"; // "ready" | "falling" | "done"
       const MAX_TIMELINE   = 300;
@@ -769,7 +769,7 @@
 
           const mesh = new THREE.Mesh(
             new THREE.SphereGeometry(BALL_RADIUS, 32, 20),
-            new THREE.MeshStandardMaterial({ color:COL_COLORS[i], roughness:0.3, metalness:0.2 })
+            new THREE.MeshStandardMaterial({ color:COL_COLORS[i], roughness:0.65, metalness:0.0 })
           );
           mesh.castShadow=mesh.receiveShadow=true;
           mesh.position.set(x,y,0);
@@ -783,7 +783,6 @@
             lastY: y,
             prevVelY: 0,
             bounceCount: 0,
-            kineticHistory: [],
             timelineHistory: []
           });
         }
@@ -801,10 +800,6 @@
         labPhase   = "ready";
       }
 
-      // ── Energy colouring ──
-      // Maps kinetic energy (clamped 0–1) to a colour:
-      //   0 KE → cool blue (#4f9cf9)
-      //   1 KE → hot red  (#f87171)
       // ── Lab sync + per-frame analytics ──
       function syncLab() {
         for (let i=0; i<labBalls.length; i++) {
@@ -815,13 +810,7 @@
           ball.mesh.position.set(p.x, p.y, p.z);
 
           if (labDropped) {
-            const vy   = v.y;
-            const ke01 = Math.min(vy*vy / 100, 1.0); // normalise; 10 m/s ≈ max
-            // Keep ball identity color; use emissive glow to show kinetic energy.
-            // High KE → warm orange-white glow. Low KE → no glow (emissive stays black).
-            ball.mesh.material.emissive.setRGB(ke01 * 0.9, ke01 * 0.45, ke01 * 0.05);
-            ball.kineticHistory.push(ke01);
-            if (ball.kineticHistory.length > 200) ball.kineticHistory.shift();
+            const vy = v.y;
 
             // Detect bounce: vy crossed zero upward
             if (ball.prevVelY < -0.5 && vy >= 0) {
@@ -980,53 +969,86 @@
       }
 
       // ── Live measure table ──
-      function updateMeasureTable() {
-        const dropH = parseFloat(heightSliderLab.value) || 8;
-        // initial KE ∝ h (mgh); we normalise to drop height
-        // after n bounces, retained energy fraction = e^(2n) × (currentH / dropH)
-        // simpler proxy: energy% = (currentBounceHeight / dropH) × 100 after each bounce
-        // during fall: use current height as proxy
+      // measureCells[i] = { heightEl, bouncesEl, barEl, pctEl }
+      let measureCells = [];
 
+      function buildMeasureTable() {
         if (!measureBody) return;
+        measureBody.innerHTML = "";
+        measureCells = [];
+        for (let i=0; i<5; i++) {
+          const tr = document.createElement("tr");
 
-        // Build rows on first call or if empty
-        if (measureBody.children.length === 0) {
-          for (let i=0; i<5; i++) {
-            const tr = document.createElement("tr");
-            tr.id = "mrow-"+i;
-            measureBody.appendChild(tr);
-          }
+          // Ball label cell — static, never changes
+          const tdLabel = document.createElement("td");
+          const swatch  = document.createElement("span");
+          swatch.className = "measure-swatch";
+          swatch.style.background = COL_HEX[i];
+          tdLabel.appendChild(swatch);
+          tdLabel.appendChild(document.createTextNode(COL_NAMES[i]));
+
+          // Height cell
+          const tdHeight = document.createElement("td");
+          tdHeight.className = "measure-val";
+          const heightEl = document.createTextNode("—");
+          tdHeight.appendChild(heightEl);
+
+          // Bounces cell
+          const tdBounces = document.createElement("td");
+          tdBounces.className = "measure-val";
+          const bouncesEl = document.createTextNode("—");
+          tdBounces.appendChild(bouncesEl);
+
+          // Energy cell — bar + pct text, fixed layout
+          const tdEnergy = document.createElement("td");
+          tdEnergy.style.whiteSpace = "nowrap";
+          const barEl = document.createElement("span");
+          barEl.className = "measure-energy-bar";
+          barEl.style.background = COL_HEX[i];
+          barEl.style.opacity    = "0.75";
+          barEl.style.width      = "60px"; // fixed max width, opacity carries the value
+          const pctEl = document.createElement("span");
+          pctEl.className = "measure-val";
+          pctEl.style.marginLeft = "6px";
+          pctEl.textContent = "—";
+          tdEnergy.appendChild(barEl);
+          tdEnergy.appendChild(pctEl);
+
+          tr.appendChild(tdLabel);
+          tr.appendChild(tdHeight);
+          tr.appendChild(tdBounces);
+          tr.appendChild(tdEnergy);
+          measureBody.appendChild(tr);
+
+          measureCells.push({ heightEl, bouncesEl, barEl, pctEl });
         }
+      }
+
+      function updateMeasureTable() {
+        if (!measureCells.length) return;
+        const dropH = parseFloat(heightSliderLab.value) || 8;
 
         for (let i=0; i<5; i++) {
           const ball = labBalls[i];
-          const tr   = document.getElementById("mrow-"+i);
-          if (!tr) continue;
+          const cell = measureCells[i];
+          if (!ball || !cell) continue;
 
-          if (!ball) {
-            tr.innerHTML = "";
+          if (!labDropped) {
+            cell.heightEl.nodeValue  = dropH.toFixed(1) + " m";
+            cell.bouncesEl.nodeValue = "—";
+            cell.barEl.style.opacity = "0.75";
+            cell.pctEl.textContent   = "—";
             continue;
           }
 
-          const currentH = labDropped ? Math.max(0, ball.lastY - BALL_RADIUS) : dropH;
-          const energyPct = labDropped
-            ? Math.round(Math.min((currentH / dropH) * 100, 100))
-            : 100;
-          const barW = Math.round(energyPct * 0.6); // max ~60px
-          const heightStr = labDropped
-            ? (Math.max(0, ball.lastY - BALL_RADIUS)).toFixed(2) + " m"
-            : dropH.toFixed(1) + " m";
-          const bouncesStr = labDropped ? ball.bounceCount : "—";
-          const energyDim  = !labDropped || energyPct > 5 ? "" : " dim";
+          const currentH  = Math.max(0, ball.lastY - BALL_RADIUS);
+          const energyPct = Math.round(Math.min((currentH / dropH) * 100, 100));
 
-          tr.innerHTML = `
-            <td><span class="measure-swatch" style="background:${COL_HEX[i]}"></span>${COL_NAMES[i]}</td>
-            <td class="measure-val">${heightStr}</td>
-            <td class="measure-val">${bouncesStr}</td>
-            <td>
-              <span class="measure-energy-bar" style="width:${barW}px;background:${COL_HEX[i]};opacity:0.7;"></span>
-              <span class="measure-val${energyDim}" style="margin-left:4px;">${energyPct}%</span>
-            </td>`;
+          cell.heightEl.nodeValue  = currentH.toFixed(2) + " m";
+          cell.bouncesEl.nodeValue = String(ball.bounceCount);
+          // Use opacity on a fixed-width bar — no reflow
+          cell.barEl.style.opacity = (energyPct / 100 * 0.85 + 0.05).toFixed(2);
+          cell.pctEl.textContent   = energyPct + "%";
         }
       }
 
@@ -1044,6 +1066,7 @@
         buildLabScene();
         createLabWorld(labGravityY);
         spawnLabBalls();
+        buildMeasureTable();
         setLabRendererSize();
         phaseLabel.textContent="① Ready";
         phaseLabel.style.color="var(--accent)";
@@ -1112,10 +1135,10 @@
         clearLabScene();
         createLabWorld(labGravityY);
         spawnLabBalls();
+        buildMeasureTable();
         dropBtnLab.disabled=false;
         phaseLabel.textContent="① Ready";
         phaseLabel.style.color="var(--accent)";
-        if (measureBody) measureBody.innerHTML="";
       });
 
       resetBtnLab.addEventListener("click", () => {
@@ -1125,10 +1148,10 @@
         clearLabScene();
         createLabWorld(labGravityY);
         spawnLabBalls();
+        buildMeasureTable();
         dropBtnLab.disabled=false;
         phaseLabel.textContent="① Ready";
         phaseLabel.style.color="var(--accent)";
-        if (measureBody) measureBody.innerHTML="";
       });
 
       // ═══════════════════════════════════════════════════════════
