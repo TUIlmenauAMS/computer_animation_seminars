@@ -67,12 +67,17 @@
 
     /* ── control panel ── */
     #controls {
-      position:absolute; top:14px; right:14px; z-index:10;
+      position:absolute; top:14px; right:14px; bottom:14px; z-index:10;
       background:rgba(2,4,8,0.80); backdrop-filter:blur(10px);
       border:1px solid var(--border); border-radius:12px;
       padding:16px 18px; width:230px;
       display:flex; flex-direction:column; gap:12px;
+      overflow-y:auto; overflow-x:hidden;
+      scrollbar-width:thin; scrollbar-color:var(--border) transparent;
     }
+    #controls::-webkit-scrollbar { width:4px; }
+    #controls::-webkit-scrollbar-track { background:transparent; }
+    #controls::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
     .ctrl-title {
       font-family:var(--mono); font-size:10px; color:var(--muted);
       text-transform:uppercase; letter-spacing:0.1em;
