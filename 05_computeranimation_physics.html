@@ -359,7 +359,7 @@
     <tr><td>3</td><td>Collision Detection</td><td>Broad phase, narrow phase, bounding volumes, collision events</td><td>Demo 1</td></tr>
     <tr><td>4</td><td>Rapier + Three.js</td><td>World, RigidBody, Collider, physics loop, restitution, friction</td><td>Demos 1–2</td></tr>
     <tr><td>5</td><td>Constraints &amp; Joints</td><td>Hinge, ball-socket, revolute joints; chains and ragdolls</td><td>Demo 3</td></tr>
-    <tr><td>6</td><td>Spring-Damper Secondary Animation</td><td>Follow-through, overshoot, jiggle; stiffness and damping</td><td>Demo 4</td></tr>
+    <tr><td>6</td><td>Spring-Damper Secondary Animation</td><td>Follow-through, overshoot, chain propagation; stiffness, damping, critical damping, length constraint (PBD)</td><td>Demo 4</td></tr>
     <tr><td>7</td><td>PyBullet</td><td>Python physics simulation; simulate → record → replay pipeline</td><td>Demo 5</td></tr>
     <tr><td>8</td><td>Demo Index</td><td>All five demos with run instructions</td><td>—</td></tr>
   </tbody>
@@ -837,7 +837,7 @@ Overdamped    (d &gt; d_crit): slow, sluggish return to rest, no overshoot</code
 </p>
 
 <div class="demo-box">
-  <strong>Demo 4 — Spring-Damper Secondary Animation.</strong> <code>05_ca_spring.html</code> moves a capsule character placeholder along a figure-eight keyframed path. Three secondary objects — a hat on top, a tail at the back, a held lantern at the side — are each driven by an independent spring-damper system reacting to the capsule's velocity and acceleration. Sliders let you adjust stiffness and damping for each accessory individually. Set damping to zero and watch the objects oscillate indefinitely; increase stiffness until they snap rigidly to the character. The source implements the full spring-damper integration loop in plain JavaScript — no physics engine required.
+  <strong>Demo 4 — Spring-Damper Secondary Animation: Bioluminescent Deep-Sea Serpent.</strong> <code>05_ca_spring.html</code> builds a 30-segment serpent chain in Three.js. The head follows the mouse cursor (or traces an autonomous sine-wave path when the cursor is idle); each of the 30 body segments is driven by a spring-damper force toward the position of the segment ahead of it, so motion propagates down the chain with natural lag, follow-through, and overshoot. After each spring integration step, a <strong>length constraint</strong> (position-based correction) is applied to prevent segments from stretching apart at high speed — the same concept that underpins Position-Based Dynamics (PBD) in cloth simulation. The right-hand panel exposes four controls: stiffness <code>k</code>, damping <code>d</code>, segment length, and head speed. Four presets (Underdamped, Critical, Overdamped, d = 0) let you jump to canonical regimes instantly, and the HUD shows the live <code>d / d_crit</code> ratio and current regime label so the physics vocabulary maps directly to what you see. Click anywhere on the canvas to fire a random startle impulse across all segments. The integration runs at a fixed 120 Hz timestep inside a standard accumulator loop — the same pattern used in Demo 1, here in pure JavaScript with no physics engine.
   <p style="margin:10px 0 0 0;"><a href="05_ca_spring.html" target="_blank" style="display:inline-block; padding:6px 14px; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Open Demo 4 &#8599;</a></p>
 </div>
 </div>
@@ -1059,7 +1059,7 @@ python 05_ca_pybullet.py</pre>
       <td>4</td>
       <td><a href="05_ca_spring.html" target="_blank"><code>05_ca_spring.html</code></a></td>
       <td>Browser</td>
-      <td>Spring-damper secondary animation, stiffness, damping, critical damping</td>
+      <td>Spring-damper chain (30-segment serpent), stiffness, damping, critical damping, length constraint (PBD), startle impulse</td>
       <td>Open via GitHub Pages</td>
     </tr>
     <tr>
