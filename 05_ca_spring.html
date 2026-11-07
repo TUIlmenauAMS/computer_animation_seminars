@@ -45,6 +45,8 @@
     /* ── canvas fills remaining space ── */
     .canvas-wrap {
       flex:1; position:relative; overflow:hidden; min-height:0;
+      /* Explicit height so the canvas never bleeds into the footer */
+      height:0;
     }
     #c { width:100%; height:100%; display:block; }
 
@@ -204,6 +206,7 @@
       <button class="preset-btn" id="pCrit">Critical</button>
       <button class="preset-btn" id="pOver">Overdamped</button>
       <button class="preset-btn" id="pFree">d = 0</button>
+      <button class="preset-btn" id="pReset" style="border-color:rgba(255,96,48,0.4);color:var(--orange)">↺ Reset</button>
     </div>
 
     <div class="ctrl-sep"></div>
@@ -293,15 +296,16 @@ scene.background = new THREE.Color(0x000608);
 scene.fog = new THREE.FogExp2(0x000608, 0.045);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
-camera.position.set(0, 4, 22);
+// Pull camera back so the full 30-segment serpent (≈16 m at default link length) is visible
+camera.position.set(0, 8, 32);
 camera.lookAt(0, 0, 0);
 
 const controls = new OrbitControls(camera, canvas);
 controls.target.set(0, 0, 0);
 controls.enableDamping  = true;
 controls.dampingFactor  = 0.06;
-controls.minDistance    = 5;
-controls.maxDistance    = 60;
+controls.minDistance    = 8;
+controls.maxDistance    = 90;
 controls.update();
 
 // Minimal ambient — the creature lights itself
@@ -454,7 +458,7 @@ for (let i = 0; i < N_SEG; i++) {
 
   // Initial staggered position along X axis
   segments.push({
-    pos:  new THREE.Vector3(-i * 0.55, 0, 0),
+    pos:  new THREE.Vector3(-i * 0.75, 0, 0),
     vel:  new THREE.Vector3(),
     mesh, finMesh, light,
     col
@@ -628,6 +632,23 @@ document.getElementById("pFree").addEventListener("click", function() {
   slK.value=20; slD.value=0; slK.dispatchEvent(new Event("input")); slD.dispatchEvent(new Event("input")); activatePreset(this);
 });
 
+// ── Reset: restore default slider values and snap segments back into a straight line ──
+document.getElementById("pReset").addEventListener("click", function() {
+  // Reset sliders to defaults
+  slK.value=12;   slK.dispatchEvent(new Event("input"));
+  slD.value=4;    slD.dispatchEvent(new Event("input"));
+  slL.value=0.55; slL.dispatchEvent(new Event("input"));
+  slSpd.value=1.0; slSpd.dispatchEvent(new Event("input"));
+  presetBtns.forEach(b => b.classList.remove("active"));
+  // Snap all segments back to a straight resting line along X, zero velocity
+  for (let i = 0; i < N_SEG; i++) {
+    segments[i].pos.set(-i * 0.75, 0, 0);
+    segments[i].vel.set(0, 0, 0);
+  }
+  autoT = 0;
+  mouseActive = false;
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 12 — Main animation loop
 // ─────────────────────────────────────────────────────────────────────────────
@@ -648,9 +669,9 @@ function animate() {
     autoT += FIXED_DT * spd * 0.9;
     if (!mouseActive || headTarget.length() < 0.001) {
       headTarget.set(
-        Math.sin(autoT * 0.7)  * 7,
-        Math.sin(autoT * 0.5)  * 2.5,
-        Math.sin(autoT * 0.35) * 3
+        Math.sin(autoT * 0.7)  * 13,
+        Math.sin(autoT * 0.5)  * 4,
+        Math.sin(autoT * 0.35) * 6
       );
     }
 
