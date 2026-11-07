@@ -805,13 +805,6 @@
       // Maps kinetic energy (clamped 0–1) to a colour:
       //   0 KE → cool blue (#4f9cf9)
       //   1 KE → hot red  (#f87171)
-      function keToColor(ke01) {
-        const r = Math.round(0x4f + (0xf8-0x4f)*ke01);
-        const g = Math.round(0x9c + (0x71-0x9c)*ke01);
-        const b = Math.round(0xf9 + (0x71-0xf9)*ke01);
-        return new THREE.Color(r/255, g/255, b/255);
-      }
-
       // ── Lab sync + per-frame analytics ──
       function syncLab() {
         for (let i=0; i<labBalls.length; i++) {
@@ -824,7 +817,9 @@
           if (labDropped) {
             const vy   = v.y;
             const ke01 = Math.min(vy*vy / 100, 1.0); // normalise; 10 m/s ≈ max
-            ball.mesh.material.color.copy(keToColor(ke01));
+            // Keep ball identity color; use emissive glow to show kinetic energy.
+            // High KE → warm orange-white glow. Low KE → no glow (emissive stays black).
+            ball.mesh.material.emissive.setRGB(ke01 * 0.9, ke01 * 0.45, ke01 * 0.05);
             ball.kineticHistory.push(ke01);
             if (ball.kineticHistory.length > 200) ball.kineticHistory.shift();
 
