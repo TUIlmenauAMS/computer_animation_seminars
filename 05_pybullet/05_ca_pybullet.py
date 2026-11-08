@@ -190,7 +190,7 @@ GRID_STEP: float = 0.5
 GRID_COLOUR: tuple[float, float, float] = (0.18, 0.22, 0.30)
 
 # Camera defaults
-CAM_DISTANCE_DEFAULT: float = 3.2
+CAM_DISTANCE_DEFAULT: float = 5.5
 CAM_AZIMUTH_DEFAULT: float = 25.0
 CAM_ELEVATION_DEFAULT: float = 10.0
 CAM_TARGET_DEFAULT: tuple[float, float, float] = (0.0, 0.9, 0.0)
@@ -355,12 +355,17 @@ def parse_bvh(path: Path) -> BVHData:
             continue
 
         if keyword == "END":
+            # "End Site { OFFSET ... }" — skip the whole block, and *only* that
+            # block. (It must start at depth 0: the block's own "{" opens it and
+            # its own "}" closes it. Starting at 1 would also swallow the parent
+            # joint's closing brace and mis-parent every joint that follows.)
             i += 1
-            depth = 1
-            while i < len(lines) and depth > 0:
-                if "{" in lines[i]: depth += 1
-                if "}" in lines[i]: depth -= 1
+            depth = 0
+            while i < len(lines):
+                depth += lines[i].count("{") - lines[i].count("}")
                 i += 1
+                if depth <= 0 and "}" in lines[i - 1]:
+                    break
             continue
 
         if line == "}":
@@ -463,6 +468,7 @@ class GLBMesh(NamedTuple):
     parent:      np.ndarray   # (J,)  parent joint slot, -1 for the root
     bind_pos:    np.ndarray   # (J,3) joint position in bind-pose world space
     bind_rot:    np.ndarray   # (J,3,3) joint rotation in bind-pose world space
+    inv_bind:    np.ndarray   # (J,4,4) inverse bind matrices from glTF skin (float64)
 
 
 _COMP_DTYPE = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16,
@@ -583,6 +589,19 @@ def load_glb(path: Path) -> GLBMesh:
             anc = parent_of.get(anc)
         parent[s] = slot_of_node[anc] if anc is not None else -1
 
+    # Read the authoritative inverse-bind matrices from the glTF skin.
+    # These are the exact inverses of each joint's world transform in the bind
+    # pose (including the Armature's 0.01 cm→m scale). Using them directly is
+    # both more correct and cheaper than recomputing from bind_pos/bind_rot.
+    if "inverseBindMatrices" in skin:
+        ibm_raw = _acc_data(data, bin_data, skin["inverseBindMatrices"])
+        # glTF stores matrices column-major, so each (4,4) slice needs a transpose
+        inv_bind = np.array([m.T for m in ibm_raw], dtype=np.float64)
+    else:
+        # Fallback: invert the world matrices we computed ourselves
+        inv_bind = np.array([np.linalg.inv(world(ni)) for ni in joint_nodes],
+                            dtype=np.float64)
+
     return GLBMesh(
         positions=np.ascontiguousarray(positions),
         normals=np.ascontiguousarray(normals),
@@ -593,6 +612,7 @@ def load_glb(path: Path) -> GLBMesh:
         parent=parent,
         bind_pos=bind_pos,
         bind_rot=bind_rot,
+        inv_bind=inv_bind,
     )
 
 
@@ -724,8 +744,21 @@ class Retargeter:
                 p[j] = p[par] + D[par] @ (P[j] - P[par])
             else:
                 p[j] = root_world if b == 0 else P[j]
-            mats[j, :3, :3] = D[j]
-            mats[j, :3, 3] = p[j] - D[j] @ P[j]
+
+            # Build the posed world matrix for this joint: T(p[j]) * R(D[j])
+            # then right-multiply by the glTF inverse bind matrix.
+            # This is the standard glTF skinning formula:
+            #   skin_matrix[j] = pose_world[j] @ inv_bind[j]
+            # Previously the code used  p[j] - D[j] @ P[j]  as the translation,
+            # which is only correct when the bind-pose rotation is identity.
+            # With a non-identity bind rotation (e.g. A-pose arms) that caused
+            # the bone-bending / deformation artifact visible in the screenshot.
+            pose_world = np.eye(4)
+            pose_world[:3, :3] = D[j]
+            pose_world[:3, 3] = p[j]
+            m = pose_world @ mesh.inv_bind[j]
+            mats[j] = m
+
         return mats.astype(np.float32), root_world
 
 
@@ -1081,6 +1114,14 @@ class SkeletonViewport(QOpenGLWidget):
     def mousePressEvent(self, event) -> None:
         self._last_mouse_pos = event.position()
         self._auto_orbit = False
+        # Middle-button drag will pan; grab cursor so it stays in window
+        if event.button() == Qt.MiddleButton:
+            self.setCursor(Qt.SizeAllCursor)
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._last_mouse_pos = None
+        if event.button() == Qt.MiddleButton:
+            self.unsetCursor()
 
     def mouseMoveEvent(self, event) -> None:
         if self._last_mouse_pos is None:
@@ -1093,6 +1134,14 @@ class SkeletonViewport(QOpenGLWidget):
             self._cam_azimuth   += dx * 0.5
             self._cam_elevation -= dy * 0.5
             self._cam_elevation  = max(-89.0, min(89.0, self._cam_elevation))
+        elif event.buttons() & Qt.MiddleButton:
+            # Pan: move the look-at target in the camera's local XY plane
+            scale = self._cam_distance * 0.001
+            az = math.radians(self._cam_azimuth)
+            # right vector in world XZ, up is world Y
+            self._cam_target[0] -= dx * scale * math.cos(az)
+            self._cam_target[2] -= dx * scale * math.sin(az)
+            self._cam_target[1] += dy * scale
         elif event.buttons() & Qt.RightButton:
             scale = self._cam_distance * 0.001
             az = math.radians(self._cam_azimuth)
@@ -1101,13 +1150,12 @@ class SkeletonViewport(QOpenGLWidget):
             self._cam_target[1] += dy * scale
         self.update()
 
-    def mouseReleaseEvent(self, event) -> None:
-        self._last_mouse_pos = None
-
     def wheelEvent(self, event) -> None:
+        # Plain wheel → zoom (gentle 4 % per notch)
         delta = event.angleDelta().y()
-        self._cam_distance *= 0.9 if delta > 0 else 1.1
-        self._cam_distance = max(0.3, min(20.0, self._cam_distance))
+        factor = 0.96 if delta > 0 else 1.04
+        self._cam_distance *= factor ** (abs(delta) / 120)
+        self._cam_distance = max(0.5, min(30.0, self._cam_distance))
         self.update()
 
 
@@ -1224,7 +1272,7 @@ class ControlPanel(QWidget):
         c_layout = QVBoxLayout(camera_group)
         c_layout.setSpacing(8)
 
-        cam_hint = QLabel("Left drag: orbit   Right drag: pan\nScroll: zoom")
+        cam_hint = QLabel("Left drag: orbit   Mid drag / Right drag: pan\nScroll: zoom")
         cam_hint.setStyleSheet("color: #5a6175; font-size: 10px;")
         c_layout.addWidget(cam_hint)
 
