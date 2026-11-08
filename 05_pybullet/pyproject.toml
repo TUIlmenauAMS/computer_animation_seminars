@@ -1,71 +1,36 @@
-# =============================================================================
-# Computeranimation — Seminar 05
-# Demo: Physics-Based Skeleton Animation
-# =============================================================================
-#
-# Dependency stack (all pinned to exact versions for reproducibility):
-#
-#   PySide6    Qt6 Python bindings — the UI framework used by Maya, Blender,
-#              Houdini and Nuke. Provides QMainWindow, QOpenGLWidget, QDockWidget,
-#              QSlider, QTimer, and the full Qt signal/slot system.
-#
-#   PyOpenGL   OpenGL Python bindings — drives the 3-D viewport. Immediate-mode
-#              GL (glBegin/glEnd) renders capped cylinders and spheres for each
-#              bone segment with Phong shading and an ivory material.
-#
-#   pybullet-arm64  Drop-in fork of pybullet with pre-built wheels for Windows,
-#              macOS and Linux — same API, same "import pybullet". Provides the
-#              rigid-body simulation engine for the kinematic-to-ragdoll blend;
-#              the BVH replay path runs without stepping the simulator.
-#
-#   NumPy      All BVH frame data is stored as float32 typed arrays. Used for
-#              joint transform math (4×4 matrices, cross products, dot products)
-#              and for extracting world-space joint positions each frame.
-#
-# Run:
-#   cd 05_pybullet
-#   uv sync                     # first time — creates .venv and installs deps
-#   uv run python 05_ca_pybullet.py
-#
-# Ubuntu system dependencies (run once if not already installed):
-#   sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
-#
-# Requires Python 3.12 (PySide6 6.7.x; pybullet-arm64 ships cp312 wheels for
-# all platforms — Windows, macOS and Linux).
-# =============================================================================
-
 [project]
-name        = "ca-seminar05-pybullet"
-version     = "1.0.0"
-description = "CA Demo — Physics-Based Skeleton Animation"
-authors = [
-    { name = "Renato Fera P.", email = "renato.profeta@tu-ilmenau.de" }
-]
-requires-python = ">=3.12,<3.13"
-
+name = "05-ca-pybullet-domino"
+version = "0.1.0"
+description = "Demo 05 — Domino Cascade · Computeranimation Chapter 05"
+requires-python = "==3.12.*"
 dependencies = [
-    # Qt6 Python bindings — full desktop UI framework
-    # Changelog: https://doc.qt.io/qt-6/whatsnew66.html
-    "PySide6==6.7.2",
+    "PySide6>=6.7.0",
+    "numpy>=1.26.0",
+    "PyOpenGL>=3.1.7",
+]
 
-    # OpenGL Python bindings — required by the 3-D viewport (Phong shading,
-    # bone cylinder/sphere geometry via immediate-mode GL).
-    # Changelog: https://pyopengl.sourceforge.net/
-    "PyOpenGL==3.1.7",
-
-    # Drop-in pybullet fork — pre-built wheels for Windows, macOS and Linux.
-    # Use "import pybullet" in code exactly as with the original package.
-    # Changelog: https://pypi.org/project/pybullet-arm64/
-    "pybullet-arm64==3.2.8",
-
-    # Numerical arrays — float32 BVH frame data and 4×4 joint transform math.
-    # Changelog: https://numpy.org/doc/stable/release.html
-    "numpy==2.0.2",
+[project.optional-dependencies]
+# pybullet-arm64 ships pre-built wheels for Apple Silicon and ARM64 Windows.
+# On x86_64 Linux / Windows use plain pybullet instead.
+arm64 = [
+    "pybullet-arm64>=3.2.7",
+]
+x86 = [
+    "pybullet>=3.2.6",
 ]
 
 [tool.uv]
-# This is a script-only project — no package to build or install.
-# uv manages the venv and deps without a build backend.
-# .venv is created in the project root on first `uv sync`; do not commit it.
-package = false
-managed = true
+# uv resolves the correct pybullet variant at sync time.
+# Run:   uv sync --extra arm64     (Apple Silicon / ARM64 Windows)
+#        uv sync --extra x86       (x86-64 Linux / Windows)
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I"]
