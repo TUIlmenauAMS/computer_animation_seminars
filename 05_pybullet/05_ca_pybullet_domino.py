@@ -84,7 +84,6 @@ LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 
 # ── Physics ───────────────────────────────────────────────────────────────────
 PHYSICS_DT: float      = 1.0 / 240.0   # 240 Hz — stable for thin bodies
-PHYSICS_SUBSTEP: int   = 4             # per 60 Hz UI tick → 1× real-time default
 
 # ── Domino geometry (metres) — real proportions H:W:D ≈ 2:1:0.25 ─────────────
 DOM_H: float           = 0.30
@@ -95,16 +94,24 @@ DOM_RESTITUTION: float = 0.15
 DOM_FRICTION: float    = 0.70
 
 # ── Layout geometry ───────────────────────────────────────────────────────────
-DOMINO_SPACING: float  = 0.165
-STEP_HEIGHT: float     = 0.055
-STEP_DEPTH: float      = 0.165
-STEPS_PER_RAMP: int    = 7
-FORK_ANGLE_DEG: float  = 32.0
+DOMINO_SPACING: float  = 0.155   # slightly tighter for denser chains
+STEP_HEIGHT: float     = 0.045   # shallower steps → more steps per ramp
+STEP_DEPTH: float      = 0.155
+STEPS_PER_RAMP: int    = 10      # deeper staircases
+FORK_ANGLE_DEG: float  = 28.0
 
-# ── Speed slider ──────────────────────────────────────────────────────────────
-SPEED_MIN: int     = 1
-SPEED_MAX: int     = 8
-SPEED_DEFAULT: int = 4   # slightly faster default than the old code
+# ── Speed control ─────────────────────────────────────────────────────────────
+# 4 substeps × (1/240 s) × 60 Hz timer = exactly 1× real-time.
+# The speed table maps human-readable labels to substep counts.
+REAL_TIME_SUBSTEPS: int = 4
+SPEED_TABLE: list[tuple[str, int]] = [
+    ("½×",  2),
+    ("1×",  4),   # default — real-time
+    ("2×",  8),
+    ("4×", 16),
+    ("8×", 32),
+]
+SPEED_DEFAULT_IDX: int = 1   # index into SPEED_TABLE → "1×" real-time
 
 # ── Domino body gradient (blue → cyan → green → gold → red) ──────────────────
 BODY_GRADIENT: list[tuple[float, float, float]] = [
@@ -133,122 +140,64 @@ APP_STYLESHEET = f"""
 QMainWindow, QWidget {{
     background-color: {PALETTE["bg"]};
     color: {PALETTE["text"]};
-    font-family: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+    font-family: 'Segoe UI', Arial, sans-serif;
     font-size: 13px;
 }}
+
+/* ── Generic button base ─────────────────────────────────────────────────── */
 QPushButton {{
     background-color: {PALETTE["surface"]};
     color: {PALETTE["text"]};
     border: 1px solid {PALETTE["border"]};
-    border-radius: 6px;
+    border-radius: 5px;
     padding: 6px 16px;
     font-weight: 600;
     font-size: 13px;
 }}
-QPushButton:hover {{
+QPushButton:hover  {{
     background-color: {PALETTE["border"]};
-    border-color: {PALETTE["accent"]};
-    color: {PALETTE["accent"]};
-}}
-QPushButton:pressed {{
-    background-color: {PALETTE["bg"]};
-    border-color: {PALETTE["accent"]};
-    padding-top: 7px;
-    padding-bottom: 5px;
-}}
-QPushButton:focus {{
-    outline: none;
+    color: {PALETTE["text"]};
     border-color: {PALETTE["accent"]};
 }}
-QPushButton#start_btn {{
-    background: qlineargradient(
-        x1:0, y1:0, x2:0, y2:1,
-        stop:0 #3dffa8, stop:1 {PALETTE["green"]}
-    );
-    color: #04231a;
-    border: 1px solid #2ae090;
+QPushButton:pressed {{ background-color: {PALETTE["bg"]}; }}
+
+/* ── Start / Reset buttons: rely on per-widget setStyleSheet instead ─────── */
+/* (Fusion style ignores app-level #id selectors on some platforms)          */
+
+/* ── Stat cards ─────────────────────────────────────────────────────────── */
+QWidget#stat_card {{
+    background-color: {PALETTE["surface"]};
+    border: 1px solid {PALETTE["border"]};
     border-radius: 6px;
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    padding: 0px 28px;
-    min-width: 148px;
 }}
-QPushButton#start_btn:hover {{
-    background: qlineargradient(
-        x1:0, y1:0, x2:0, y2:1,
-        stop:0 #55ffb8, stop:1 #2ecc8f
-    );
-    color: #021a12;
-    border-color: #55ffb8;
-}}
-QPushButton#start_btn:pressed {{
-    background: qlineargradient(
-        x1:0, y1:0, x2:0, y2:1,
-        stop:0 {PALETTE["green"]}, stop:1 #1fa86a
-    );
-    color: #04231a;
-    border-color: #1fa86a;
-    padding-top: 1px;
-    padding-bottom: 0px;
-}}
-QPushButton#start_btn:disabled {{
-    background: {PALETTE["border"]};
-    color: {PALETTE["muted"]};
-    border-color: {PALETTE["border"]};
-}}
-QPushButton#reset_btn {{
-    background: transparent;
-    color: {PALETTE["orange"]};
-    border: 1px solid {PALETTE["orange"]};
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    padding: 0px 20px;
-    min-width: 100px;
-}}
-QPushButton#reset_btn:hover {{
-    background: qlineargradient(
-        x1:0, y1:0, x2:0, y2:1,
-        stop:0 #ffb870, stop:1 {PALETTE["orange"]}
-    );
-    color: #1a0a00;
-    border-color: #ffb870;
-}}
-QPushButton#reset_btn:pressed {{
-    background: #c96a1a;
-    color: #1a0a00;
-    border-color: #c96a1a;
-    padding-top: 1px;
-    padding-bottom: 0px;
-}}
-QSlider::groove:horizontal {{
-    height: 4px; background: {PALETTE["border"]}; border-radius: 2px;
-}}
-QSlider::handle:horizontal {{
-    background: {PALETTE["accent"]}; border: none;
-    width: 16px; height: 16px; margin: -6px 0; border-radius: 8px;
-}}
-QSlider::sub-page:horizontal {{ background: {PALETTE["accent"]}; border-radius: 2px; }}
+
+/* ── Section headers ────────────────────────────────────────────────────── */
 QLabel#section_header {{
     color: {PALETTE["muted"]};
-    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-    padding: 10px 0 3px 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    padding: 10px 0 4px 0;
 }}
+
+/* ── Dividers ───────────────────────────────────────────────────────────── */
 QFrame#divider {{
     background-color: {PALETTE["border"]};
     max-height: 1px;
 }}
+
+/* ── Status bar ─────────────────────────────────────────────────────────── */
 QStatusBar {{
     background-color: {PALETTE["surface"]};
     color: {PALETTE["muted"]};
     border-top: 1px solid {PALETTE["border"]};
     font-size: 11px;
 }}
+
+/* ── Checkbox ───────────────────────────────────────────────────────────── */
 QCheckBox {{
     color: {PALETTE["text"]};
-    spacing: 6px;
+    spacing: 7px;
     font-size: 12px;
 }}
 QCheckBox::indicator {{
@@ -261,11 +210,35 @@ QCheckBox::indicator:checked {{
     background-color: {PALETTE["accent"]};
     border-color: {PALETTE["accent"]};
 }}
+
+/* ── Splitter ───────────────────────────────────────────────────────────── */
 QSplitter::handle {{
     background-color: {PALETTE["border"]};
-    width: 2px;
+    width: 1px;
 }}
 """
+
+# Inline styles for speed chips — set directly via setStyleSheet() on each
+# button so we never depend on Qt property selectors, which are unreliable
+# on Windows with the Fusion style.
+_CHIP_INACTIVE = (
+    f"QPushButton {{ background-color: {PALETTE['surface']};"
+    f" color: {PALETTE['muted']};"
+    f" border: 1px solid {PALETTE['border']};"
+    f" border-radius: 5px; font-size: 12px; font-weight: 600;"
+    f" padding: 4px 12px; min-width: 38px; }}"
+    f"QPushButton:hover {{ background-color: {PALETTE['border']};"
+    f" color: {PALETTE['text']}; border-color: {PALETTE['accent']}; }}"
+)
+_CHIP_ACTIVE = (
+    f"QPushButton {{ background-color: {PALETTE['accent']};"
+    f" color: #03101e;"
+    f" border: 1px solid {PALETTE['accent']};"
+    f" border-radius: 5px; font-size: 12px; font-weight: 700;"
+    f" padding: 4px 12px; min-width: 38px; }}"
+    f"QPushButton:hover {{ background-color: #72b4ff;"
+    f" border-color: #72b4ff; color: #03101e; }}"
+)
 
 # =============================================================================
 # ── GLSL shaders ──────────────────────────────────────────────────────────────
@@ -460,58 +433,181 @@ def _ascend(ox: float, oy: float, oz: float, yaw: float, n: int) -> list[DP]:
     return pl
 
 
+def _arc(
+    cx: float, cy: float, cz: float,
+    radius: float, start_ang: float, end_ang: float,
+    n: int,
+) -> list[DP]:
+    """
+    Circular arc of n dominoes.  Each domino is tangent to the arc so it
+    naturally faces the next one in the chain.
+    """
+    pl: list[DP] = []
+    for i in range(n):
+        t   = i / max(n - 1, 1)
+        ang = start_ang + (end_ang - start_ang) * t
+        x   = cx + radius * math.cos(ang)
+        y   = cy + radius * math.sin(ang)
+        # tangent direction = perpendicular to radial direction
+        yaw = ang + math.pi * 0.5 * (1 if end_ang > start_ang else -1)
+        pl.append(DP(x, y, cz, yaw))
+    return pl
+
+
 def build_layout() -> tuple[list[DP], list[int]]:
     """
-    Full C+D layout — Staircase Canyon + Branching Tree.
+    Cascade layout — ~260 dominoes in five acts, all on the ground plane
+    or on proper staircase steps.  Every segment connects flush to the
+    previous one so the wave propagates without gaps.
 
-    Spine plateau → descent → ground run
-                                  │
-                              FORK 1
-                             ╱         ╲
-                        asc_L           asc_R
-                       plat_L           plat_R
-                          │                 │
-                      FORK 2L           FORK 2R
-                      ╱    ╲            ╱    ╲
-                  arm_LL arm_LR     arm_RL arm_RR
+    ACT 1 · Single straight entry (8 dominoes) — one tile is pushed.
+    ACT 2 · S-curve on the ground — adds visual interest.
+    ACT 3 · Staircase descent (8 steps) → PE→KE acceleration.
+    ACT 4 · Ground run then staircase ascent (6 steps) → KE→PE.
+    ACT 5 · Fork: one domino fans two branches; each branch forks again
+              → 4 final straight arms of 20 dominoes each.
+
+    Returns
+    -------
+    pl  : ordered list of DP (bottom-centre position + yaw)
+    fi  : indices in pl of the two fork dominoes (for InfoPanel display)
     """
     pl: list[DP] = []
     fi: list[int] = []
-    h0  = 0.0
-    fr  = math.radians(FORK_ANGLE_DEG)
-    top = STEPS_PER_RAMP * STEP_HEIGHT
 
-    # ── Spine ──────────────────────────────────────────────────────────────
-    sp = _run(-4.5, 0.0, top, h0, 8)
-    pl.extend(sp)
-    sd = _descend(sp[-1].x + STEP_DEPTH, sp[-1].y, top - STEP_HEIGHT, h0, STEPS_PER_RAMP)
-    pl.extend(sd)
-    gr = _run(sd[-1].x + DOMINO_SPACING, sd[-1].y, 0.0, h0, 4)
-    pl.extend(gr)
+    SP  = DOMINO_SPACING          # 0.155 m — standard spacing
+    fr  = math.radians(FORK_ANGLE_DEG)   # fork half-angle
 
-    fi.append(len(pl) - 1)   # FORK 1
-    f1x = gr[-1].x + DOMINO_SPACING * 0.55   # tight offset — arc reaches both
-    f1y = gr[-1].y
+    # ── ACT 1 — Straight entry, heading east (+X) ─────────────────────────
+    # First domino is at the origin facing east.  The player pushes domino 0.
+    entry = _run(0.0, 0.0, 0.0, 0.0, 10)
+    pl.extend(entry)
 
-    for hb in [h0 + fr, h0 - fr]:
-        ax = f1x + math.cos(hb) * STEP_DEPTH
-        ay = f1y + math.sin(hb) * STEP_DEPTH
-        asc  = _ascend(ax, ay, STEP_HEIGHT, hb, STEPS_PER_RAMP)
-        pl.extend(asc)
-        px = asc[-1].x + math.cos(hb) * DOMINO_SPACING
-        py = asc[-1].y + math.sin(hb) * DOMINO_SPACING
-        plat = _run(px, py, asc[-1].z, hb, 6)
-        pl.extend(plat)
+    # ── ACT 2 — Staircase ascent to plateau (8 steps) ─────────────────────
+    # The first domino is on the ground.  We build steps rising upward so
+    # the descent in ACT 3 has real height → PE→KE conversion.
+    N_STEPS = 8
+    plateau_z = N_STEPS * STEP_HEIGHT
 
-        fi.append(len(pl) - 1)   # FORK 2L / 2R
-        f2x = plat[-1].x + math.cos(hb) * DOMINO_SPACING * 0.55
-        f2y = plat[-1].y + math.sin(hb) * DOMINO_SPACING * 0.55
-        f2z = plat[-1].z
+    p = entry[-1]
+    rise = _ascend(
+        p.x + math.cos(p.yaw) * STEP_DEPTH,
+        p.y + math.sin(p.yaw) * STEP_DEPTH,
+        STEP_HEIGHT, p.yaw, N_STEPS,
+    )
+    pl.extend(rise)
 
-        for hsub in [hb + fr * 0.7, hb - fr * 0.7]:
-            bx = f2x + math.cos(hsub) * STEP_DEPTH
-            by = f2y + math.sin(hsub) * STEP_DEPTH
-            pl.extend(_descend(bx, by, f2z - STEP_HEIGHT, hsub, STEPS_PER_RAMP))
+    # S-curve on the plateau
+    p2 = rise[-1]
+    # Arc 1: sweep left (CCW) ~80° with radius 1.6 m
+    cx1 = p2.x + math.cos(p2.yaw + math.pi * 0.5) * 1.6
+    cy1 = p2.y + math.sin(p2.yaw + math.pi * 0.5) * 1.6
+    sa1 = p2.yaw - math.pi * 0.5
+    ea1 = sa1 + math.radians(80)
+    arc1 = _arc(cx1, cy1, plateau_z, 1.6, sa1, ea1, 10)
+    pl.extend(arc1)
+
+    # Arc 2: sweep right (CW) ~80° — completes the S
+    p3 = arc1[-1]
+    cx2 = p3.x + math.cos(p3.yaw - math.pi * 0.5) * 1.6
+    cy2 = p3.y + math.sin(p3.yaw - math.pi * 0.5) * 1.6
+    sa2 = p3.yaw + math.pi * 0.5
+    ea2 = sa2 - math.radians(80)
+    arc2 = _arc(cx2, cy2, plateau_z, 1.6, sa2, ea2, 10)
+    pl.extend(arc2)
+
+    # Short straight on plateau after S
+    p4 = arc2[-1]
+    link1 = _run(
+        p4.x + math.cos(p4.yaw) * SP,
+        p4.y + math.sin(p4.yaw) * SP,
+        plateau_z, p4.yaw, 6,
+    )
+    pl.extend(link1)
+
+    # ── ACT 3 — Staircase descent back to ground ───────────────────────────
+    p5 = link1[-1]
+    descent = _descend(
+        p5.x + math.cos(p5.yaw) * STEP_DEPTH,
+        p5.y + math.sin(p5.yaw) * STEP_DEPTH,
+        plateau_z - STEP_HEIGHT, p5.yaw, N_STEPS,
+    )
+    pl.extend(descent)
+
+    # Ground run at the bottom
+    p6 = descent[-1]
+    ground1 = _run(
+        p6.x + math.cos(p6.yaw) * SP,
+        p6.y + math.sin(p6.yaw) * SP,
+        0.0, p6.yaw, 10,
+    )
+    pl.extend(ground1)
+
+    # ── ACT 4 — Second ascent (6 steps) → elevated fork platform ──────────
+    p7 = ground1[-1]
+    N_STEPS2 = 6
+    fork_z = N_STEPS2 * STEP_HEIGHT
+
+    ascent = _ascend(
+        p7.x + math.cos(p7.yaw) * STEP_DEPTH,
+        p7.y + math.sin(p7.yaw) * STEP_DEPTH,
+        STEP_HEIGHT, p7.yaw, N_STEPS2,
+    )
+    pl.extend(ascent)
+
+    # Short plateau run before the fork domino
+    p8 = ascent[-1]
+    pre_fork = _run(
+        p8.x + math.cos(p8.yaw) * SP,
+        p8.y + math.sin(p8.yaw) * SP,
+        fork_z, p8.yaw, 6,
+    )
+    pl.extend(pre_fork)
+
+    # ── ACT 5 — Fork 1 → two branches, each descends then forks → 4 arms ──
+    # Fork geometry rule: the first domino of each branch must be within
+    # DOM_H * sin(fork_angle) ≈ 0.14 m of the fork domino so the tip of the
+    # falling fork tile physically contacts it.  We use a reduced fork angle
+    # and place the first branch domino at exactly SP along the branch heading.
+    fi.append(len(pl) - 1)   # record first fork domino index
+    pf = pre_fork[-1]
+    fork_half = math.radians(22)   # tighter angle → first branch tile in reach
+    sub_fr    = math.radians(18)   # sub-fork angle
+
+    for branch_yaw in [pf.yaw + fork_half, pf.yaw - fork_half]:
+        # First branch domino placed at SP along branch heading from fork
+        bx = pf.x + math.cos(branch_yaw) * SP
+        by = pf.y + math.sin(branch_yaw) * SP
+        branch_top = _run(bx, by, fork_z, branch_yaw, 6)
+        pl.extend(branch_top)
+
+        # Descend from elevated fork to ground
+        pb_top = branch_top[-1]
+        branch_desc = _descend(
+            pb_top.x + math.cos(branch_yaw) * STEP_DEPTH,
+            pb_top.y + math.sin(branch_yaw) * STEP_DEPTH,
+            fork_z - STEP_HEIGHT, branch_yaw, N_STEPS2,
+        )
+        pl.extend(branch_desc)
+
+        # Ground run before the second fork
+        pb_gnd = branch_desc[-1]
+        branch_ground = _run(
+            pb_gnd.x + math.cos(branch_yaw) * SP,
+            pb_gnd.y + math.sin(branch_yaw) * SP,
+            0.0, branch_yaw, 8,
+        )
+        pl.extend(branch_ground)
+
+        # Second fork (at ground level) — same tight placement rule
+        fi.append(len(pl) - 1)
+        pb2 = branch_ground[-1]
+
+        for arm_yaw in [pb2.yaw + sub_fr, pb2.yaw - sub_fr]:
+            ax = pb2.x + math.cos(arm_yaw) * SP
+            ay = pb2.y + math.sin(arm_yaw) * SP
+            arm = _run(ax, ay, 0.0, arm_yaw, 20)
+            pl.extend(arm)
 
     return pl, fi
 
@@ -710,18 +806,28 @@ class DominoPhysics:
         """
         self._placements, _ = build_layout()
 
-        step_hw = STEP_DEPTH * 0.5
-        step_ww = DOM_W * 0.9
-        step_hh = STEP_HEIGHT * 0.5
-
         # ── Step platforms ────────────────────────────────────────────────────
+        # Each domino that is NOT at z ≈ 0 sits on a solid step slab.
+        # The slab half-extents span the full step depth and are tall enough
+        # to reach from z down to the ground (or the next step surface).
+        # This creates a proper staircase the physics engine can reason about.
+        step_hw = STEP_DEPTH * 0.6     # half-depth along travel direction
+        step_ww = DOM_W * 1.1          # slightly wider than domino
         self.platform_data = []
+
         for p in self._placements:
-            pos = (p.x, p.y, p.z - step_hh)
+            if abs(p.z) < 0.004:        # at ground level — plane.urdf handles it
+                continue
+            # Slab top surface = p.z; slab bottom = ground (z=0) or negative floor.
+            # Half-height = |p.z| / 2; slab centre at p.z / 2.
+            step_hh = abs(p.z) * 0.5 + 0.002   # tiny extra to avoid gap
+            pos = (p.x, p.y, p.z * 0.5)
             q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
             self.platform_data.append((pos, q, step_hw, step_ww, step_hh))
             sh  = pybullet.createCollisionShape(
-                pybullet.GEOM_BOX, halfExtents=[step_hw, step_ww, step_hh])
+                pybullet.GEOM_BOX,
+                halfExtents=[step_hw, step_ww, step_hh],
+            )
             bid = pybullet.createMultiBody(0, sh, -1, list(pos), list(q))
             pybullet.changeDynamics(bid, -1, lateralFriction=DOM_FRICTION)
 
@@ -758,21 +864,38 @@ class DominoPhysics:
 
     def start(self) -> None:
         """
-        Tip the first domino with a small torque impulse.
+        Tip ONLY the first domino (index 0) with a torque + linear impulse.
 
         CONCEPT: applyExternalTorque adds an angular impulse (N·m).
-        One small push is enough — once tilt exceeds arctan(DOM_D/DOM_H)
-        ≈ 5.7°, gravity takes over.  Torque axis is perpendicular to the
-        domino heading so it falls forward, not sideways.
+        Once tilt exceeds arctan(DOM_D/DOM_H) ≈ 5.7°, gravity takes over.
+        Torque axis is perpendicular to the domino heading so it falls
+        forward (into the chain), not sideways.
+
+        A complementary linear velocity nudge along the domino's facing
+        direction guarantees the tip even if the torque is absorbed by the
+        ground contact point, ensuring one — and only one — tile is pushed.
         """
         if not self._dom_ids:
             return
         self._running = True
-        p0 = self._placements[0]
+        p0  = self._placements[0]
+        bid = self._dom_ids[0]
+
+        # Angular impulse — perpendicular to heading, tilts it forward
         pybullet.applyExternalTorque(
-            self._dom_ids[0], -1,
-            torqueObj=[-math.sin(p0.yaw) * 5.0, math.cos(p0.yaw) * 5.0, 0.0],
+            bid, -1,
+            torqueObj=[-math.sin(p0.yaw) * 12.0,
+                        math.cos(p0.yaw) * 12.0,
+                        0.0],
             flags=pybullet.WORLD_FRAME,
+        )
+        # Small linear nudge along the facing direction for extra reliability
+        pybullet.resetBaseVelocity(
+            bid,
+            linearVelocity =[math.cos(p0.yaw) * 0.4,
+                              math.sin(p0.yaw) * 0.4,
+                              0.0],
+            angularVelocity=[0.0, 0.0, 0.0],
         )
 
     def step(self, n: int) -> None:
@@ -781,8 +904,9 @@ class DominoPhysics:
 
         ANIMATION CONCEPT — fixed-timestep loop:
         QTimer fires at ~60 Hz. Each tick advances n×PHYSICS_DT simulation.
-        Default n = 4 → 4×(1/240) ≈ 16.7 ms/frame = real-time at 60 fps.
-        Speed ×8 → 32 ms/frame = 2× real-time. Physics accuracy unchanged.
+        n = REAL_TIME_SUBSTEPS (4) → 4×(1/240) ≈ 16.7 ms/frame = 1× real-time.
+        n = 8  → 2× real-time.  n = 32 → 8× real-time.
+        Physics accuracy is unchanged — only temporal compression varies.
         """
         if not self._running:
             return
@@ -1151,8 +1275,11 @@ class InfoPanel(QWidget):
         self.setMaximumWidth(300)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 6, 14, 10)
-        layout.setSpacing(2)
+        layout.setContentsMargins(12, 8, 12, 12)
+        layout.setSpacing(0)
+
+        MONO = ("font-family: 'IBM Plex Mono', 'Courier New', monospace;"
+                " font-size: 12px;")
 
         def _hdr(text: str) -> QLabel:
             lbl = QLabel(text)
@@ -1164,75 +1291,112 @@ class InfoPanel(QWidget):
             f.setFrameShape(QFrame.Shape.HLine)
             return f
 
-        MONO = (f"font-family: 'IBM Plex Mono', 'Courier New', monospace;"
-                f" font-size: 12px;")
+        def _stat_card(value_lbl: QLabel, caption: str) -> QWidget:
+            """Mini stat card: large value + small caption below."""
+            card = QWidget(); card.setObjectName("stat_card")
+            cv = QVBoxLayout(card)
+            cv.setContentsMargins(10, 8, 10, 8); cv.setSpacing(1)
+            value_lbl.setStyleSheet(
+                f"color:{PALETTE['text']}; font-size:20px; font-weight:700;")
+            value_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            cap = QLabel(caption)
+            cap.setStyleSheet(
+                f"color:{PALETTE['muted']}; font-size:10px; font-weight:600;"
+                "letter-spacing:0.08em;")
+            cv.addWidget(value_lbl)
+            cv.addWidget(cap)
+            return card
 
         # ── Layout info ───────────────────────────────────────────────────────
         layout.addWidget(_hdr("LAYOUT"))
         self._layout_info = QLabel()
         self._layout_info.setWordWrap(True)
-        self._layout_info.setStyleSheet(f"color:{PALETTE['text']}; font-size: 12px;")
+        self._layout_info.setStyleSheet(f"color:{PALETTE['text']}; font-size:12px;")
         layout.addWidget(self._layout_info)
-
-        layout.addSpacing(4)
+        layout.addSpacing(8)
         layout.addWidget(_div())
 
-        # ── Live stats ────────────────────────────────────────────────────────
+        # ── Live stats — two stat cards side-by-side ──────────────────────────
         layout.addWidget(_hdr("LIVE STATS"))
-        self._fallen_lbl  = QLabel("Fallen   0 / 0")
-        self._simtime_lbl = QLabel("Sim      0.00 s")
-        self._wave_lbl    = QLabel("Wave     waiting…")
-        for lbl in (self._fallen_lbl, self._simtime_lbl, self._wave_lbl):
-            lbl.setStyleSheet(MONO)
-            layout.addWidget(lbl)
+        layout.addSpacing(4)
 
-        # Progress bar (colour strip shows cascade progress)
+        self._fallen_val = QLabel("0")
+        self._simtime_val = QLabel("0.00 s")
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(6)
+        cards_row.addWidget(_stat_card(self._fallen_val, "FALLEN"))
+        cards_row.addWidget(_stat_card(self._simtime_val, "SIM TIME"))
+        layout.addLayout(cards_row)
+        layout.addSpacing(8)
+
+        self._wave_lbl = QLabel("Wave front: waiting…")
+        self._wave_lbl.setStyleSheet(
+            f"color:{PALETTE['muted']}; font-size:11px; {MONO}")
+        layout.addWidget(self._wave_lbl)
+
+        # Progress bar
+        layout.addSpacing(8)
         self._prog_outer = QWidget()
-        self._prog_outer.setFixedHeight(5)
+        self._prog_outer.setFixedHeight(4)
         self._prog_outer.setStyleSheet(
             f"background:{PALETTE['border']}; border-radius:2px;")
         self._prog_inner = QWidget(self._prog_outer)
-        self._prog_inner.setFixedHeight(5)
+        self._prog_inner.setFixedHeight(4)
         self._prog_inner.setStyleSheet(
-            f"background:{PALETTE['green']}; border-radius:2px;")
+            f"background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            f" stop:0 {PALETTE['accent']}, stop:1 {PALETTE['green']});"
+            "border-radius:2px;")
         self._prog_inner.setFixedWidth(0)
-        layout.addSpacing(4)
         layout.addWidget(self._prog_outer)
-
-        layout.addSpacing(4)
+        layout.addSpacing(8)
         layout.addWidget(_div())
 
         # ── Camera controls ───────────────────────────────────────────────────
         layout.addWidget(_hdr("CAMERA"))
         self._auto_cb = QCheckBox("Auto-track wave front")
         layout.addWidget(self._auto_cb)
-        layout.addSpacing(4)
-        hint = QLabel(
-            "Left-drag   →  orbit\n"
-            "Mid-drag    →  pan\n"
-            "Scroll      →  zoom\n"
-            "Dbl-click   →  reframe"
-        )
-        hint.setStyleSheet(
-            f"color:{PALETTE['muted']}; font-size:11px; {MONO}")
-        layout.addWidget(hint)
+        layout.addSpacing(6)
+        controls = [
+            ("Left-drag",  "Orbit"),
+            ("Mid-drag",   "Pan"),
+            ("Scroll",     "Zoom"),
+            ("Dbl-click",  "Reframe"),
+        ]
+        for key, action in controls:
+            row = QHBoxLayout()
+            row.setSpacing(0)
+            k = QLabel(key)
+            k.setStyleSheet(
+                f"color:{PALETTE['muted']}; font-size:11px; {MONO}")
+            k.setFixedWidth(72)
+            a = QLabel(action)
+            a.setStyleSheet(f"color:{PALETTE['text']}; font-size:11px;")
+            row.addWidget(k); row.addWidget(a); row.addStretch()
+            layout.addLayout(row)
 
-        layout.addSpacing(4)
+        layout.addSpacing(8)
         layout.addWidget(_div())
 
         # ── Physics parameters ────────────────────────────────────────────────
         layout.addWidget(_hdr("PHYSICS PARAMETERS"))
-        phys_text = (
-            f"Mass         {DOM_MASS*1000:.0f} g\n"
-            f"Restitution  {DOM_RESTITUTION:.2f}\n"
-            f"Friction     {DOM_FRICTION:.2f}\n"
-            f"Step height  {STEP_HEIGHT*100:.0f} mm\n"
-            f"Timestep     1/{int(1/PHYSICS_DT)} s\n"
-            f"Substeps     {PHYSICS_SUBSTEP}"
-        )
-        phys_lbl = QLabel(phys_text)
-        phys_lbl.setStyleSheet(f"color:{PALETTE['muted']}; font-size:11px; {MONO}")
-        layout.addWidget(phys_lbl)
+        phys_rows = [
+            ("Mass",        f"{DOM_MASS*1000:.0f} g"),
+            ("Restitution", f"{DOM_RESTITUTION:.2f}"),
+            ("Friction",    f"{DOM_FRICTION:.2f}"),
+            ("Step height", f"{STEP_HEIGHT*100:.0f} mm"),
+            ("Timestep",    f"1/{int(1/PHYSICS_DT)} s"),
+            ("1× speed",    f"{REAL_TIME_SUBSTEPS} substeps/frame"),
+        ]
+        for label, value in phys_rows:
+            row = QHBoxLayout(); row.setSpacing(0)
+            lk = QLabel(label)
+            lk.setStyleSheet(
+                f"color:{PALETTE['muted']}; font-size:11px; {MONO}")
+            lk.setFixedWidth(88)
+            lv = QLabel(value)
+            lv.setStyleSheet(f"color:{PALETTE['text']}; font-size:11px; {MONO}")
+            row.addWidget(lk); row.addWidget(lv); row.addStretch()
+            layout.addLayout(row)
 
         layout.addStretch()
 
@@ -1253,13 +1417,13 @@ class InfoPanel(QWidget):
         wave: tuple,
         running: bool,
     ) -> None:
-        self._fallen_lbl.setText(f"Fallen   {n_fallen:3d} / {total}")
-        self._simtime_lbl.setText(f"Sim      {sim_time:6.2f} s")
+        self._fallen_val.setText(f"{n_fallen} / {total}")
+        self._simtime_val.setText(f"{sim_time:.2f} s")
         if running and n_fallen > 0:
             self._wave_lbl.setText(
-                f"Wave   ({wave[0]:+.1f}, {wave[1]:+.1f})")
+                f"Wave front: ({wave[0]:+.1f}, {wave[1]:+.1f})")
         else:
-            self._wave_lbl.setText("Wave     waiting…")
+            self._wave_lbl.setText("Wave front: waiting…")
 
         # Update progress bar width
         if total > 0:
@@ -1295,7 +1459,8 @@ class MainWindow(QMainWindow):
 
         self._physics  = DominoPhysics()
         self._physics.connect()
-        self._substeps = SPEED_DEFAULT
+        self._substeps = SPEED_TABLE[SPEED_DEFAULT_IDX][1]
+        self._speed_idx = SPEED_DEFAULT_IDX
         self._fps      = 60.0
         self._last_t   = time.perf_counter()
 
@@ -1366,40 +1531,98 @@ class MainWindow(QMainWindow):
             f"background-color:{PALETTE['surface']};"
             f"border-top: 1px solid {PALETTE['border']};"
         )
-        ctrl.setFixedHeight(60)
+        ctrl.setFixedHeight(68)
         crow = QHBoxLayout(ctrl)
-        crow.setContentsMargins(20, 9, 20, 9); crow.setSpacing(16)
+        crow.setContentsMargins(20, 12, 20, 12); crow.setSpacing(14)
 
-        self._start_btn = QPushButton("▶  Start cascade")
+        # ── START button — green pill, high-contrast, works under Fusion ────
+        self._start_btn = QPushButton("▶  Start Cascade")
         self._start_btn.setObjectName("start_btn")
         self._start_btn.setFixedHeight(42)
+        self._start_btn.setMinimumWidth(180)
+        self._start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._start_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1db96a;
+                color: #ffffff;
+                border: none;
+                border-radius: 21px;
+                padding: 0px 28px;
+                font-size: 14px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+            }
+            QPushButton:hover {
+                background-color: #25e07f;
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background-color: #12944f;
+                color: #ffffff;
+            }
+            QPushButton:disabled {
+                background-color: #1a2630;
+                color: #3a5040;
+                border: 1px solid #253530;
+            }
+        """)
 
-        self._reset_btn = QPushButton("⟳  Reset")
+        # ── RESET button — slate-blue pill, clearly readable ──────────────
+        self._reset_btn = QPushButton("↺  Reset")
         self._reset_btn.setObjectName("reset_btn")
         self._reset_btn.setFixedHeight(42)
+        self._reset_btn.setMinimumWidth(120)
+        self._reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2d3a52;
+                color: #e0e6f8;
+                border: 1px solid #4a5878;
+                border-radius: 21px;
+                padding: 0px 24px;
+                font-size: 14px;
+                font-weight: 600;
+                letter-spacing: 0.3px;
+            }
+            QPushButton:hover {
+                background-color: #3d4f70;
+                color: #ffffff;
+                border-color: #6a7ea8;
+            }
+            QPushButton:pressed {
+                background-color: #1e2a3e;
+                color: #ffffff;
+            }
+        """)
 
-        spd_lbl = QLabel("SPEED")
-        spd_lbl.setStyleSheet(
-            f"color:{PALETTE['muted']}; font-size:10px;"
-            "font-weight:600; letter-spacing:1px;")
-        spd_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # ── Speed chips ───────────────────────────────────────────────────────
+        # 1× = real-time (REAL_TIME_SUBSTEPS substeps/frame at 60 Hz)
+        spd_cap = QLabel("SPEED")
+        spd_cap.setStyleSheet(
+            f"color:{PALETTE['muted']}; font-size:10px; font-weight:700;"
+            "letter-spacing:0.08em;")
+        spd_cap.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        self._spd_val = QLabel(f"×{SPEED_DEFAULT}")
-        self._spd_val.setStyleSheet(
-            f"color:{PALETTE['accent']}; font-size:14px; font-weight:700;")
-        self._spd_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._speed_chips: list[QPushButton] = []
+        chips_w = QWidget()
+        chips_row = QHBoxLayout(chips_w)
+        chips_row.setContentsMargins(0, 0, 0, 0)
+        chips_row.setSpacing(4)
+        for i, (label, _substeps) in enumerate(SPEED_TABLE):
+            btn = QPushButton(label)
+            btn.setFixedHeight(30)
+            btn.setStyleSheet(_CHIP_INACTIVE)
+            btn.clicked.connect(lambda _checked, idx=i: self._on_speed(idx))
+            chips_row.addWidget(btn)
+            self._speed_chips.append(btn)
+        self._update_speed_chips()
 
-        self._spd_sl = QSlider(Qt.Orientation.Horizontal)
-        self._spd_sl.setRange(SPEED_MIN, SPEED_MAX)
-        self._spd_sl.setValue(SPEED_DEFAULT)
-        self._spd_sl.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self._spd_sl.setTickInterval(1)
-        self._spd_sl.setFixedWidth(180)
+        spd_w = QWidget(); sv = QHBoxLayout(spd_w)
+        sv.setContentsMargins(0, 0, 0, 0); sv.setSpacing(8)
+        sv.addWidget(spd_cap)
+        sv.addWidget(chips_w)
 
-        spd_w = QWidget(); sv = QVBoxLayout(spd_w)
-        sv.setContentsMargins(0, 0, 0, 0); sv.setSpacing(2)
-        sv.addWidget(spd_lbl); sv.addWidget(self._spd_val); sv.addWidget(self._spd_sl)
-
+        # ── HUD readout ───────────────────────────────────────────────────────
         self._hud = QLabel()
         self._hud.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
@@ -1409,6 +1632,7 @@ class MainWindow(QMainWindow):
 
         crow.addWidget(self._start_btn)
         crow.addWidget(self._reset_btn)
+        crow.addSpacing(8)
         crow.addWidget(spd_w)
         crow.addStretch()
         crow.addWidget(self._hud)
@@ -1431,7 +1655,6 @@ class MainWindow(QMainWindow):
         # ── Signals & slots ───────────────────────────────────────────────────
         self._start_btn.clicked.connect(self._on_start)
         self._reset_btn.clicked.connect(self._on_reset)
-        self._spd_sl.valueChanged.connect(self._on_speed)
 
         self._refresh_hud()
 
@@ -1461,8 +1684,10 @@ class MainWindow(QMainWindow):
 
     def _refresh_hud(self) -> None:
         ph = self._physics
+        spd_label = SPEED_TABLE[self._speed_idx][0]
         self._hud.setText(
-            f"Fallen {ph.n_fallen:3d}/{ph.total}"
+            f"Speed {spd_label}"
+            f"   Fallen {ph.n_fallen:3d}/{ph.total}"
             f"   Sim {ph.sim_time:6.2f} s"
             f"   {self._fps:.0f} fps"
         )
@@ -1471,7 +1696,7 @@ class MainWindow(QMainWindow):
 
     def _on_start(self) -> None:
         self._physics.start()
-        self._start_btn.setText("● Running…")
+        self._start_btn.setText("▶  Running…")
         self._start_btn.setEnabled(False)
         self.statusBar().showMessage(
             "Cascade released — left-drag to orbit · scroll to zoom · "
@@ -1480,7 +1705,7 @@ class MainWindow(QMainWindow):
 
     def _on_reset(self) -> None:
         self._physics.reset()
-        self._start_btn.setText("▶  Start cascade")
+        self._start_btn.setText("▶  Start Cascade")
         self._start_btn.setEnabled(True)
         self._info.set_layout_info(self._physics.total)
         self.statusBar().showMessage(
@@ -1488,9 +1713,24 @@ class MainWindow(QMainWindow):
         )
         self._refresh_hud()
 
-    def _on_speed(self, v: int) -> None:
-        self._substeps = v
-        self._spd_val.setText(f"×{v}")
+    def _update_speed_chips(self) -> None:
+        """Highlight the active speed chip and un-highlight all others."""
+        for i, btn in enumerate(self._speed_chips):
+            btn.setStyleSheet(_CHIP_ACTIVE if i == self._speed_idx else _CHIP_INACTIVE)
+
+    def _on_speed(self, idx: int) -> None:
+        self._speed_idx = idx
+        label, substeps = SPEED_TABLE[idx]
+        self._substeps = substeps
+        # Also scale the timer interval so ½× truly halves the update rate
+        # and higher speeds don't just pile substeps into the same 16 ms slot.
+        # Base interval = 16 ms (≈60 Hz) at 1× real-time (4 substeps).
+        # ½× → 32 ms (≈30 Hz); 2× → 8 ms; 4× → 4 ms; 8× → 2 ms.
+        base_interval = 16  # ms at 1× (REAL_TIME_SUBSTEPS substeps)
+        ratio = substeps / REAL_TIME_SUBSTEPS   # 0.5 / 1 / 2 / 4 / 8
+        new_interval = max(2, round(base_interval / ratio))
+        self._timer.setInterval(new_interval)
+        self._update_speed_chips()
 
     def closeEvent(self, event) -> None:   # type: ignore[override]
         self._timer.stop()
