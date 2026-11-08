@@ -1,0 +1,61 @@
+# =============================================================================
+# Computeranimation — Seminar 05
+# Demo: Physics-Based Skeleton Animation
+# =============================================================================
+#
+# Dependency stack (all pinned to exact versions for reproducibility):
+#
+#   PySide6    Qt6 Python bindings — the UI framework used by Maya, Blender,
+#              Houdini and Nuke. Provides QMainWindow, QOpenGLWidget, QDockWidget,
+#              QSlider, QTimer, and the full Qt signal/slot system.
+#
+#   PyOpenGL   OpenGL Python bindings — drives the 3-D viewport. Immediate-mode
+#              GL (glBegin/glEnd) renders capped cylinders and spheres for each
+#              bone segment with Phong shading and an ivory material.
+#
+#   NumPy      All BVH frame data is stored as float32 typed arrays. Used for
+#              joint transform math (4×4 matrices, cross products, dot products)
+#              and for extracting world-space joint positions each frame.
+#
+# Run:
+#   cd 05_pybullet
+#   uv sync                     # first time — creates .venv and installs deps
+#   uv run python 05_ca_pybullet.py
+#
+# Ubuntu system dependencies (run once if not already installed):
+#   sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
+#
+# Requires Python 3.11 or later (PySide6 6.x drops 3.10 support on some
+# platforms; 3.11 is safe on Windows, macOS and Linux).
+# =============================================================================
+
+[project]
+name        = "ca-seminar05-pybullet"
+version     = "1.0.0"
+description = "CA Demo — Physics-Based Skeleton Animation"
+authors = [
+    { name = "Renato Fera P.", email = "renato.profeta@tu-ilmenau.de" }
+]
+requires-python = ">=3.11,<3.13"
+
+dependencies = [
+    # Qt6 Python bindings — full desktop UI framework
+    # Changelog: https://doc.qt.io/qt-6/whatsnew66.html
+    "PySide6==6.7.2",
+
+    # OpenGL Python bindings — required by the 3-D viewport (Phong shading,
+    # bone cylinder/sphere geometry via immediate-mode GL).
+    # Changelog: https://pyopengl.sourceforge.net/
+    "PyOpenGL==3.1.7",
+
+    # Numerical arrays — float32 BVH frame data and 4×4 joint transform math.
+    # Changelog: https://numpy.org/doc/stable/release.html
+    "numpy==2.0.2",
+]
+
+[tool.uv]
+# This is a script-only project — no package to build or install.
+# uv manages the venv and deps without a build backend.
+# .venv is created in the project root on first `uv sync`; do not commit it.
+package = false
+managed = true
