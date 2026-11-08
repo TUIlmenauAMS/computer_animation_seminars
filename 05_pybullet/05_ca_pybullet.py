@@ -190,7 +190,7 @@ GRID_STEP: float = 0.5
 GRID_COLOUR: tuple[float, float, float] = (0.18, 0.22, 0.30)
 
 # Camera defaults
-CAM_DISTANCE_DEFAULT: float = 5.5
+CAM_DISTANCE_DEFAULT: float = 8.0
 CAM_AZIMUTH_DEFAULT: float = 25.0
 CAM_ELEVATION_DEFAULT: float = 10.0
 CAM_TARGET_DEFAULT: tuple[float, float, float] = (0.0, 0.9, 0.0)
@@ -225,7 +225,7 @@ GLB_TO_BVH: dict[str, str] = {
 
 # ── GLSL Shaders ──────────────────────────────────────────────────────────────
 
-VERT_SRC = """
+VERT_SRC_TEMPLATE = """
 #version 330 core
 
 layout(location = 0) in vec3 aPos;
@@ -235,12 +235,12 @@ layout(location = 3) in vec4  aWeights;
 
 uniform mat4 uProjection;
 uniform mat4 uView;
-uniform mat4 uJointMatrices[24];
+uniform mat4 uJointMatrices[{num_joints}];
 
 out vec3 vNormal;
 out vec3 vFragPos;
 
-void main() {
+void main() {{
     // GPU skinning: blend up to 4 joint transforms
     mat4 skin =
         aWeights.x * uJointMatrices[aJoints.x] +
@@ -254,7 +254,7 @@ void main() {
     // valid normal matrix (and far cheaper than inverse-transpose on 178k verts).
     vNormal   = mat3(skin) * aNormal;
     gl_Position = uProjection * uView * worldPos;
-}
+}}
 """
 
 FRAG_SRC = """
@@ -555,8 +555,10 @@ def load_glb(path: Path) -> GLBMesh:
         if "matrix" in node:
             return np.array(node["matrix"], dtype=np.float64).reshape(4, 4).T
         M = np.eye(4)
-        M[:3, :3] = _quat_to_mat3(node.get("rotation", [0, 0, 0, 1])) * np.array(
-            node.get("scale", [1, 1, 1]), dtype=np.float64)
+        # glTF TRS: M = T * R * S  (scale is a diagonal post-multiplied onto R)
+        R = _quat_to_mat3(node.get("rotation", [0, 0, 0, 1]))
+        S = np.array(node.get("scale", [1, 1, 1]), dtype=np.float64)
+        M[:3, :3] = R * S          # each column of R scaled by corresponding S component
         M[:3, 3] = node.get("translation", [0, 0, 0])
         return M
 
@@ -745,19 +747,14 @@ class Retargeter:
             else:
                 p[j] = root_world if b == 0 else P[j]
 
-            # Build the posed world matrix for this joint: T(p[j]) * R(D[j])
-            # then right-multiply by the glTF inverse bind matrix.
-            # This is the standard glTF skinning formula:
-            #   skin_matrix[j] = pose_world[j] @ inv_bind[j]
-            # Previously the code used  p[j] - D[j] @ P[j]  as the translation,
-            # which is only correct when the bind-pose rotation is identity.
-            # With a non-identity bind rotation (e.g. A-pose arms) that caused
-            # the bone-bending / deformation artifact visible in the screenshot.
-            pose_world = np.eye(4)
-            pose_world[:3, :3] = D[j]
-            pose_world[:3, 3] = p[j]
-            m = pose_world @ mesh.inv_bind[j]
-            mats[j] = m
+            # Skinning matrix: rotate by D[j], then translate so the joint's
+            # bind-pose position maps to its posed position.
+            # M * v_bind = D[j] @ v_bind + (p[j] - D[j] @ P[j])
+            # This is correct because bind_pos (P) is already in world-metre
+            # space (the Armature 0.01 scale is baked into it via world()),
+            # so inv_bind is a pure translation T(-P[j]) in that same space.
+            mats[j, :3, :3] = D[j]
+            mats[j, :3, 3]  = p[j] - D[j] @ P[j]
 
         return mats.astype(np.float32), root_world
 
@@ -936,15 +933,8 @@ class SkeletonViewport(QOpenGLWidget):
         glClearColor(0.05, 0.07, 0.11, 1.0)
         glEnable(GL_DEPTH_TEST)
 
-        # Compile shader
-        try:
-            self._prog = _link_program(VERT_SRC, FRAG_SRC)
-        except Exception as e:
-            print(f"[ERROR] Shader compilation failed: {e}")
-            traceback.print_exc()
-            return
-
-        # Load GLB if present
+        # Load GLB first so we know the exact joint count,
+        # then compile the shader with that count baked in.
         if SKELETON_GLB.exists():
             try:
                 self._load_mesh()
@@ -958,6 +948,21 @@ class SkeletonViewport(QOpenGLWidget):
         """Upload GLB geometry to the GPU."""
         self._mesh = load_glb(SKELETON_GLB)
         m = self._mesh
+
+        # Compile the vertex shader now that we know the joint count.
+        # The array size must exactly match (or exceed) the number of joints in
+        # the skin so that aJoints indices never read out-of-bounds, which would
+        # leave those vertices at the origin and make the mesh collapse.
+        num_joints = max(len(m.joint_names), 1)
+        vert_src = VERT_SRC_TEMPLATE.format(num_joints=num_joints)
+        print(f"[Mesh] {num_joints} joints, compiling shader with uJointMatrices[{num_joints}]")
+        try:
+            self._prog = _link_program(vert_src, FRAG_SRC)
+        except Exception as e:
+            import traceback
+            print(f"[ERROR] Shader compilation failed: {e}")
+            traceback.print_exc()
+            return
 
         self._vao = glGenVertexArrays(1)
         glBindVertexArray(self._vao)
@@ -1039,7 +1044,7 @@ class SkeletonViewport(QOpenGLWidget):
         aspect = w / h
 
         # Projection
-        fov, near, far = 45.0, 0.05, 100.0
+        fov, near, far = 45.0, 0.05, 500.0
         f = 1.0 / math.tan(math.radians(fov) / 2)
         proj = np.array([
             [f/aspect, 0,  0,                        0],
@@ -1064,7 +1069,7 @@ class SkeletonViewport(QOpenGLWidget):
         # ── Draw ground grid (immediate mode, no shader) ──
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(fov, aspect, near, far)
+        gluPerspective(fov, aspect, near, far)  # far=500 matches shader projection
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
         gluLookAt(cx, cy, cz, tx, ty, tz, 0.0, 1.0, 0.0)
@@ -1155,7 +1160,7 @@ class SkeletonViewport(QOpenGLWidget):
         delta = event.angleDelta().y()
         factor = 0.96 if delta > 0 else 1.04
         self._cam_distance *= factor ** (abs(delta) / 120)
-        self._cam_distance = max(0.5, min(30.0, self._cam_distance))
+        self._cam_distance = max(0.5, min(100.0, self._cam_distance))
         self.update()
 
 
