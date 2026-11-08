@@ -13,6 +13,11 @@
 #              GL (glBegin/glEnd) renders capped cylinders and spheres for each
 #              bone segment with Phong shading and an ivory material.
 #
+#   pybullet-arm64  Drop-in fork of pybullet with pre-built wheels for Windows,
+#              macOS and Linux — same API, same "import pybullet". Provides the
+#              rigid-body simulation engine for the kinematic-to-ragdoll blend;
+#              the BVH replay path runs without stepping the simulator.
+#
 #   NumPy      All BVH frame data is stored as float32 typed arrays. Used for
 #              joint transform math (4×4 matrices, cross products, dot products)
 #              and for extracting world-space joint positions each frame.
@@ -25,8 +30,8 @@
 # Ubuntu system dependencies (run once if not already installed):
 #   sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
 #
-# Requires Python 3.11 or later (PySide6 6.x drops 3.10 support on some
-# platforms; 3.11 is safe on Windows, macOS and Linux).
+# Requires Python 3.12 (PySide6 6.7.x; pybullet-arm64 ships cp312 wheels for
+# all platforms — Windows, macOS and Linux).
 # =============================================================================
 
 [project]
@@ -36,7 +41,7 @@ description = "CA Demo — Physics-Based Skeleton Animation"
 authors = [
     { name = "Renato Fera P.", email = "renato.profeta@tu-ilmenau.de" }
 ]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.12,<3.13"
 
 dependencies = [
     # Qt6 Python bindings — full desktop UI framework
@@ -47,6 +52,11 @@ dependencies = [
     # bone cylinder/sphere geometry via immediate-mode GL).
     # Changelog: https://pyopengl.sourceforge.net/
     "PyOpenGL==3.1.7",
+
+    # Drop-in pybullet fork — pre-built wheels for Windows, macOS and Linux.
+    # Use "import pybullet" in code exactly as with the original package.
+    # Changelog: https://pypi.org/project/pybullet-arm64/
+    "pybullet-arm64==3.2.8",
 
     # Numerical arrays — float32 BVH frame data and 4×4 joint transform math.
     # Changelog: https://numpy.org/doc/stable/release.html
