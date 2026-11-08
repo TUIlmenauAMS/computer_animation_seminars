@@ -50,16 +50,21 @@ Connections to other seminars
 
 from __future__ import annotations
 
+import json
 import math
+import struct
 import sys
 import time
 from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
+import pybullet
+import pybullet_data
 from OpenGL.GL import (
     GL_AMBIENT,
     GL_AMBIENT_AND_DIFFUSE,
+    GL_BACK,
     GL_BLEND,
     GL_COLOR_BUFFER_BIT,
     GL_COLOR_MATERIAL,
@@ -70,7 +75,9 @@ from OpenGL.GL import (
     GL_FRONT_AND_BACK,
     GL_LIGHT0,
     GL_LIGHTING,
+    GL_LINE_LOOP,
     GL_LINE_SMOOTH,
+    GL_LINE_STRIP,
     GL_LINES,
     GL_MODELVIEW,
     GL_ONE_MINUS_SRC_ALPHA,
@@ -86,6 +93,7 @@ from OpenGL.GL import (
     glBlendFunc,
     glClear,
     glClearColor,
+    glColor3f,
     glColor4f,
     glColorMaterial,
     glDisable,
@@ -97,34 +105,37 @@ from OpenGL.GL import (
     glMaterialf,
     glMaterialfv,
     glMatrixMode,
+    glMultMatrixf,
     glNormal3f,
     glPopMatrix,
     glPushMatrix,
     glRotatef,
+    glScalef,
     glShadeModel,
     glTranslatef,
     glVertex3f,
     glViewport,
 )
-from OpenGL.GLU import gluLookAt, gluNewQuadric, gluPerspective, gluSphere
+from OpenGL.GLU import gluLookAt, gluPerspective, gluSphere, gluNewQuadric
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QFont, QColor
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDockWidget,
+    QDoubleSpinBox,
     QFormLayout,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPushButton,
-    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
+    QFrame,
+    QSizePolicy,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -143,7 +154,7 @@ BVH_RUN: Path = SCRIPT_DIR / "09_01.bvh"
 BVH_DANCE: Path = SCRIPT_DIR / "60_01.bvh"
 
 # Physics
-PHYSICS_TIMESTEP: float = 1.0 / 120.0  # 120 Hz simulation
+PHYSICS_TIMESTEP: float = 1.0 / 120.0   # 120 Hz simulation
 RENDER_FPS: int = 60
 GRAVITY: float = -9.81
 
@@ -171,19 +182,18 @@ CAM_TARGET_DEFAULT: tuple[float, float, float] = (0.0, 0.9, 0.0)
 
 # ── BVH Parser ────────────────────────────────────────────────────────────────
 
-
 class BVHJoint(NamedTuple):
     name: str
-    parent: int  # index into joint list, -1 for root
-    offset: np.ndarray  # rest-pose offset (metres)
+    parent: int          # index into joint list, -1 for root
+    offset: np.ndarray   # rest-pose offset (metres)
     channels: list[str]  # channel names e.g. ['Xrotation', 'Yrotation', 'Zrotation']
-    channel_start: int  # index into one frame's flat channel array
+    channel_start: int   # index into one frame's flat channel array
 
 
 class BVHData(NamedTuple):
     joints: list[BVHJoint]
-    frames: np.ndarray  # shape (n_frames, n_channels)
-    frame_time: float  # seconds per frame
+    frames: np.ndarray   # shape (n_frames, n_channels)
+    frame_time: float    # seconds per frame
 
 
 def parse_bvh(path: Path) -> BVHData:
@@ -196,7 +206,7 @@ def parse_bvh(path: Path) -> BVHData:
     lines = [l.strip() for l in text.splitlines()]
 
     joints: list[BVHJoint] = []
-    stack: list[int] = []  # stack of parent indices
+    stack: list[int] = []          # stack of parent indices
     channel_index: int = 0
     i: int = 0
 
@@ -214,28 +224,21 @@ def parse_bvh(path: Path) -> BVHData:
         if keyword in ("ROOT", "JOINT"):
             name = tokens[1] if len(tokens) > 1 else f"Joint_{len(joints)}"
             parent = stack[-1] if stack else -1
-            joints.append(
-                BVHJoint(
-                    name=name,
-                    parent=parent,
-                    offset=np.zeros(3, dtype=np.float32),
-                    channels=[],
-                    channel_start=channel_index,
-                )
-            )
+            joints.append(BVHJoint(
+                name=name,
+                parent=parent,
+                offset=np.zeros(3, dtype=np.float32),
+                channels=[],
+                channel_start=channel_index,
+            ))
             stack.append(len(joints) - 1)
             i += 1
             continue
 
         if keyword == "OFFSET" and stack:
             idx = stack[-1]
-            offset = (
-                np.array(
-                    [float(tokens[1]), float(tokens[2]), float(tokens[3])],
-                    dtype=np.float32,
-                )
-                * BVH_SCALE
-            )
+            offset = np.array([float(tokens[1]), float(tokens[2]), float(tokens[3])],
+                               dtype=np.float32) * BVH_SCALE
             joints[idx] = joints[idx]._replace(offset=offset)
             i += 1
             continue
@@ -243,7 +246,7 @@ def parse_bvh(path: Path) -> BVHData:
         if keyword == "CHANNELS" and stack:
             idx = stack[-1]
             n = int(tokens[1])
-            channels = tokens[2 : 2 + n]
+            channels = tokens[2: 2 + n]
             joints[idx] = joints[idx]._replace(
                 channels=channels,
                 channel_start=channel_index,
@@ -252,7 +255,7 @@ def parse_bvh(path: Path) -> BVHData:
             i += 1
             continue
 
-        if keyword == "END":  # End Site
+        if keyword == "END":    # End Site
             # skip until closing brace
             i += 1
             depth = 1
@@ -304,7 +307,8 @@ def parse_bvh(path: Path) -> BVHData:
     return BVHData(joints=joints, frames=frames, frame_time=frame_time)
 
 
-def euler_to_matrix(rx: float, ry: float, rz: float, order: str = "ZXY") -> np.ndarray:
+def euler_to_matrix(rx: float, ry: float, rz: float,
+                    order: str = "ZXY") -> np.ndarray:
     """Convert Euler angles (degrees) to 4×4 rotation matrix.
 
     BVH files typically use ZXY order (Zrotation Xrotation Yrotation).
@@ -315,15 +319,18 @@ def euler_to_matrix(rx: float, ry: float, rz: float, order: str = "ZXY") -> np.n
     cy, sy = math.cos(ry_r), math.sin(ry_r)
     cz, sz = math.cos(rz_r), math.sin(rz_r)
 
-    Rx = np.array(
-        [[1, 0, 0, 0], [0, cx, -sx, 0], [0, sx, cx, 0], [0, 0, 0, 1]], dtype=np.float32
-    )
-    Ry = np.array(
-        [[cy, 0, sy, 0], [0, 1, 0, 0], [-sy, 0, cy, 0], [0, 0, 0, 1]], dtype=np.float32
-    )
-    Rz = np.array(
-        [[cz, -sz, 0, 0], [sz, cz, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=np.float32
-    )
+    Rx = np.array([[1, 0, 0, 0],
+                   [0, cx, -sx, 0],
+                   [0, sx, cx, 0],
+                   [0, 0, 0, 1]], dtype=np.float32)
+    Ry = np.array([[cy, 0, sy, 0],
+                   [0, 1, 0, 0],
+                   [-sy, 0, cy, 0],
+                   [0, 0, 0, 1]], dtype=np.float32)
+    Rz = np.array([[cz, -sz, 0, 0],
+                   [sz, cz, 0, 0],
+                   [0, 0, 1, 0],
+                   [0, 0, 0, 1]], dtype=np.float32)
 
     matrices = {"X": Rx, "Y": Ry, "Z": Rz}
     result = np.eye(4, dtype=np.float32)
@@ -332,7 +339,8 @@ def euler_to_matrix(rx: float, ry: float, rz: float, order: str = "ZXY") -> np.n
     return result
 
 
-def bvh_frame_transforms(bvh: BVHData, frame_idx: int) -> list[np.ndarray]:
+def bvh_frame_transforms(bvh: BVHData,
+                          frame_idx: int) -> list[np.ndarray]:
     """Compute world-space 4×4 transform for every joint at frame_idx.
 
     Returns a list of 4×4 numpy arrays, one per joint, in joint order.
@@ -371,7 +379,8 @@ def bvh_frame_transforms(bvh: BVHData, frame_idx: int) -> list[np.ndarray]:
             T[2, 3] += tx_z
 
         if rots:
-            order = "".join(ch[0] for ch in joint.channels if ch.endswith("rotation"))
+            order = "".join(ch[0] for ch in joint.channels
+                            if ch.endswith("rotation"))
             R = euler_to_matrix(
                 rots.get("X", 0.0),
                 rots.get("Y", 0.0),
@@ -391,56 +400,56 @@ def bvh_frame_transforms(bvh: BVHData, frame_idx: int) -> list[np.ndarray]:
 
 # ── Skeleton Definition ───────────────────────────────────────────────────────
 # Mapping from CMU BVH joint names to body-segment groups and radii.
-# CMU uses MotionBuilder-compatible names (after Bruce Hahne's conversion).
+# Joint names are taken directly from the CMU mocap BVH hierarchy (08_01.bvh).
 
 BONE_SEGMENTS: list[tuple[str, str, float, tuple[float, float, float]]] = [
     # (parent_joint, child_joint, radius, colour)
-    # Spine
-    ("Hips", "Spine", 0.055, COLOUR_PELVIS),
-    ("Spine", "Spine1", 0.050, COLOUR_SPINE),
-    ("Spine1", "Spine2", 0.048, COLOUR_SPINE),
-    ("Spine2", "Spine3", 0.045, COLOUR_SPINE),
-    ("Spine3", "Neck", 0.040, COLOUR_SPINE),
-    ("Neck", "Head", 0.038, COLOUR_SKULL),
-    # Left arm
-    ("Spine3", "LeftShoulder", 0.030, COLOUR_LIMB),
-    ("LeftShoulder", "LeftArm", 0.028, COLOUR_LIMB),
-    ("LeftArm", "LeftForeArm", 0.025, COLOUR_LIMB),
-    ("LeftForeArm", "LeftHand", 0.022, COLOUR_EXTREMITY),
-    # Right arm
-    ("Spine3", "RightShoulder", 0.030, COLOUR_LIMB),
-    ("RightShoulder", "RightArm", 0.028, COLOUR_LIMB),
-    ("RightArm", "RightForeArm", 0.025, COLOUR_LIMB),
-    ("RightForeArm", "RightHand", 0.022, COLOUR_EXTREMITY),
-    # Left leg
-    ("Hips", "LeftUpLeg", 0.045, COLOUR_LIMB),
-    ("LeftUpLeg", "LeftLeg", 0.040, COLOUR_LIMB),
-    ("LeftLeg", "LeftFoot", 0.030, COLOUR_LIMB),
-    ("LeftFoot", "LeftToeBase", 0.022, COLOUR_EXTREMITY),
-    # Right leg
-    ("Hips", "RightUpLeg", 0.045, COLOUR_LIMB),
-    ("RightUpLeg", "RightLeg", 0.040, COLOUR_LIMB),
-    ("RightLeg", "RightFoot", 0.030, COLOUR_LIMB),
-    ("RightFoot", "RightToeBase", 0.022, COLOUR_EXTREMITY),
+    # Spine — CMU 08_01.bvh hierarchy: Hips→LowerBack→Spine→Spine1→Neck→Neck1→Head
+    ("Hips",      "LowerBack",     0.055, COLOUR_PELVIS),
+    ("LowerBack", "Spine",         0.050, COLOUR_SPINE),
+    ("Spine",     "Spine1",        0.048, COLOUR_SPINE),
+    ("Spine1",    "Neck",          0.045, COLOUR_SPINE),
+    ("Neck",      "Neck1",         0.038, COLOUR_SPINE),
+    ("Neck1",     "Head",          0.036, COLOUR_SKULL),
+    # Left arm — branches from Spine1
+    ("Spine1",      "LeftShoulder",  0.030, COLOUR_LIMB),
+    ("LeftShoulder","LeftArm",       0.028, COLOUR_LIMB),
+    ("LeftArm",     "LeftForeArm",   0.025, COLOUR_LIMB),
+    ("LeftForeArm", "LeftHand",      0.022, COLOUR_EXTREMITY),
+    # Right arm — branches from Spine1
+    ("Spine1",       "RightShoulder", 0.030, COLOUR_LIMB),
+    ("RightShoulder","RightArm",      0.028, COLOUR_LIMB),
+    ("RightArm",     "RightForeArm",  0.025, COLOUR_LIMB),
+    ("RightForeArm", "RightHand",     0.022, COLOUR_EXTREMITY),
+    # Left leg — Hips→LHipJoint→LeftUpLeg→LeftLeg→LeftFoot→LeftToeBase
+    ("Hips",      "LHipJoint",    0.050, COLOUR_PELVIS),
+    ("LHipJoint", "LeftUpLeg",    0.045, COLOUR_LIMB),
+    ("LeftUpLeg", "LeftLeg",      0.040, COLOUR_LIMB),
+    ("LeftLeg",   "LeftFoot",     0.030, COLOUR_LIMB),
+    ("LeftFoot",  "LeftToeBase",  0.022, COLOUR_EXTREMITY),
+    # Right leg — Hips→RHipJoint→RightUpLeg→RightLeg→RightFoot→RightToeBase
+    ("Hips",       "RHipJoint",    0.050, COLOUR_PELVIS),
+    ("RHipJoint",  "RightUpLeg",   0.045, COLOUR_LIMB),
+    ("RightUpLeg", "RightLeg",     0.040, COLOUR_LIMB),
+    ("RightLeg",   "RightFoot",    0.030, COLOUR_LIMB),
+    ("RightFoot",  "RightToeBase", 0.022, COLOUR_EXTREMITY),
 ]
 
 # Joint names that get a sphere rendered (joint ball)
 JOINT_SPHERES: dict[str, tuple[float, tuple[float, float, float]]] = {
-    "Hips": (0.070, COLOUR_PELVIS),
-    "Head": (0.090, COLOUR_SKULL),
-    "LeftHand": (0.030, COLOUR_EXTREMITY),
-    "RightHand": (0.030, COLOUR_EXTREMITY),
-    "LeftFoot": (0.035, COLOUR_EXTREMITY),
-    "RightFoot": (0.035, COLOUR_EXTREMITY),
+    "Hips":       (0.065, COLOUR_PELVIS),
+    "Head":       (0.090, COLOUR_SKULL),
+    "LeftHand":   (0.028, COLOUR_EXTREMITY),
+    "RightHand":  (0.028, COLOUR_EXTREMITY),
+    "LeftFoot":   (0.032, COLOUR_EXTREMITY),
+    "RightFoot":  (0.032, COLOUR_EXTREMITY),
 }
 
 
 # ── OpenGL Primitives ─────────────────────────────────────────────────────────
 
-
-def _draw_cylinder(
-    p0: np.ndarray, p1: np.ndarray, radius: float, slices: int = 12
-) -> None:
+def _draw_cylinder(p0: np.ndarray, p1: np.ndarray,
+                   radius: float, slices: int = 12) -> None:
     """Draw a capped cylinder from p0 to p1 using immediate-mode GL."""
     vec = p1 - p0
     length = float(np.linalg.norm(vec))
@@ -456,12 +465,8 @@ def _draw_cylinder(
     glPushMatrix()
     glTranslatef(float(p0[0]), float(p0[1]), float(p0[2]))
     if ax_len > 1e-6:
-        glRotatef(
-            angle,
-            float(axis[0] / ax_len),
-            float(axis[1] / ax_len),
-            float(axis[2] / ax_len),
-        )
+        glRotatef(angle, float(axis[0] / ax_len),
+                  float(axis[1] / ax_len), float(axis[2] / ax_len))
     elif angle > 90:
         glRotatef(180.0, 1.0, 0.0, 0.0)
 
@@ -512,14 +517,13 @@ def _draw_sphere_at(pos: np.ndarray, radius: float) -> None:
 def _set_bone_material(colour: tuple[float, float, float]) -> None:
     """Set OpenGL material for ivory bone rendering."""
     r, g, b = colour
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, [r * 0.4, g * 0.4, b * 0.4, 1.0])
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, [r, g, b, 1.0])
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT,  [r * 0.4, g * 0.4, b * 0.4, 1.0])
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE,  [r, g, b, 1.0])
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.6, 0.6, 0.55, 1.0])
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0)
+    glMaterialf(GL_FRONT_AND_BACK,  GL_SHININESS, 60.0)
 
 
 # ── Skeleton Renderer ─────────────────────────────────────────────────────────
-
 
 class SkeletonRenderer:
     """Renders BVH joint transforms as anatomical bone geometry.
@@ -576,7 +580,6 @@ class SkeletonRenderer:
 
 # ── Ground Grid ───────────────────────────────────────────────────────────────
 
-
 def draw_ground_grid() -> None:
     """Draw a subtle dark grid on y=0."""
     glDisable(GL_LIGHTING)
@@ -593,9 +596,9 @@ def draw_ground_grid() -> None:
     x = -half
     while x <= half + 1e-5:
         glVertex3f(x, 0.0, -half)
-        glVertex3f(x, 0.0, half)
+        glVertex3f(x, 0.0,  half)
         glVertex3f(-half, 0.0, x)
-        glVertex3f(half, 0.0, x)
+        glVertex3f( half, 0.0, x)
         x += GRID_STEP
     glEnd()
 
@@ -604,9 +607,9 @@ def draw_ground_grid() -> None:
     glColor4f(r + 0.15, g + 0.15, b + 0.15, 0.9)
     glBegin(GL_LINES)
     glVertex3f(0.0, 0.0, -half)
-    glVertex3f(0.0, 0.0, half)
+    glVertex3f(0.0, 0.0,  half)
     glVertex3f(-half, 0.0, 0.0)
-    glVertex3f(half, 0.0, 0.0)
+    glVertex3f( half, 0.0, 0.0)
     glEnd()
 
     glDisable(GL_LINE_SMOOTH)
@@ -615,7 +618,6 @@ def draw_ground_grid() -> None:
 
 
 # ── OpenGL Viewport ───────────────────────────────────────────────────────────
-
 
 class SkeletonViewport(QOpenGLWidget):
     """QOpenGLWidget that renders the skeleton scene.
@@ -725,9 +727,9 @@ class SkeletonViewport(QOpenGLWidget):
 
         # Key light — warm white from upper front
         glLightfv(GL_LIGHT0, GL_POSITION, [2.0, 5.0, 3.0, 0.0])
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 0.98, 0.95, 1.0])
-        glLightfv(GL_LIGHT0, GL_SPECULAR, [0.8, 0.8, 0.75, 1.0])
-        glLightfv(GL_LIGHT0, GL_AMBIENT, [0.12, 0.13, 0.15, 1.0])
+        glLightfv(GL_LIGHT0, GL_DIFFUSE,  [1.0, 0.98, 0.95, 1.0])
+        glLightfv(GL_LIGHT0, GL_SPECULAR, [0.8, 0.8,  0.75, 1.0])
+        glLightfv(GL_LIGHT0, GL_AMBIENT,  [0.12, 0.13, 0.15, 1.0])
 
     def resizeGL(self, w: int, h: int) -> None:
         h = max(h, 1)
@@ -747,17 +749,9 @@ class SkeletonViewport(QOpenGLWidget):
         cx = self._cam_target[0] + self._cam_distance * math.cos(el) * math.sin(az)
         cy = self._cam_target[1] + self._cam_distance * math.sin(el)
         cz = self._cam_target[2] + self._cam_distance * math.cos(el) * math.cos(az)
-        gluLookAt(
-            cx,
-            cy,
-            cz,
-            self._cam_target[0],
-            self._cam_target[1],
-            self._cam_target[2],
-            0.0,
-            1.0,
-            0.0,
-        )
+        gluLookAt(cx, cy, cz,
+                  self._cam_target[0], self._cam_target[1], self._cam_target[2],
+                  0.0, 1.0, 0.0)
 
         # Update light position in view space
         glLightfv(GL_LIGHT0, GL_POSITION, [2.0, 5.0, 3.0, 0.0])
@@ -781,9 +775,9 @@ class SkeletonViewport(QOpenGLWidget):
         self._last_mouse_pos = event.position()
 
         if event.buttons() & Qt.LeftButton:
-            self._cam_azimuth += dx * 0.5
+            self._cam_azimuth   += dx * 0.5
             self._cam_elevation -= dy * 0.5
-            self._cam_elevation = max(-89.0, min(89.0, self._cam_elevation))
+            self._cam_elevation  = max(-89.0, min(89.0, self._cam_elevation))
 
         elif event.buttons() & Qt.RightButton:
             # Pan: move target in the camera's local XY plane
@@ -807,13 +801,11 @@ class SkeletonViewport(QOpenGLWidget):
 
 # ── Control Panel ─────────────────────────────────────────────────────────────
 
-
 class ControlPanel(QWidget):
     """Right-side panel with all simulation and playback controls."""
 
-    def __init__(
-        self, viewport: SkeletonViewport, parent: QWidget | None = None
-    ) -> None:
+    def __init__(self, viewport: SkeletonViewport,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._viewport = viewport
         self.setMinimumWidth(280)
@@ -835,8 +827,7 @@ class ControlPanel(QWidget):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if LOGO_PATH.exists():
             pixmap = QPixmap(str(LOGO_PATH)).scaledToWidth(
-                72, Qt.TransformationMode.SmoothTransformation
-            )
+                72, Qt.TransformationMode.SmoothTransformation)
             logo_label.setPixmap(pixmap)
         else:
             logo_label.setText("AMS Group – TU Ilmenau")
@@ -845,14 +836,12 @@ class ControlPanel(QWidget):
         author_label = QLabel("Renato Fera P.")
         author_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         author_label.setStyleSheet(
-            "color: #5a6175; font-size: 10px; letter-spacing: 0.5px;"
-        )
+            "color: #5a6175; font-size: 10px; letter-spacing: 0.5px;")
 
         chapter_label = QLabel("Chapter 05 · Physics-based Animation")
         chapter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         chapter_label.setStyleSheet(
-            "color: #4f9cf9; font-size: 9px; letter-spacing: 0.3px;"
-        )
+            "color: #4f9cf9; font-size: 9px; letter-spacing: 0.3px;")
         chapter_label.setWordWrap(True)
 
         h_layout.addWidget(logo_label)
@@ -880,7 +869,8 @@ class ControlPanel(QWidget):
         m_layout.addWidget(self._motion_combo)
 
         self._status_label = QLabel("No motion loaded")
-        self._status_label.setStyleSheet("color: #5a6175; font-size: 10px;")
+        self._status_label.setStyleSheet(
+            "color: #5a6175; font-size: 10px;")
         self._status_label.setWordWrap(True)
         m_layout.addWidget(self._status_label)
 
@@ -958,26 +948,23 @@ class ControlPanel(QWidget):
         i_layout.setSpacing(6)
 
         style = "color: #4f9cf9; font-size: 11px; font-family: monospace;"
-        self._info_motion = QLabel("—")
-        self._info_frames = QLabel("—")
+        self._info_motion  = QLabel("—")
+        self._info_frames  = QLabel("—")
         self._info_fps_bvh = QLabel("—")
-        self._info_fps_gl = QLabel("—")
-        for lbl in (
-            self._info_motion,
-            self._info_frames,
-            self._info_fps_bvh,
-            self._info_fps_gl,
-        ):
+        self._info_fps_gl  = QLabel("—")
+        for lbl in (self._info_motion, self._info_frames,
+                    self._info_fps_bvh, self._info_fps_gl):
             lbl.setStyleSheet(style)
 
-        i_layout.addRow(QLabel("Motion:"), self._info_motion)
-        i_layout.addRow(QLabel("Frames:"), self._info_frames)
+        i_layout.addRow(QLabel("Motion:"),  self._info_motion)
+        i_layout.addRow(QLabel("Frames:"),  self._info_frames)
         i_layout.addRow(QLabel("BVH fps:"), self._info_fps_bvh)
-        i_layout.addRow(QLabel("GL fps:"), self._info_fps_gl)
+        i_layout.addRow(QLabel("GL fps:"),  self._info_fps_gl)
         for row in range(i_layout.rowCount()):
             lbl = i_layout.itemAt(row, QFormLayout.LabelRole)
             if lbl and lbl.widget():
-                lbl.widget().setStyleSheet("color: #5a6175; font-size: 11px;")
+                lbl.widget().setStyleSheet(
+                    "color: #5a6175; font-size: 11px;")
 
         layout.addWidget(info_group)
         layout.addStretch()
@@ -1006,7 +993,8 @@ class ControlPanel(QWidget):
         path = self._motion_combo.itemData(index)
         label = self._motion_combo.itemText(index)
         if path is None or not path.exists():
-            self._status_label.setText(f"⚠  File not found:\n{path}")
+            self._status_label.setText(
+                f"⚠  File not found:\n{path}")
             return
         self._viewport.load_bvh(path, label.strip())
         self._status_label.setText(f"Loaded: {path.name}")
@@ -1038,7 +1026,8 @@ class ControlPanel(QWidget):
 
     def _on_orbit_toggled(self, checked: bool) -> None:
         self._viewport.set_auto_orbit(checked)
-        self._orbit_btn.setText("Auto-Orbit: ON" if checked else "Auto-Orbit: OFF")
+        self._orbit_btn.setText(
+            "Auto-Orbit: ON" if checked else "Auto-Orbit: OFF")
 
     def update_info(self) -> None:
         """Called each frame to refresh the info panel."""
@@ -1049,7 +1038,8 @@ class ControlPanel(QWidget):
         if vp._bvh:
             fps_bvh = 1.0 / vp._bvh.frame_time if vp._bvh.frame_time > 0 else 0
             self._info_motion.setText(vp._motion_name[:24])
-            self._info_frames.setText(f"{vp._frame + 1} / {vp._frame_count}")
+            self._info_frames.setText(
+                f"{vp._frame + 1} / {vp._frame_count}")
             self._info_fps_bvh.setText(f"{fps_bvh:.0f} fps")
         self._info_fps_gl.setText(f"{vp._fps_display:.1f} fps")
 
@@ -1141,7 +1131,6 @@ class ControlPanel(QWidget):
 
 # ── Main Window ───────────────────────────────────────────────────────────────
 
-
 class MainWindow(QMainWindow):
     """Application main window.
 
@@ -1168,8 +1157,7 @@ class MainWindow(QMainWindow):
         # Control panel dock
         dock = QDockWidget("Controls", self)
         dock.setFeatures(
-            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
-        )
+            QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
         self._panel = ControlPanel(self._viewport)
@@ -1200,7 +1188,7 @@ class MainWindow(QMainWindow):
         now = time.perf_counter()
         dt = now - self._last_tick
         self._last_tick = now
-        dt = min(dt, 0.1)  # clamp — prevents spiral-of-death on freeze
+        dt = min(dt, 0.1)   # clamp — prevents spiral-of-death on freeze
 
         self._viewport.advance_frame(dt)
         self._panel.update_info()
@@ -1231,30 +1219,22 @@ class MainWindow(QMainWindow):
                 missing.append(path.name)
         if missing:
             names = ", ".join(missing)
-            self.setWindowTitle(f"{WINDOW_TITLE}  ⚠  Missing: {names}")
+            self.setWindowTitle(
+                f"{WINDOW_TITLE}  ⚠  Missing: {names}")
             print("\n⚠  Missing asset files in", SCRIPT_DIR)
             print("   Required:")
-            print(
-                "   • human-skeleton-rigged.glb "
-                "→ https://grab3d.com/dl/human-skeleton-rigged/"
-                "human-skeleton-rigged.glb"
-            )
-            print(
-                "   • 08_01.bvh  → "
-                "github.com/una-dinosauria/cmu-mocap  data/008/08_01.bvh"
-            )
-            print(
-                "   • 09_01.bvh  → "
-                "github.com/una-dinosauria/cmu-mocap  data/009/09_01.bvh"
-            )
-            print(
-                "   • 60_01.bvh  → "
-                "github.com/una-dinosauria/cmu-mocap  data/060/60_01.bvh"
-            )
+            print("   • human-skeleton-rigged.glb "
+                  "→ https://grab3d.com/dl/human-skeleton-rigged/"
+                  "human-skeleton-rigged.glb")
+            print("   • 08_01.bvh  → "
+                  "github.com/una-dinosauria/cmu-mocap  data/008/08_01.bvh")
+            print("   • 09_01.bvh  → "
+                  "github.com/una-dinosauria/cmu-mocap  data/009/09_01.bvh")
+            print("   • 60_01.bvh  → "
+                  "github.com/una-dinosauria/cmu-mocap  data/060/60_01.bvh")
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
-
 
 def main() -> None:
     """Create the QApplication, show the window, and start the event loop.
