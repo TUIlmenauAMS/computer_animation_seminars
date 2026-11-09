@@ -360,13 +360,13 @@
     <tr><td>4</td><td>Rapier + Three.js</td><td>World, RigidBody, Collider, physics loop, restitution, friction</td><td>Demos 1–2</td></tr>
     <tr><td>5</td><td>Constraints &amp; Joints</td><td>Hinge, ball-socket, revolute joints; chains and ragdolls</td><td>Demo 3</td></tr>
     <tr><td>6</td><td>Spring-Damper Secondary Animation</td><td>Follow-through, overshoot, chain propagation; stiffness, damping, critical damping, length constraint (PBD)</td><td>Demo 4</td></tr>
-    <tr><td>7</td><td>PyBullet</td><td>Python physics simulation; simulate → record → replay pipeline</td><td>Demo 5</td></tr>
+    <tr><td>7</td><td>PyBullet + OpenGL</td><td>Physics/render split; domino cascade layout; GLSL shaders; interactive camera; fixed-timestep loop</td><td>Demo 5</td></tr>
     <tr><td>8</td><td>Demo Index</td><td>All five demos with run instructions</td><td>—</td></tr>
   </tbody>
 </table>
 
 <div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
-  <strong>Libraries used in this chapter.</strong> The browser demos use <strong>Rapier 3D</strong> loaded as a WASM module from <code>https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js</code> and <strong>Three.js r165</strong> via importmap from jsDelivr. All browser demos are self-contained HTML files — no build step, no local server required. The Python demo uses <strong>PyBullet</strong> and <strong>NumPy</strong>, both installable via <code>pip</code>, and runs fully headlessly — it is compatible with local machines, GitHub Codespaces, and Google Colab.
+  <strong>Libraries used in this chapter.</strong> The browser demos use <strong>Rapier 3D</strong> loaded as a WASM module from <code>https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js</code> and <strong>Three.js r165</strong> via importmap from jsDelivr. All browser demos are self-contained HTML files — no build step, no local server required. The Python demo uses <strong>PyBullet</strong>, <strong>PySide6</strong>, <strong>PyOpenGL</strong>, and <strong>NumPy</strong>, managed via <code>uv</code>. It runs as a full desktop application on a local machine — a Qt window with an OpenGL 3.3 renderer.
 </div>
 </div>
 
@@ -847,142 +847,191 @@ Overdamped    (d &gt; d_crit): slow, sluggish return to rest, no overshoot</code
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div class="nb-cell">
 <hr>
-<h2 id="pybullet">7. PyBullet: Physics Simulation in Python</h2>
+<h2 id="pybullet">7. PyBullet + OpenGL: Domino Cascade</h2>
 
 <h3>7.1 What is PyBullet?</h3>
 <p>PyBullet is the Python binding for the <strong>Bullet Physics SDK</strong> — a production-proven open-source physics engine used in blockbuster films (<em>Guardians of the Galaxy</em>, <em>Batman v Superman</em>) and game engines (Godot's older physics backend). Today PyBullet is widely used in <strong>robotics research</strong> and <strong>reinforcement learning</strong> (OpenAI Gym, DeepMind Control Suite) because it is accurate, scriptable, and fast enough for simulation-at-scale workloads.</p>
-<p>The key distinction from Rapier: PyBullet runs the entire simulation on the CPU, in Python, with no GPU or WASM involvement. This makes it ideal for a Python animation pipeline: simulate, record all positions to NumPy arrays, then replay or export the motion data.</p>
+<p>The key distinction from Rapier: PyBullet runs entirely on the CPU, in Python, with no GPU or WASM involvement. It owns the physics world exclusively — collision detection, constraint solving, integration — while a separate renderer reads the resulting body poses each frame and draws the scene. This <strong>physics/render split</strong> is the architectural pattern that Demo 5 teaches.</p>
 
-<h3>7.2 Installation and environment compatibility</h3>
-<pre><code>pip install pybullet numpy matplotlib</code></pre>
-<p>PyBullet works in three environments relevant to this course:</p>
-<ul>
-  <li><strong>Local machine</strong> — full GUI mode (<code>pybullet.GUI</code>) opens an OpenGL window for live viewing</li>
-  <li><strong>GitHub Codespaces / Google Colab</strong> — use <code>pybullet.DIRECT</code> (headless mode); no display required, full simulation capability. This is what Demo 5 uses by default.</li>
-  <li><strong>Google Colab with GUI</strong> — possible via <code>pyvirtualdisplay</code> + <code>xvfb</code>, but unnecessary for the simulate → record → replay pipeline</li>
-</ul>
+<h3>7.2 Installation</h3>
+<p>Demo 5 is managed with <strong>uv</strong>, which handles all dependencies in an isolated virtual environment. No manual <code>pip install</code> is required.</p>
+<pre><code>uv sync --extra arm64   # resolves and installs all dependencies
+uv run python 05_ca_pybullet_domino.py</code></pre>
+<p>The demo depends on <strong>PyBullet</strong> (physics), <strong>PySide6</strong> (Qt application and OpenGL widget), <strong>PyOpenGL</strong> (raw OpenGL 3.3 calls), and <strong>NumPy</strong> (matrix math). It runs as a full desktop GUI application and requires a local machine with a display — it is not designed for headless environments such as Codespaces or Colab.</p>
 
 <div class="warn-box">
-  <strong>Use <code>pybullet.DIRECT</code> in Codespaces and Colab.</strong> <code>pybullet.connect(pybullet.GUI)</code> requires a display (an OpenGL window). Codespaces and Colab are headless Linux containers — they have no display, and the GUI call will crash. <code>pybullet.connect(pybullet.DIRECT)</code> runs the full physics simulation with no window at all. Since the pipeline records all results to NumPy, there is nothing lost: visualise the replay with matplotlib instead.
+  <strong>PyBullet is used in <code>DIRECT</code> mode even though a window is open.</strong> The Qt/OpenGL renderer provides the visible window — PyBullet never opens one. <code>pybullet.connect(pybullet.DIRECT)</code> runs the physics engine in headless mode; the renderer reads poses via <code>getBasePositionAndOrientation()</code> and draws them independently. This is intentional: neither subsystem knows the internals of the other, making it straightforward to swap either one without touching the other.
 </div>
 
 <h3>7.3 Core PyBullet concepts</h3>
 <table>
   <thead><tr><th>Concept</th><th>PyBullet call</th><th>Notes</th></tr></thead>
   <tbody>
-    <tr><td>Connect to physics server</td><td><code>pybullet.connect(pybullet.DIRECT)</code></td><td>DIRECT = headless; GUI = live OpenGL window (local only)</td></tr>
+    <tr><td>Connect to physics server</td><td><code>pybullet.connect(pybullet.DIRECT)</code></td><td>Headless — the Qt/OpenGL layer provides the window</td></tr>
     <tr><td>Set gravity</td><td><code>pybullet.setGravity(0, 0, -9.81)</code></td><td>PyBullet uses Z-up convention (unlike Three.js Y-up)</td></tr>
-    <tr><td>Load a shape</td><td><code>pybullet.createCollisionShape(...)</code></td><td>GEOM_SPHERE, GEOM_BOX, GEOM_CAPSULE, GEOM_MESH</td></tr>
-    <tr><td>Create a body</td><td><code>pybullet.createMultiBody(mass, shape, ...)</code></td><td>Returns an integer body ID; mass=0 → static</td></tr>
-    <tr><td>Step the simulation</td><td><code>pybullet.stepSimulation()</code></td><td>Advances by <code>timeStep</code> (set via <code>setTimeStep</code>)</td></tr>
-    <tr><td>Read position</td><td><code>pybullet.getBasePositionAndOrientation(id)</code></td><td>Returns <code>(pos, orn)</code> tuples — pos is (x, y, z)</td></tr>
-    <tr><td>Set fixed timestep</td><td><code>pybullet.setTimeStep(1/60)</code></td><td>Match to your desired recording frame rate</td></tr>
-    <tr><td>Disconnect</td><td><code>pybullet.disconnect()</code></td><td>Always disconnect when the simulation is complete</td></tr>
+    <tr><td>Set timestep</td><td><code>pybullet.setTimeStep(1/240)</code></td><td>240 Hz prevents thin dominoes from interpenetrating</td></tr>
+    <tr><td>Solver iterations</td><td><code>pybullet.setPhysicsEngineParameter(numSolverIterations=20)</code></td><td>More iterations → better contact resolution for stacked thin bodies</td></tr>
+    <tr><td>Load a shape</td><td><code>pybullet.createCollisionShape(pybullet.GEOM_BOX, halfExtents=[…])</code></td><td>One collision shape reused for all domino bodies</td></tr>
+    <tr><td>Create a body</td><td><code>pybullet.createMultiBody(mass, shape, …)</code></td><td>Returns an integer body ID; mass=0 → static (platforms, ground)</td></tr>
+    <tr><td>Apply a torque</td><td><code>pybullet.applyExternalTorque(bid, -1, torqueObj=[…], flags=…)</code></td><td>Used once to tip domino 0 and start the cascade</td></tr>
+    <tr><td>Step the simulation</td><td><code>pybullet.stepSimulation()</code></td><td>Called n times per render frame to control playback speed</td></tr>
+    <tr><td>Read position</td><td><code>pybullet.getBasePositionAndOrientation(id)</code></td><td>Returns <code>(pos, orn)</code> — orn is a (x, y, z, w) quaternion</td></tr>
+    <tr><td>Disconnect</td><td><code>pybullet.disconnect()</code></td><td>Called on window close and on Reset</td></tr>
   </tbody>
 </table>
 
-<h3>7.4 Simulate → record → replay pipeline</h3>
-<pre><code>import pybullet
-import pybullet_data
-import numpy as np
+<h3>7.4 The physics/render split</h3>
+<p>The central design pattern of Demo 5 is a clean separation between two independent subsystems: <strong>DominoPhysics</strong> (owns the PyBullet world) and <strong>DominoViewport</strong> (owns the OpenGL renderer). They communicate through one narrow interface: a list of <code>(pos, orn)</code> tuples that DominoPhysics writes after every step and DominoViewport reads every frame.</p>
+<pre><code># ANIMATION CONCEPT: physics and rendering are independent subsystems.
+# DominoPhysics exposes only three public arrays to the renderer.
+# The renderer never calls any PyBullet function — it only reads these arrays.
 
-# STEP 0: Connect — DIRECT for headless (Codespaces, Colab, batch runs).
-# Replace with pybullet.GUI for a live viewer on your local machine.
-physicsClient = pybullet.connect(pybullet.DIRECT)
-pybullet.setAdditionalSearchPath(pybullet_data.getDataPath())
+class DominoPhysics:
+    body_states:   list[tuple]   # [(pos, orn), …] — updated after every step()
+    platform_data: list[tuple]   # static box poses — set once during connect()
+    body_colors:   list[tuple]   # [(r, g, b), …]  — set once, never changes
 
-# STEP 1: Configure the world.
-# ANIMATION CONCEPT: PyBullet uses Z-up convention — gravity points in -Z.
-# This is different from Three.js and Rapier, which use Y-up.
-pybullet.setGravity(0, 0, -9.81)
-pybullet.setTimeStep(1 / 60)           # 60 Hz simulation
+    def step(self, n: int) -> None:
+        # Advance the simulation by n physics steps (fixed dt = 1/240 s each).
+        for _ in range(n):
+            pybullet.stepSimulation()
+        self._sync_states()      # copy PyBullet poses → body_states
 
-# STEP 2: Load a ground plane (provided in pybullet_data).
-# mass=0 makes the plane static — it does not move under gravity.
-planeId = pybullet.loadURDF("plane.urdf")
+    def _sync_states(self) -> None:
+        self.body_states = [
+            pybullet.getBasePositionAndOrientation(bid)
+            for bid in self._dom_ids
+        ]
 
-# STEP 3: Create a stack of boxes.
-N_BOXES  = 5
-BOX_HALF = 0.25   # half-extent in metres (box is 0.5 × 0.5 × 0.5 m)
-box_ids  = []
+# DominoViewport reads body_states in paintGL() and builds a 4×4 model
+# matrix for each body — no PyBullet calls, no physics knowledge required.
+# Swapping PyBullet for a different physics engine only changes DominoPhysics.</code></pre>
 
-for i in range(N_BOXES):
-    shape = pybullet.createCollisionShape(
-        pybullet.GEOM_BOX,
-        halfExtents=[BOX_HALF, BOX_HALF, BOX_HALF]
-    )
-    body = pybullet.createMultiBody(
-        baseMass=1.0,                              # kg — mass=0 → static
-        baseCollisionShapeIndex=shape,
-        basePosition=[0, 0, BOX_HALF * 2 * (i + 1) + 0.5]
-    )
-    box_ids.append(body)
+<p>The Qt <code>QTimer</code> fires at approximately 60 Hz. Each tick calls <code>physics.step(n)</code> (advancing the simulation by n substeps) and then schedules a repaint. At the default 1× speed, n = 4 substeps × 1/240 s = 16.7 ms of simulated time per tick, matching wall-clock time. Increasing n compresses simulated time without changing physics accuracy — the same number of solver iterations runs per step.</p>
 
-# STEP 4: Simulate and RECORD positions into a NumPy array.
-# ANIMATION CONCEPT: pre-allocate the array before the loop — appending
-# inside a tight loop is slow in Python. The shape (N_FRAMES, N_BOXES, 3)
-# stores [x, y, z] for every box at every frame.
-N_FRAMES  = 300
-positions = np.zeros((N_FRAMES, N_BOXES, 3), dtype=np.float32)
+<h3>7.5 Domino layout: procedural scene generation</h3>
+<p>All domino positions are computed procedurally at startup by <code>build_layout()</code>, which assembles the cascade from a sequence of primitive layout operations. No coordinates are hard-coded — the entire scene is derived from a small set of physical constants.</p>
 
-for frame in range(N_FRAMES):
-    pybullet.stepSimulation()
-    for j, body_id in enumerate(box_ids):
-        pos, _ = pybullet.getBasePositionAndOrientation(body_id)
-        positions[frame, j] = pos   # (x, y, z) tuple → NumPy row
+<table>
+  <thead><tr><th>Function</th><th>What it produces</th><th>Key parameter</th></tr></thead>
+  <tbody>
+    <tr><td><code>_run(ox, oy, oz, yaw, n, sp)</code></td><td>n dominoes in a straight line at constant elevation</td><td><code>sp</code> — centre-to-centre spacing</td></tr>
+    <tr><td><code>_stair(ox, oy, oz, yaw, n, rise, run)</code></td><td>n dominoes stepping up or down by <code>rise</code> metres per step; also generates static platform boxes for elevated tiles</td><td><code>rise</code> — negative for descent, positive for ascent</td></tr>
+    <tr><td><code>_arc(cx, cy, cz, radius, start_ang, end_ang, n)</code></td><td>n dominoes along a circular arc, each oriented tangent to the arc</td><td><code>radius</code>, angular sweep</td></tr>
+    <tr><td><code>build_layout()</code></td><td>Assembles all five acts into a single ordered list of placements, plus platform box specs</td><td>—</td></tr>
+  </tbody>
+</table>
 
-print(f"Recorded {N_FRAMES} frames × {N_BOXES} boxes — shape: {positions.shape}")
-# → Recorded 300 frames × 5 boxes — shape: (300, 5, 3)
+<p>The cascade runs through five acts in sequence. Only domino 0 ever receives an external force — every subsequent fall is caused by physical contact between neighbours:</p>
+<pre><code># ANIMATION CONCEPT: the cascade is a chain of physical contacts, not keyframes.
+# build_layout() returns an ordered list of DP (domino placement) objects.
+# Each DP holds (x, y, z, yaw) — world-space position and heading direction.
 
-# STEP 5: Disconnect — the simulation is complete.
-# The physics server is shut down; positions[] holds everything we need.
-pybullet.disconnect()
+# Act 1 — Entry platform: flat elevated run, heading +X.
+#   START_H = DESCEND_STEPS × STEP_RISE = 10 × 0.05 = 0.50 m
+entry, plats   = _stair(0.0, 0.0, START_H, yaw=0.0, n=8, rise=0.0)
 
-# STEP 6: REPLAY — play back the recorded data without the physics engine.
-# ANIMATION CONCEPT: positions[] is now a self-contained motion dataset.
-# It can be visualised, exported as JSON, used to drive a Three.js animation,
-# or fed into a machine learning reward function.
-print("\nReplay — first 5 frames, box 0 Z position:")
-for frame in range(5):
-    print(f"  frame {frame:3d}  z = {positions[frame, 0, 2]:.4f} m")</code></pre>
+# Act 2 — Descent: stair-stepped ramp from START_H down to z=0.
+#   Each step drops by STEP_RISE = 0.05 m; spacing is wider (0.165 m) because
+#   gravity accelerates the falling tile forward on the downhill run.
+descend, plats = _stair(…, n=10, rise=-STEP_RISE, run=DESCEND_SPACING)
 
-<h3>7.5 Exporting motion data for use in Three.js</h3>
-<pre><code>import json
+# Act 3 — Ground run: flat section at z=0 on the global ground plane.
+#   No platform boxes are generated here — the plane.urdf provides the surface.
+floor_run, _   = _stair(…, n=6, rise=0.0)
 
-# ANIMATION CONCEPT: JSON is the bridge between the Python simulation pipeline
-# and the browser. The recorded NumPy array is serialised to a JSON file that
-# a Three.js demo can load and replay as a keyframed animation —
-# without re-running the physics simulation.
+# Act 4 — Ascent: stair-stepped ramp from z=0 up to PLATEAU_H.
+#   Steps are shallower (rise=0.030 m) and spacing tighter (0.130 m) so the
+#   kinetic energy from the descent is enough to carry the wave up.
+#   This is the same energy exchange as a skate half-pipe.
+ascend, plats  = _stair(…, n=8, rise=A_RISE, run=ASCEND_SPACING)
 
-motion_data = {
-    "n_frames":  int(N_FRAMES),
-    "n_boxes":   int(N_BOXES),
-    "fps":       60,
-    "positions": positions.tolist()   # (300, 5, 3) ndarray → nested list
-}
+# Act 5 — Plateau: flat section at PLATEAU_H leading to the fork domino.
+plateau, plats = _stair(…, n=5, rise=0.0)
 
-with open("05_ca_pybullet_motion.json", "w") as f:
-    json.dump(motion_data, f)
+# Fork: the last plateau domino falls toward two neighbours placed at ±35°.
+# Each neighbour starts its own arm — the cascade wave splits.
+for sign in (+1.0, -1.0):
+    arm_yaw = pf.yaw + sign * math.radians(35.0)
+    arm, plats = _stair(ax, ay, PLATEAU_H, arm_yaw, n=12, rise=0.0)</code></pre>
 
-print("Exported 05_ca_pybullet_motion.json")
-# Load this file in a Three.js scene with fetch() and use it to drive
-# mesh.position each frame — turning a physics simulation into animation data.</code></pre>
+<p>Elevated dominoes need a solid surface under them. <code>_stair()</code> automatically generates a static platform box for every step above z=0 — a thin slab whose top face aligns exactly with the domino's footing elevation. The ground plane (<code>plane.urdf</code>) supports all dominoes at z=0; no box is generated for those.</p>
 
 <div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
-  <strong>PyBullet vs Rapier: choosing the right tool.</strong> Use <strong>Rapier in the browser</strong> when you need real-time physics in a web app — it is designed for interactive rendering at 60 fps alongside Three.js. Use <strong>PyBullet in Python</strong> when you need a scriptable, headless simulation: generating training data for a neural network, batch-processing many simulations to find stable configurations, or producing motion files to drive a Three.js animation offline. The two are complementary. A production pipeline might use PyBullet to simulate hundreds of variations overnight, select the best motion files, and load them into a Three.js viewer — exactly the pattern that seminar 05 teaches.
+  <strong>Energy conservation in the cascade.</strong> The descent and ascent ramps demonstrate the conversion between gravitational potential energy and kinetic energy — the same principle as a skate half-pipe. On the way down, each falling tile accelerates because gravity adds energy at every step; this is why the descending-ramp spacing (<code>DESCEND_SPACING = 0.165 m</code>) is wider than on flat ground. On the ascent, the tile decelerates as kinetic energy converts back to potential energy; spacing is tighter (<code>ASCEND_SPACING = 0.130 m</code>) to keep each tile within reach of its neighbour before momentum runs out. The ascending step rise (<code>A_RISE = 0.030 m</code>) is kept smaller than the descending step (<code>STEP_RISE = 0.050 m</code>) so the total height gained on the way up is less than the height lost on the way down — the cascade always has enough energy to complete the climb.
+</div>
+
+<h3>7.6 Starting the cascade: angular impulse</h3>
+<p>When the user clicks <strong>Start</strong>, a single external torque is applied to domino 0 for one physics step. A torque (angular impulse) is used rather than a linear force because the goal is to <em>tip</em> the tile — rotate it forward about its base edge — not slide it. Once the tile tilts past its tipping angle (arctan(depth / height) ≈ 5.7°), its centre of mass passes beyond the pivot edge and gravity takes over. Every subsequent domino falls because it is physically struck by the one before it.</p>
+<pre><code># ANIMATION CONCEPT: angular impulse to start the cascade.
+# The torque axis is perpendicular to the domino's heading direction
+# in the XY plane, so the tile rotates forward rather than sideways.
+# A vector perpendicular to (cos θ, sin θ, 0) is (-sin θ, cos θ, 0).
+
+p0 = self._placements[0]
+pybullet.applyExternalTorque(
+    self._dom_ids[0], -1,
+    torqueObj=[-math.sin(p0.yaw) * 8.0,
+                math.cos(p0.yaw) * 8.0,
+                0.0],
+    flags=pybullet.WORLD_FRAME,
+)</code></pre>
+
+<h3>7.7 OpenGL renderer: from quaternion to screen</h3>
+<p>The renderer (<code>DominoViewport</code>) is a <code>QOpenGLWidget</code> that uses OpenGL 3.3 Core Profile. All geometry is drawn with the same unit-cube VAO — only the model matrix, colour, and specular exponent change between draw calls. The rendering pipeline per frame is:</p>
+<ol>
+  <li><strong>Build the model matrix</strong> from the body's physics pose. The PyBullet quaternion (x, y, z, w) is expanded to a 3×3 rotation matrix, then embedded in a 4×4 matrix with the translation and scale: <code>M = T × R × S</code>.</li>
+  <li><strong>Upload uniforms</strong> — the model matrix, base colour, and specular power — to the GLSL shader via <code>glUniformMatrix4fv</code> and <code>glUniform4f</code>.</li>
+  <li><strong>Draw the body</strong> in its gradient colour (blue → cyan → green → gold → red across the sequence).</li>
+  <li><strong>Draw the face stripe</strong> — a thin ivory box placed on the domino's front face. Its centre is offset along the body's local X axis, extracted from column 0 of the model matrix: this works correctly for any orientation, including mid-fall.</li>
+</ol>
+<pre><code># ANIMATION CONCEPT: per-body model matrix from physics pose.
+# _build_model_mat() converts a PyBullet (pos, orn) pair into a 4×4 matrix
+# that the GLSL vertex shader uses to transform object-space vertices
+# into world space: clip_pos = Projection × View × Model × vertex_pos.
+
+def _build_model_mat(pos, orn, sx, sy, sz) -> np.ndarray:
+    T = np.eye(4, dtype=np.float32)
+    T[0,3], T[1,3], T[2,3] = pos   # translation
+    R = _quat_to_mat4(orn)          # rotation from (x, y, z, w) quaternion
+    S = np.diag([sx, sy, sz, 1.0])  # non-uniform scale (domino dimensions)
+    return T @ R @ S                 # T × R × S: scale first, rotate, translate
+
+# Face stripe: offset along the domino's local X axis (column 0 of M).
+# Dividing by DOM_D gives the unit direction in world space.
+local_x  = m[:3, 0] / DOM_D
+face_pos = np.array(pos) + local_x * (DOM_D * 0.5 + FACE_D * 0.5)</code></pre>
+
+<p>The vertex shader passes world-space position and normal to the fragment shader, which implements <strong>Blinn-Phong shading</strong> with two lights (a warm key light and a cool fill light at 35% intensity) and applies <strong>gamma correction</strong> (γ = 1/2.2) before writing to the framebuffer. The floor uses a procedural checkerboard computed from world-space XY coordinates — no texture file required.</p>
+
+<h3>7.8 Interactive camera</h3>
+<p>The <code>InteractiveCamera</code> class maintains the view in spherical coordinates around a target point: yaw (horizontal angle), pitch (vertical angle), and distance. The eye position is derived each frame from these three values, keeping the camera always looking at the target.</p>
+<table>
+  <thead><tr><th>Interaction</th><th>Effect</th><th>Implementation</th></tr></thead>
+  <tbody>
+    <tr><td>Left-drag</td><td>Orbit — change yaw and pitch</td><td>Mouse delta × 0.4°/pixel</td></tr>
+    <tr><td>Middle-drag</td><td>Pan — translate target in camera XY plane</td><td>Scale by distance/viewport_height so panning feels consistent at any zoom</td></tr>
+    <tr><td>Scroll wheel</td><td>Zoom — scale orbit distance</td><td>Multiplicative: <code>distance × 0.999^delta</code> — same feel close and far</td></tr>
+    <tr><td>Double-click</td><td>Reframe — restore default view</td><td>Stored default values copied back</td></tr>
+    <tr><td>Auto-track</td><td>Target follows the wave front</td><td>Lerp toward the average position of the last 5 fallen dominoes, factor = dt × 2.0</td></tr>
+  </tbody>
+</table>
+
+<div style="border-left:5px solid #1a73e8; background:rgba(79,156,249,0.06); border-radius:6px; padding:16px 20px; margin:20px 0;">
+  <strong>PyBullet vs Rapier: choosing the right tool.</strong> Use <strong>Rapier in the browser</strong> when you need real-time interactive physics in a web app alongside Three.js — it is designed for that use case. Use <strong>PyBullet in Python</strong> when the simulation is the centrepiece: a complex procedurally generated scene, physics parameters you want to explore programmatically, or a renderer you control at the OpenGL level. Demo 5 sits at the far end of that spectrum — PyBullet computes motion, a custom OpenGL 3.3 pipeline renders it, and a Qt application ties them together. Neither subsystem depends on the other's internals.
 </div>
 
 <p style="margin:12px 0 0 0;">
   <a href="https://docs.google.com/document/d/10sXEhzFRSnvFcl3XxNGhnD4N2SedqwdAvK3dsihxVUA/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">PyBullet Quickstart Guide &#8599;</a>
   <a href="https://github.com/bulletphysics/bullet3" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">Bullet Physics SDK on GitHub &#8599;</a>
-  <a href="https://pypi.org/project/pybullet/" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">pybullet on PyPI &#8599;</a>
+  <a href="https://doc.qt.io/qtforpython-6/PySide6/QtOpenGLWidgets/QOpenGLWidget.html" target="_blank" rel="noopener" style="display:inline-block; padding:6px 14px; margin:4px 8px 4px 0; border:1px solid #1a73e8; border-radius:20px; text-decoration:none; font-weight:600; font-size:0.95em;">PySide6 QOpenGLWidget &#8599;</a>
 </p>
 
 <div class="demo-box">
-  <strong>Demo 5 — PyBullet Simulation Pipeline.</strong> <code>05_ca_pybullet.py</code> connects to a PyBullet <code>DIRECT</code> server (fully headless — works in Codespaces and Colab), creates a stack of 5 boxes above a ground plane, simulates 300 frames at 60 Hz, and records the position and orientation of every box into a NumPy array of shape <code>(300, 5, 3)</code>. After disconnecting from the physics server, it enters a matplotlib replay loop — animating each frame without touching PyBullet again. Finally, it exports the recorded positions as <code>05_ca_pybullet_motion.json</code>. Run with:
-  <pre style="margin:10px 0 0; background: rgba(52,211,153,0.05); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:12px 16px; font-size:13px;">pip install pybullet numpy matplotlib
-python 05_ca_pybullet.py</pre>
-  <p style="margin:8px 0 0;">This is the Python equivalent of Rapier's browser loop: <strong>simulate → record → replay → export</strong>. The exported JSON is the bridge to the browser.</p>
+  <strong>Demo 5 — Domino Cascade.</strong> <code>05_ca_pybullet_domino.py</code> builds a full-featured desktop application combining PyBullet physics with a custom OpenGL 3.3 renderer inside a PySide6 Qt window. A single cascade wave travels through five acts — an elevated entry platform, a staircase descent to ground level, a flat ground run, a staircase ascent back up, and a plateau that forks into two arms — with all domino positions generated procedurally from physical constants. Only domino 0 receives an external torque; every subsequent fall is caused by physical contact. The renderer draws each domino in a blue-to-red gradient colour with a Blinn-Phong shader, two-light setup, and gamma correction. An interactive orbit/pan/zoom camera can optionally auto-track the wave front as it propagates. Speed chips (½×, 1×, 2×, 4×, 8×) compress simulated time by running more physics substeps per render frame. Run with:
+  <pre style="margin:10px 0 0; background: rgba(52,211,153,0.05); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:12px 16px; font-size:13px;">uv sync --extra arm64
+uv run python 05_ca_pybullet_domino.py</pre>
+  <p style="margin:8px 0 0;">Ubuntu users may need: <code>sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0</code></p>
 </div>
 </div>
 
@@ -1030,7 +1079,7 @@ python 05_ca_pybullet.py</pre>
 
 <hr>
 <h2 id="demo-index">8. Demo Index</h2>
-<p>Five demos accompany this chapter. Demos 1–4 run directly in the browser from GitHub Pages — open the links below. Demo 5 is a Python script that runs locally (or in Codespaces / Colab) with <code>python 05_ca_pybullet.py</code>.</p>
+<p>Five demos accompany this chapter. Demos 1–4 run directly in the browser from GitHub Pages — open the links below. Demo 5 is a Python desktop application that requires a local machine with a display; run it with <code>uv</code> as shown below.</p>
 <table>
   <thead><tr><th>#</th><th>File</th><th>Type</th><th>Key concept</th><th>How to run</th></tr></thead>
   <tbody>
@@ -1064,10 +1113,10 @@ python 05_ca_pybullet.py</pre>
     </tr>
     <tr>
       <td>5</td>
-      <td><code>05_ca_pybullet.py</code></td>
-      <td>Python script</td>
-      <td>PyBullet simulate → record → replay → export JSON; headless, Colab-compatible</td>
-      <td><code>python 05_ca_pybullet.py</code></td>
+      <td><code>05_ca_pybullet_domino.py</code></td>
+      <td>Python desktop app</td>
+      <td>Physics/render split (PyBullet DIRECT + OpenGL 3.3); domino cascade layout; Blinn-Phong GLSL shader; interactive orbit camera; speed control</td>
+      <td><code>uv sync --extra arm64</code><br><code>uv run python 05_ca_pybullet_domino.py</code></td>
     </tr>
   </tbody>
 </table>
