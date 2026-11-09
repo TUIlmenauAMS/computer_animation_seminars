@@ -6,7 +6,7 @@
 # Course   : Computeranimation — Chapter 05: Physics-based Animation
 # Institute: Institut für Medientechnik, Technische Universität Ilmenau
 # -----------------------------------------------------------------------------
-"""05_ca_pybullet_domino.py — Professional Domino Cascade Demo.
+"""05_ca_pybullet_domino_simple.py — Simple Single-Wave Domino Cascade Demo.
 
 Architecture — physics and rendering are fully decoupled:
   · PyBullet DIRECT  — headless rigid-body simulation, no rendering
@@ -15,22 +15,26 @@ Architecture — physics and rendering are fully decoupled:
   · Interactive camera — orbit (left-drag), pan (mid-drag), zoom (scroll),
                           reframe (double-click), optional wave-front auto-track
 
-Layout strategy:
-  · Single Line (one direction only): a single straight chain of dominoes.
-    Exactly one domino (index 0) receives an external torque; every other
-    domino falls solely because its immediate neighbour struck it. The
-    wave travels in one direction only — there is no branching, forking,
-    or curving back.
+Layout strategy — One Wave, One Direction:
+  · Flat entry platform → stair ramp DOWN → flat canyon floor → stair
+    ramp UP → flat plateau → single FORK into two arms (±35°).
+  · Exactly one domino (index 0) ever receives an external torque; every
+    other domino falls solely because its immediate neighbour struck it.
+    Elevation changes are real static platforms, not just repositioned
+    dominoes, so the physics of standing, falling, and landing on a
+    different height all actually happen.
 
 PHYSICS CONCEPTS TAUGHT
 ------------------------
 1. Rigid body dynamics       — mass, inertia tensor, restitution, friction
 2. Collision detection       — AABB broadphase + GJK/EPA narrowphase
 3. Impulse propagation       — angular momentum transferred on contact
-4. Single-source causality   — one external impulse, one linear chain reaction
-5. Fixed-timestep loop       — stepSimulation at 1/240 s, decoupled from fps
-6. Physics/render separation — PyBullet for simulation, OpenGL for display
-7. GPU instanced transforms  — per-domino model matrix from physics pose
+4. Gravitational PE ↔ KE     — ramp descent/climb trades height for speed
+                                and back again (half-pipe principle)
+5. Single-fork branching     — one clean split, two arms, no secondary forks
+6. Fixed-timestep loop       — stepSimulation at 1/240 s, decoupled from fps
+7. Physics/render separation — PyBullet for simulation, OpenGL for display
+8. GPU instanced transforms  — per-domino model matrix from physics pose
 
 How to run
 ----------
@@ -78,7 +82,7 @@ from PySide6.QtWidgets import (
 # =============================================================================
 
 WINDOW_TITLE = (
-    "Domino Cascade — Computeranimation Chapter 05  ·  PyBullet + OpenGL 3.3"
+    "Domino Cascade (Simple) — Computeranimation Chapter 05  ·  PyBullet + OpenGL 3.3"
 )
 LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 
@@ -97,8 +101,20 @@ DOM_RESTITUTION: float = 0.0
 DOM_FRICTION: float    = 0.80
 
 # ── Layout geometry ───────────────────────────────────────────────────────────
-DOMINO_SPACING: float  = 0.155   # centre-to-centre spacing along chain
-CHAIN_LENGTH: int      = 40      # total number of dominoes in the single line
+DOMINO_SPACING: float    = 0.155   # centre-to-centre spacing on flat ground
+DESCEND_SPACING: float   = 0.165   # slightly longer strides going downhill —
+                                    #   gravity assists, so dominoes can reach
+                                    #   a little farther before tipping over
+ASCEND_SPACING: float    = 0.130   # shorter, tighter strides going uphill —
+                                    #   keeps the next tile in reach before the
+                                    #   falling one loses too much momentum
+DESCEND_STEP_RISE: float = 0.050   # metres dropped per stair step
+ASCEND_STEP_RISE: float  = 0.032   # metres gained per stair step — deliberately
+                                    #   smaller & the run is shorter than the
+                                    #   descent, so the kinetic energy built up
+                                    #   going down carries the wave back up,
+                                    #   the same principle as a skate half-pipe
+PLATFORM_THICKNESS: float = 0.05   # static step-platform slab thickness
 
 # ── Speed control ─────────────────────────────────────────────────────────────
 # 4 substeps × (1/240 s) × 60 Hz timer = exactly 1× real-time.
@@ -399,29 +415,202 @@ class DP(NamedTuple):
 
 def _run(ox: float, oy: float, oz: float, yaw: float, n: int,
          sp: float = DOMINO_SPACING) -> list[DP]:
+    """n dominoes on a single flat elevation, heading in a straight line."""
     dx, dy = math.cos(yaw) * sp, math.sin(yaw) * sp
     return [DP(ox + dx*i, oy + dy*i, oz, yaw) for i in range(n)]
 
 
-
-def build_layout() -> tuple[list[DP], list[int]]:
+def _arc(
+    cx: float, cy: float, cz: float,
+    radius: float, start_ang: float, end_ang: float,
+    n: int,
+) -> list[DP]:
     """
-    Cascade layout — a single straight line of dominoes on z = 0.
+    Circular arc of n dominoes on a single elevation (cz).  Each domino is
+    tangent to the arc so it naturally faces the next one in the chain.
+    A domino's yaw and yaw+π describe the same physical pose (the body is
+    symmetric under a 180° spin about its own centre), so a sign flip in
+    the tangent formula between arcs never shows up as a real discontinuity.
+    """
+    pl: list[DP] = []
+    for i in range(n):
+        t   = i / max(n - 1, 1)
+        ang = start_ang + (end_ang - start_ang) * t
+        x   = cx + radius * math.cos(ang)
+        y   = cy + radius * math.sin(ang)
+        yaw = ang + math.pi * 0.5 * (1 if end_ang > start_ang else -1)
+        pl.append(DP(x, y, cz, yaw))
+    return pl
 
-    This is deliberately the simplest possible cascade:
-      · ONE chain, ONE heading (+X), no curves, no forks, no branches.
-      · Domino 0 is the only one ever touched by an external force.
-      · Domino i (for i > 0) can fall ONLY because domino i-1 struck it,
-        so the wave propagates strictly in one direction, tile by tile.
+
+def _platform_for(dp: DP, length: float) -> tuple:
+    """
+    A static platform box under a single domino at an arbitrary (possibly
+    elevated) position, oriented along that domino's yaw. Used for dominoes
+    that sit on a curved (not straight) elevated path, where `_stair`'s
+    per-step box doesn't apply.
+    """
+    hz = PLATFORM_THICKNESS * 0.5
+    return (
+        (dp.x, dp.y, dp.z - hz), dp.yaw,
+        length * 0.5, (DOM_W + 0.10) * 0.5, hz,
+    )
+
+
+def _stair(
+    ox: float, oy: float, oz: float, yaw: float, n: int,
+    rise: float, run: float = DOMINO_SPACING,
+) -> tuple[list[DP], list[tuple]]:
+    """
+    A straight run of n dominoes where each successive one sits `rise`
+    metres higher (rise > 0) or lower (rise < 0) than the last — a
+    staircase. `rise = 0.0` places a flat run at a constant elevation
+    (useful for a plateau or a canyon floor that sits above/below z = 0).
+
+    Every domino needs solid footing, so each step also produces a static
+    platform box whose TOP face is exactly at that domino's height — except
+    when the step is at z ≈ 0, where the existing ground plane already
+    provides it.
 
     Returns
     -------
-    pl : ordered list of DP placements (index 0 is the one that gets pushed)
-    fi : always empty — there are no fork/branch dominoes in this layout
+    placements : the n DP positions (world bottom-centre of each domino)
+    platforms  : (pos_xyz, yaw, half_x, half_y, half_z) per non-zero step,
+                 ready for DominoPhysics to instantiate as static boxes
     """
-    pl = _run(0.0, 0.0, 0.0, 0.0, CHAIN_LENGTH)
-    fi: list[int] = []
-    return pl, fi
+    dx, dy = math.cos(yaw), math.sin(yaw)
+    placements: list[DP] = []
+    platforms:  list[tuple] = []
+    for i in range(n):
+        z = oz + rise * i
+        x = ox + dx * run * i
+        y = oy + dy * run * i
+        placements.append(DP(x, y, z, yaw))
+        if abs(z) > 1e-6:
+            hz = PLATFORM_THICKNESS * 0.5
+            # Half-length is slightly over run/2 so consecutive step boxes
+            # overlap a little instead of leaving a seam a falling domino
+            # could catch its corner on.
+            platforms.append((
+                (x, y, z - hz), yaw,
+                run * 0.55, (DOM_W + 0.10) * 0.5, hz,
+            ))
+    return placements, platforms
+
+
+def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
+    """
+    Single-wave cascade: flat entry → ramp DOWN to ground → flat floor
+    → ramp UP to plateau → one clean FORK into two arms.
+
+    ONE wave, ONE direction.  Domino 0 is the only tile ever given an
+    external push; every subsequent fall is caused by physical contact.
+
+    ACT 1 · Entry ramp  — dominoes start ON an elevated platform heading
+             +X.  The platform height equals DESCEND_STEPS × STEP_RISE so
+             the descent lands exactly at z = 0 (the infinite ground plane).
+    ACT 2 · Descent     — stair-stepped ramp down to z = 0.  Gravity
+             converts potential energy to kinetic energy; the cascade
+             accelerates visibly on the way down.
+    ACT 3 · Canyon floor — short flat run at z = 0.  Lets the wave
+             settle before the climb.
+    ACT 4 · Ascent      — stair-stepped ramp back up.  Fewer, shallower
+             steps than the descent so the kinetic energy banked on the
+             way down is enough to carry the wave to the top (half-pipe
+             principle).  Rise per step is kept < STEP_RISE so the top
+             plateau is lower than the starting platform — this is
+             intentional and physically correct.
+    ACT 5 · Plateau     — short flat run on the elevated plateau.
+    ACT 6 · Fork        — last plateau domino fans into two arms (±FORK_DEG).
+             The separation angle is chosen so the two first-child dominoes
+             do NOT overlap each other (SAT check: need > ~28° at this
+             spacing); 35° gives a clear safety margin.
+    ACT 7 · Arm A / Arm B — straight flat runs on the plateau surface.
+
+    Returns
+    -------
+    pl        : ordered list of DP placements
+    fork_idx  : [index of fork domino]
+    platforms : static box specs for every elevated step / plateau tile
+    """
+    pl: list[DP] = []
+    fork_idx: list[int] = []
+    platforms: list[tuple] = []
+
+    # ── Heights ──────────────────────────────────────────────────────────────
+    # Ground plane is at z = 0.  Start high enough that DESCEND_STEPS steps
+    # of DESCEND_STEP_RISE each land exactly at z = 0.
+    DESCEND_STEPS = 10
+    STEP_RISE     = DESCEND_STEP_RISE          # 0.050 m — from constants
+    START_H       = STEP_RISE * DESCEND_STEPS  # 0.50 m
+
+    # Ascent: fewer + shallower steps.  Plateau ends up at ~0.25 m.
+    ASCEND_STEPS  = 8
+    A_RISE        = STEP_RISE * 0.6            # 0.030 m per step
+    PLATEAU_H     = A_RISE * ASCEND_STEPS      # ~0.24 m
+
+    # Fork geometry
+    FORK_DEG      = 35.0
+    FORK_HALF     = math.radians(FORK_DEG)
+    FORK_SP       = 0.20   # first child spacing — wider than normal to
+                           # guarantee no initial overlap between children
+
+    # ── ACT 1 — flat entry at START_H, heading +X ──────────────────────────
+    entry, plats = _stair(0.0, 0.0, START_H, 0.0, 8, rise=0.0)
+    pl.extend(entry); platforms.extend(plats)
+
+    # ── ACT 2 — ramp DOWN (DESCEND_STEPS steps) to z = 0 ───────────────────
+    p = entry[-1]
+    descend, plats = _stair(
+        p.x + math.cos(p.yaw) * DESCEND_SPACING,
+        p.y + math.sin(p.yaw) * DESCEND_SPACING,
+        START_H, p.yaw,
+        DESCEND_STEPS,
+        rise=-STEP_RISE, run=DESCEND_SPACING,
+    )
+    pl.extend(descend); platforms.extend(plats)
+
+    # ── ACT 3 — canyon floor: flat run at z = 0 ────────────────────────────
+    p = descend[-1]
+    floor_run, plats = _stair(
+        p.x + math.cos(p.yaw) * DOMINO_SPACING,
+        p.y + math.sin(p.yaw) * DOMINO_SPACING,
+        0.0, p.yaw, 6, rise=0.0,
+    )
+    pl.extend(floor_run); platforms.extend(plats)
+
+    # ── ACT 4 — ramp UP (ASCEND_STEPS steps) to PLATEAU_H ──────────────────
+    p = floor_run[-1]
+    ascend, plats = _stair(
+        p.x + math.cos(p.yaw) * ASCEND_SPACING,
+        p.y + math.sin(p.yaw) * ASCEND_SPACING,
+        0.0, p.yaw,
+        ASCEND_STEPS,
+        rise=A_RISE, run=ASCEND_SPACING,
+    )
+    pl.extend(ascend); platforms.extend(plats)
+
+    # ── ACT 5 — flat plateau at PLATEAU_H ───────────────────────────────────
+    p = ascend[-1]
+    plateau, plats = _stair(
+        p.x + math.cos(p.yaw) * DOMINO_SPACING,
+        p.y + math.sin(p.yaw) * DOMINO_SPACING,
+        PLATEAU_H, p.yaw, 5, rise=0.0,
+    )
+    pl.extend(plateau); platforms.extend(plats)
+
+    # ── ACT 6 — fork: one domino fans into two arms ─────────────────────────
+    fork_idx.append(len(pl) - 1)   # the last plateau tile is the fork tile
+    pf = plateau[-1]
+
+    for sign in (+1.0, -1.0):
+        arm_yaw = pf.yaw + sign * FORK_HALF
+        ax = pf.x + math.cos(arm_yaw) * FORK_SP
+        ay = pf.y + math.sin(arm_yaw) * FORK_SP
+        arm, plats = _stair(ax, ay, PLATEAU_H, arm_yaw, 12, rise=0.0)
+        pl.extend(arm); platforms.extend(plats)
+
+    return pl, fork_idx, platforms
 
 
 # =============================================================================
@@ -626,21 +815,43 @@ class DominoPhysics:
 
     def _build_scene(self) -> None:
         """
-        Build domino rigid bodies on the flat ground plane.
+        Build the static platforms and domino rigid bodies.
 
-        All dominoes sit on z = 0 (plane.urdf).  No elevated slabs are needed,
-        which eliminates the entire class of slab-overlap / phantom-contact
-        problems that caused random pre-cascade tipping.
+        Flat stretches at z = 0 rest on plane.urdf, the single infinite
+        ground plane. Every elevation change — a staircase step down, the
+        canyon floor, the ramp up, the plateau — is a separate static box
+        built from build_layout()'s platform specs, so dominoes above z = 0
+        always have solid footing instead of floating in mid-air.
 
         DOMINOES
         --------
         GEOM_BOX half-extents = (D/2, W/2, H/2).
-        Centre of mass at DOM_H/2 above ground so the base sits exactly at z=0.
+        Centre of mass at p.z + DOM_H/2, i.e. half the domino's height
+        above whatever surface (ground plane or platform) it stands on.
         restitution = 0  — no energy bounces back through the floor.
         damping = 0.05   — suppresses numerical drift without slowing the cascade.
         """
-        self._placements, _ = build_layout()
-        self.platform_data   = []   # no elevated platforms in this layout
+        self._placements, _fork_idx, platform_specs = build_layout()
+        self.platform_data = []
+
+        # ── Static step platforms (mass = 0 → immovable) ────────────────────
+        # Each spec is (pos_xyz, yaw, hx, hy, hz) from build_layout(); every
+        # elevation change (staircase step, plateau, canyon floor, elevated
+        # turn) gets a real collision box so dominoes resting above z = 0
+        # have solid footing, instead of floating or clipping through air.
+        for pos, yaw, hx, hy, hz in platform_specs:
+            q = pybullet.getQuaternionFromEuler([0, 0, yaw])
+            plat_col = pybullet.createCollisionShape(
+                pybullet.GEOM_BOX, halfExtents=[hx, hy, hz])
+            pid = pybullet.createMultiBody(0, plat_col, -1, list(pos), list(q))
+            pybullet.changeDynamics(
+                pid, -1,
+                lateralFriction  = DOM_FRICTION,
+                restitution      = 0.0,
+                contactStiffness = 1e6,
+                contactDamping   = 1e4,
+            )
+            self.platform_data.append((pos, q, hx, hy, hz))
 
         dom_col = pybullet.createCollisionShape(
             pybullet.GEOM_BOX,
@@ -649,7 +860,10 @@ class DominoPhysics:
         total = len(self._placements)
         for i, p in enumerate(self._placements):
             q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
-            pos = [p.x, p.y, DOM_H * 0.5]   # all at ground level
+            # p.z is the elevation of this step's footing (0 on the ground
+            # plane, nonzero on a platform); the domino's centre of mass
+            # sits half its height above whatever surface it's standing on.
+            pos = [p.x, p.y, p.z + DOM_H * 0.5]
             bid = pybullet.createMultiBody(DOM_MASS, dom_col, -1, pos, list(q))
             pybullet.changeDynamics(
                 bid, -1,
@@ -664,7 +878,7 @@ class DominoPhysics:
         # Freeze every domino at its exact upright pose with zero velocity.
         for bid, p in zip(self._dom_ids, self._placements):
             q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
-            pos = [p.x, p.y, DOM_H * 0.5]
+            pos = [p.x, p.y, p.z + DOM_H * 0.5]
             pybullet.resetBasePositionAndOrientation(bid, pos, q)
             pybullet.resetBaseVelocity(
                 bid,
@@ -1227,10 +1441,10 @@ class InfoPanel(QWidget):
 
     def set_layout_info(self, total: int) -> None:
         self._layout_info.setText(
-            f"<b>Single-Direction Cascade</b><br>"
+            f"<b>Canyon Cascade + Branches</b><br>"
             f"<br>"
             f"<span style='color:{PALETTE['muted']}'>"
-            f"{total} dominoes · one straight line</span>"
+            f"{total} dominoes · descend · climb · 3 final arms</span>"
         )
 
     def update_stats(
@@ -1317,7 +1531,7 @@ class MainWindow(QMainWindow):
         title = QLabel(
             "<b>Demo 05 — Domino Cascade</b>"
             f"&nbsp;&nbsp;<span style='color:{PALETTE['muted']}; font-weight:400;'>"
-            "PyBullet Physics · OpenGL 3.3 · Single-Direction Cascade"
+            "PyBullet Physics · OpenGL 3.3 · Canyon Cascade + Branches"
             "</span>"
         )
         title.setStyleSheet("font-size:14px;")
