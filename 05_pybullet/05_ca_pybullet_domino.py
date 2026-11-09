@@ -1,47 +1,49 @@
 # =============================================================================
-# 05_ca_pybullet_domino.py — Domino Cascade  ·  PyBullet Physics + OpenGL 3.3
+# 05_ca_pybullet_domino_simple.py — Domino Cascade
 # =============================================================================
 # Author   : Renato Fera P.
 # LinkedIn : https://www.linkedin.com/in/renato-profeta/
 # Course   : Computeranimation — Chapter 05: Physics-based Animation
 # Institute: Institut für Medientechnik, Technische Universität Ilmenau
 # -----------------------------------------------------------------------------
-"""05_ca_pybullet_domino_simple.py — Simple Single-Wave Domino Cascade Demo.
+"""Domino cascade simulation using PyBullet for physics and OpenGL for rendering.
 
-Architecture — physics and rendering are fully decoupled:
-  · PyBullet DIRECT  — headless rigid-body simulation, no rendering
-  · OpenGL 3.3 Core  — QOpenGLWidget, Blinn-Phong, two-light setup,
-                        checkerboard floor, 4× MSAA
-  · Interactive camera — orbit (left-drag), pan (mid-drag), zoom (scroll),
-                          reframe (double-click), optional wave-front auto-track
+This demo illustrates how rigid-body physics can drive a visual animation.
+The physics engine (PyBullet) runs in headless mode and owns all collision
+detection and dynamics.  The renderer (OpenGL 3.3) reads the resulting body
+poses each frame and draws the scene independently.  Neither side knows about
+the internals of the other — this separation makes it straightforward to swap
+either subsystem without touching the other.
 
-Layout strategy — One Wave, One Direction:
-  · Flat entry platform → stair ramp DOWN → flat canyon floor → stair
-    ramp UP → flat plateau → single FORK into two arms (±35°).
-  · Exactly one domino (index 0) ever receives an external torque; every
-    other domino falls solely because its immediate neighbour struck it.
-    Elevation changes are real static platforms, not just repositioned
-    dominoes, so the physics of standing, falling, and landing on a
-    different height all actually happen.
+Layout:
+    A single cascade wave travels through five acts in sequence.  Domino 0 is
+    the only tile that ever receives an external force; every subsequent fall
+    is caused by physical contact between neighbours.
 
-PHYSICS CONCEPTS TAUGHT
-------------------------
-1. Rigid body dynamics       — mass, inertia tensor, restitution, friction
-2. Collision detection       — AABB broadphase + GJK/EPA narrowphase
-3. Impulse propagation       — angular momentum transferred on contact
-4. Gravitational PE ↔ KE     — ramp descent/climb trades height for speed
-                                and back again (half-pipe principle)
-5. Single-fork branching     — one clean split, two arms, no secondary forks
-6. Fixed-timestep loop       — stepSimulation at 1/240 s, decoupled from fps
-7. Physics/render separation — PyBullet for simulation, OpenGL for display
-8. GPU instanced transforms  — per-domino model matrix from physics pose
+    Entry platform → stair ramp down → flat ground run →
+    stair ramp up → elevated plateau → fork into two arms (±35°).
 
-How to run
-----------
+Physics concepts demonstrated:
+    1. Rigid body dynamics    — mass, inertia tensor, restitution, friction.
+    2. Collision detection    — AABB broadphase followed by GJK/EPA narrowphase.
+    3. Impulse propagation    — angular momentum transferred on contact.
+    4. Gravitational PE ↔ KE  — the ramp down converts height into speed;
+                                 the ramp up converts that speed back into
+                                 height (half-pipe principle).
+    5. Branching              — one falling domino can reach two neighbours
+                                 placed at diverging angles, splitting the wave.
+    6. Fixed-timestep loop    — stepSimulation advances at 1/240 s regardless
+                                 of the display frame rate.
+    7. Physics/render split   — PyBullet computes motion; OpenGL draws it.
+    8. Per-body model matrix  — each domino's physics pose becomes a 4×4
+                                 transform uploaded to the GPU each frame.
+
+How to run:
     uv sync --extra arm64
-    uv run python 05_ca_pybullet_domino.py
+    uv run python 05_ca_pybullet_domino_simple.py
 
-Ubuntu:  sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
+Ubuntu dependencies:
+    sudo apt install libgl1 libegl1 libxcb-cursor0 libxcb-xinerama0
 """
 # =============================================================================
 
@@ -86,50 +88,74 @@ WINDOW_TITLE = (
 )
 LOGO_PATH: Path = Path(__file__).resolve().parent.parent / "ams_group_tui.png"
 
-# ── Physics ───────────────────────────────────────────────────────────────────
-PHYSICS_DT: float      = 1.0 / 240.0   # 240 Hz — stable for thin bodies
+# ── Physics timestep ──────────────────────────────────────────────────────────
+# 240 Hz gives enough temporal resolution for thin, fast-tipping bodies.
+# A lower rate causes dominoes to interpenetrate before the solver can
+# separate them, which produces visible jitter or missed contacts.
+PHYSICS_DT: float      = 1.0 / 240.0
 
-# ── Domino geometry (metres) — real proportions H:W:D ≈ 2:1:0.25 ─────────────
+# ── Domino geometry (metres) ──────────────────────────────────────────────────
+# Standard domino proportions: height : width : depth ≈ 2 : 1 : 0.25.
 DOM_H: float           = 0.30
 DOM_W: float           = 0.14
 DOM_D: float           = 0.030
 DOM_MASS: float        = 0.090   # kg
-# Zero restitution on dominoes: energy is NOT bounced back into the chain.
-# Only a domino physically struck by its neighbour should fall; vibration
-# or surface bounce must not propagate the cascade on its own.
+
+# Restitution controls how much energy a collision returns to the bodies.
+# Setting it to zero means a domino that hits the floor or another tile does
+# not bounce; all kinetic energy on the collision normal is absorbed.
+# This ensures only a domino that is physically struck by its neighbour falls —
+# a distant vibration or floor bounce cannot trigger the cascade on its own.
 DOM_RESTITUTION: float = 0.0
+
+# Friction determines how well dominoes grip the platform surface.
+# A value of 0.80 is high enough to prevent sliding while still allowing
+# the tile to pivot cleanly about its bottom edge when it tips.
 DOM_FRICTION: float    = 0.80
 
 # ── Layout geometry ───────────────────────────────────────────────────────────
-DOMINO_SPACING: float    = 0.155   # centre-to-centre spacing on flat ground
-DESCEND_SPACING: float   = 0.165   # slightly longer strides going downhill —
-                                    #   gravity assists, so dominoes can reach
-                                    #   a little farther before tipping over
-ASCEND_SPACING: float    = 0.130   # shorter, tighter strides going uphill —
-                                    #   keeps the next tile in reach before the
-                                    #   falling one loses too much momentum
-DESCEND_STEP_RISE: float = 0.050   # metres dropped per stair step
-ASCEND_STEP_RISE: float  = 0.032   # metres gained per stair step — deliberately
-                                    #   smaller & the run is shorter than the
-                                    #   descent, so the kinetic energy built up
-                                    #   going down carries the wave back up,
-                                    #   the same principle as a skate half-pipe
-PLATFORM_THICKNESS: float = 0.05   # static step-platform slab thickness
+# Spacing on flat ground: centre-to-centre distance between adjacent dominoes.
+DOMINO_SPACING: float    = 0.155
 
-# ── Speed control ─────────────────────────────────────────────────────────────
-# 4 substeps × (1/240 s) × 60 Hz timer = exactly 1× real-time.
-# The speed table maps human-readable labels to substep counts.
+# On a downhill ramp, gravity accelerates the falling tile forward, so it can
+# reach a neighbour that is slightly farther away than on flat ground.
+DESCEND_SPACING: float   = 0.165
+
+# On an uphill ramp, the tile decelerates as it falls, so neighbours must be
+# placed closer together to stay within reach before the tile loses momentum.
+ASCEND_SPACING: float    = 0.130
+
+# Vertical rise (or drop) per stair step on the descending ramp.
+DESCEND_STEP_RISE: float = 0.050
+
+# Vertical rise per stair step on the ascending ramp.
+# Kept smaller than DESCEND_STEP_RISE so the kinetic energy accumulated on
+# the way down is enough to carry the wave up the other side — the same
+# energy trade that makes a skate half-pipe work.
+ASCEND_STEP_RISE: float  = 0.032
+
+# Thickness of each static platform slab placed under elevated dominoes.
+PLATFORM_THICKNESS: float = 0.05
+
+# ── Simulation speed ──────────────────────────────────────────────────────────
+# The QTimer fires at ~60 Hz.  Each tick advances the simulation by
+# (substeps × PHYSICS_DT) seconds.  At 4 substeps that equals 4 × 1/240 ≈ 16.7 ms,
+# matching wall-clock time and giving 1× real-time playback.
+# Higher substep counts compress time without changing physics accuracy.
 REAL_TIME_SUBSTEPS: int = 4
 SPEED_TABLE: list[tuple[str, int]] = [
     ("½×",  2),
-    ("1×",  4),   # default — real-time
+    ("1×",  4),   # default — 1× real-time
     ("2×",  8),
     ("4×", 16),
     ("8×", 32),
 ]
-SPEED_DEFAULT_IDX: int = 1   # index into SPEED_TABLE → "1×" real-time
+SPEED_DEFAULT_IDX: int = 1   # index into SPEED_TABLE selecting "1×"
 
-# ── Domino body gradient (blue → cyan → green → gold → red) ──────────────────
+# ── Colour gradient for domino bodies (blue → cyan → green → gold → red) ──────
+# Each domino is assigned a colour by interpolating this gradient according to
+# its position in the sequence.  The colour change makes the cascade wave
+# visually traceable from the first tile to the last.
 BODY_GRADIENT: list[tuple[float, float, float]] = [
     (0.08, 0.20, 0.72),
     (0.04, 0.72, 0.82),
@@ -138,7 +164,7 @@ BODY_GRADIENT: list[tuple[float, float, float]] = [
     (0.82, 0.12, 0.08),
 ]
 
-# ── UI palette — identical to demo 04 ────────────────────────────────────────
+# ── UI colour palette ─────────────────────────────────────────────────────────
 PALETTE = {
     "bg":      "#0d0f14",
     "surface": "#161a22",
@@ -234,9 +260,11 @@ QSplitter::handle {{
 }}
 """
 
-# Inline styles for speed chips — set directly via setStyleSheet() on each
-# button so we never depend on Qt property selectors, which are unreliable
-# on Windows with the Fusion style.
+# Speed chip button styles are set directly via setStyleSheet() on each widget
+# rather than through the application stylesheet, because Qt property selectors
+# (e.g. QPushButton#active) are not reliably applied by the Fusion style on all
+# platforms.  Two string constants — one for the selected state, one for the
+# unselected state — are toggled each time the user changes the speed.
 _CHIP_INACTIVE = (
     f"QPushButton {{ background-color: {PALETTE['surface']};"
     f" color: {PALETTE['muted']};"
@@ -260,7 +288,22 @@ _CHIP_ACTIVE = (
 # ── GLSL shaders ──────────────────────────────────────────────────────────────
 # =============================================================================
 
-# Vertex shader — standard MVP transform, world-space normal propagation.
+# ---------------------------------------------------------------------------
+# Vertex shader
+# ---------------------------------------------------------------------------
+# Transforms each vertex from object space to clip space via the standard
+# Model-View-Projection (MVP) chain:
+#
+#   clip position  = Projection × View × Model × object position
+#
+# The world-space position (after Model but before View/Projection) is passed
+# to the fragment shader so that lighting can be computed relative to actual
+# 3-D positions rather than screen positions.
+#
+# Normals are transformed by the inverse-transpose of the model matrix.
+# This is necessary because a plain matrix multiplication distorts normal
+# directions when the model matrix contains non-uniform scaling — the
+# inverse-transpose corrects for that distortion.
 _VERT_SRC = """
 #version 330 core
 
@@ -278,15 +321,27 @@ void main() {
     vec4 worldPos = uModel * vec4(aPos, 1.0);
     gl_Position   = uProj * uView * worldPos;
     vFragPos      = worldPos.xyz;
-    // Inverse-transpose handles non-uniform scale without distorting normals.
+    // Transform the normal by the inverse-transpose of the model matrix so
+    // that non-uniform scaling does not distort the normal direction.
     vNormal = normalize(mat3(transpose(inverse(uModel))) * aNormal);
 }
 """
 
-# Fragment shader — two-light Blinn-Phong + gamma correction.
-# Key light (warm, strong) + fill light (cool, dim) gives cinematic depth.
-# uFloor activates a checkerboard pattern computed from world-space XY
-# position, giving spatial scale reference without extra geometry.
+# ---------------------------------------------------------------------------
+# Fragment shader
+# ---------------------------------------------------------------------------
+# Implements Blinn-Phong shading with two lights and gamma correction.
+#
+# Two-light setup:
+#   - Key light: warm colour, high intensity, positioned upper-left.
+#     This is the primary source of diffuse and specular highlights.
+#   - Fill light: cool colour, 35% the intensity of the key light,
+#     positioned opposite.  It softens the shadows on the unlit side.
+#
+# The uFloor flag activates a checkerboard pattern on the floor quad.
+# The pattern is computed in the fragment shader from the world-space XY
+# position rather than from a texture, so no image file is needed and the
+# tile size stays constant regardless of the mesh's UV coordinates.
 _FRAG_SRC = """
 #version 330 core
 
@@ -308,32 +363,40 @@ out vec4 FragColor;
 void main() {
     vec4 col = uBaseColor;
 
-    // ── Checkerboard for the floor ────────────────────────────────────────
+    // Checkerboard pattern for the floor quad.
+    // Multiplying the world-space XY coordinate by 2 makes each tile 0.5 m wide.
+    // mod(cx + cy, 2.0) alternates between 0 and 1 in a checkerboard arrangement.
+    // The edge fade reduces the colour toward the perimeter so the floor blends
+    // into the background rather than ending with a sharp square border.
     if (uFloor) {
-        float cx = floor(vFragPos.x * 2.0);   // 0.5-metre squares
+        float cx = floor(vFragPos.x * 2.0);
         float cy = floor(vFragPos.y * 2.0);
         float c  = mod(cx + cy, 2.0);
         col.rgb  = mix(col.rgb * 0.48, col.rgb * 1.35, c);
-        // Fade toward the edges so there is no hard border
         float dist = length(vFragPos.xy);
         col.rgb *= 1.0 - smoothstep(14.0, 20.0, dist) * 0.6;
     }
 
     vec3 N = normalize(vNormal);
-    vec3 V = normalize(uCamPos - vFragPos);
+    vec3 V = normalize(uCamPos - vFragPos);  // direction from fragment to camera
 
-    // ── Key light (warm) ──────────────────────────────────────────────────
+    // Key light contribution.
+    // L1 is the direction from the fragment to the key light.
+    // d1 is the Lambertian (diffuse) term: cos of the angle between N and L1.
+    // H1 is the half-vector used by Blinn-Phong for the specular term.
     vec3  L1   = normalize(uLight1Pos - vFragPos);
     float d1   = max(dot(N, L1), 0.0);
     vec3  H1   = normalize(L1 + V);
     float s1   = pow(max(dot(N, H1), 0.0), uSpecPower);
 
-    // ── Fill light (cool, 35% intensity) ─────────────────────────────────
+    // Fill light contribution — same calculation at reduced (35%) intensity.
+    // A lower specular exponent (uSpecPower * 0.4) gives broader, softer highlights.
     vec3  L2   = normalize(uLight2Pos - vFragPos);
     float d2   = max(dot(N, L2), 0.0) * 0.35;
     vec3  H2   = normalize(L2 + V);
     float s2   = pow(max(dot(N, H2), 0.0), uSpecPower * 0.4) * 0.12;
 
+    // Combine ambient, diffuse, and specular contributions from both lights.
     vec3 ambient  = uAmbient * col.rgb;
     vec3 diffuse  = d1 * col.rgb * uLight1Color
                   + d2 * col.rgb * uLight2Color;
@@ -342,7 +405,9 @@ void main() {
 
     vec3 result = ambient + diffuse + specular;
 
-    // ── Gamma-encode for sRGB display (γ = 1/2.2) ────────────────────────
+    // Apply gamma correction (γ = 1/2.2) before writing to the sRGB framebuffer.
+    // Without this step, colours computed in linear light space appear too dark
+    // on a standard monitor because the display applies its own gamma on top.
     result    = pow(clamp(result, 0.0, 1.0), vec3(1.0 / 2.2));
     FragColor = vec4(result, col.a);
 }
@@ -357,24 +422,57 @@ def _lerp3(
     b: tuple[float, float, float],
     t: float,
 ) -> tuple[float, float, float]:
+    """Linearly interpolate between two RGB colour tuples.
+
+    Args:
+        a: Starting colour as (r, g, b) floats in [0, 1].
+        b: Ending colour as (r, g, b) floats in [0, 1].
+        t: Interpolation parameter in [0, 1].  t=0 returns a; t=1 returns b.
+
+    Returns:
+        Interpolated colour as (r, g, b).
+    """
     return (a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t)
 
 
 def body_color(index: int, total: int) -> tuple[float, float, float]:
-    """Map a domino index to a colour along the five-stop gradient."""
-    t  = index / max(total - 1, 1)
-    s  = t * (len(BODY_GRADIENT) - 1)
-    lo = int(s); hi = min(lo + 1, len(BODY_GRADIENT) - 1)
+    """Map a domino index to a colour sampled from the five-stop gradient.
+
+    The gradient runs from the first domino (blue) to the last (red), passing
+    through cyan, green, and gold.  This makes the cascade wave easy to follow
+    visually: the colour changes continuously from start to finish.
+
+    Args:
+        index: Zero-based index of the domino in the placement sequence.
+        total: Total number of dominoes in the scene.
+
+    Returns:
+        RGB colour tuple with components in [0, 1].
+    """
+    t  = index / max(total - 1, 1)        # normalise index to [0, 1]
+    s  = t * (len(BODY_GRADIENT) - 1)     # scale to gradient segment space
+    lo = int(s)                            # index of the lower colour stop
+    hi = min(lo + 1, len(BODY_GRADIENT) - 1)
     return _lerp3(BODY_GRADIENT[lo], BODY_GRADIENT[hi], s - lo)
 
 
 def _quat_to_mat4(quat: tuple | list) -> np.ndarray:
-    """
-    Unit quaternion (x, y, z, w) → row-major 4×4 rotation matrix.
+    """Convert a unit quaternion to a row-major 4×4 rotation matrix.
 
-    This is the standard formula from expanding q * v * q⁻¹:
-    each entry in the 3×3 block is a quadratic in {x, y, z, w}.
-    PyBullet returns quaternions in (x, y, z, w) order.
+    A quaternion (x, y, z, w) encodes a rotation in 3-D space.  Expanding
+    the sandwich product q * v * q⁻¹ gives the equivalent 3×3 rotation matrix
+    whose entries are quadratic in the quaternion components.  The result is
+    embedded in a 4×4 identity matrix so it can be multiplied with translation
+    and scale matrices.
+
+    PyBullet returns quaternions in (x, y, z, w) order, matching this function's
+    input convention.
+
+    Args:
+        quat: Unit quaternion as (x, y, z, w).
+
+    Returns:
+        Row-major 4×4 rotation matrix as a float32 NumPy array.
     """
     x, y, z, w = quat
     return np.array([
@@ -390,12 +488,21 @@ def _build_model_mat(
     orn: tuple | list,
     sx: float, sy: float, sz: float,
 ) -> np.ndarray:
-    """
-    Build a row-major 4×4 model matrix from a physics body pose + scale.
+    """Build a row-major 4×4 model matrix from a physics body pose and scale.
 
-    Composition order: T × R × S
-    (scale first, then rotate in scaled space, then translate)
-    This is the standard SRT convention used by every major 3-D engine.
+    The matrix is composed as T × R × S, meaning scale is applied first (in
+    object space), then rotation, then translation.  This is the standard
+    Scale-Rotate-Translate order used in 3-D graphics.
+
+    Args:
+        pos: World-space position as (x, y, z).
+        orn: Orientation as a unit quaternion (x, y, z, w).
+        sx:  Scale along the object's local X axis.
+        sy:  Scale along the object's local Y axis.
+        sz:  Scale along the object's local Z axis.
+
+    Returns:
+        Row-major 4×4 model matrix as a float32 NumPy array.
     """
     T = np.eye(4, dtype=np.float32)
     T[0, 3] = pos[0]; T[1, 3] = pos[1]; T[2, 3] = pos[2]
@@ -409,13 +516,33 @@ def _build_model_mat(
 # =============================================================================
 
 class DP(NamedTuple):
-    """Domino placement: world-space bottom-centre + yaw (radians)."""
+    """World-space placement of a single domino.
+
+    Attributes:
+        x:   World-space X coordinate of the domino's bottom-centre (metres).
+        y:   World-space Y coordinate of the domino's bottom-centre (metres).
+        z:   Elevation of the surface the domino stands on (metres above z=0).
+        yaw: Heading angle in radians.  The domino faces in the direction
+             (cos(yaw), sin(yaw), 0) and will fall toward the next tile.
+    """
     x: float; y: float; z: float; yaw: float
 
 
 def _run(ox: float, oy: float, oz: float, yaw: float, n: int,
          sp: float = DOMINO_SPACING) -> list[DP]:
-    """n dominoes on a single flat elevation, heading in a straight line."""
+    """Place n dominoes in a straight line at a constant elevation.
+
+    Args:
+        ox:  X coordinate of the first domino's bottom-centre.
+        oy:  Y coordinate of the first domino's bottom-centre.
+        oz:  Elevation (z coordinate) shared by all dominoes in this run.
+        yaw: Heading direction in radians.
+        n:   Number of dominoes to place.
+        sp:  Centre-to-centre spacing between dominoes.
+
+    Returns:
+        List of DP placements ordered from first to last in the cascade.
+    """
     dx, dy = math.cos(yaw) * sp, math.sin(yaw) * sp
     return [DP(ox + dx*i, oy + dy*i, oz, yaw) for i in range(n)]
 
@@ -425,12 +552,23 @@ def _arc(
     radius: float, start_ang: float, end_ang: float,
     n: int,
 ) -> list[DP]:
-    """
-    Circular arc of n dominoes on a single elevation (cz).  Each domino is
-    tangent to the arc so it naturally faces the next one in the chain.
-    A domino's yaw and yaw+π describe the same physical pose (the body is
-    symmetric under a 180° spin about its own centre), so a sign flip in
-    the tangent formula between arcs never shows up as a real discontinuity.
+    """Place n dominoes along a circular arc at a constant elevation.
+
+    Each domino is oriented tangent to the arc so that it naturally faces the
+    next tile in the chain.  The tangent direction is perpendicular to the
+    radius at that point, with the sign chosen according to the sweep direction.
+
+    Args:
+        cx:        X coordinate of the arc centre.
+        cy:        Y coordinate of the arc centre.
+        cz:        Elevation shared by all dominoes on this arc.
+        radius:    Distance from the centre to each domino's bottom-centre.
+        start_ang: Starting angle of the arc in radians.
+        end_ang:   Ending angle of the arc in radians.
+        n:         Number of dominoes to place along the arc.
+
+    Returns:
+        List of DP placements ordered from start_ang to end_ang.
     """
     pl: list[DP] = []
     for i in range(n):
@@ -438,17 +576,27 @@ def _arc(
         ang = start_ang + (end_ang - start_ang) * t
         x   = cx + radius * math.cos(ang)
         y   = cy + radius * math.sin(ang)
+        # The tangent direction is perpendicular to the radius.
+        # The sign selects the tangent that points in the sweep direction.
         yaw = ang + math.pi * 0.5 * (1 if end_ang > start_ang else -1)
         pl.append(DP(x, y, cz, yaw))
     return pl
 
 
 def _platform_for(dp: DP, length: float) -> tuple:
-    """
-    A static platform box under a single domino at an arbitrary (possibly
-    elevated) position, oriented along that domino's yaw. Used for dominoes
-    that sit on a curved (not straight) elevated path, where `_stair`'s
-    per-step box doesn't apply.
+    """Create a static platform box sized to support a single elevated domino.
+
+    Used for dominoes placed on a curved elevated path where the rectangular
+    slab produced by _stair does not apply.  The box top face aligns with
+    dp.z so the domino stands flush on its surface.
+
+    Args:
+        dp:     Placement of the domino that needs support.
+        length: Desired length of the platform slab along the domino's heading.
+
+    Returns:
+        Platform specification tuple (pos_xyz, yaw, half_x, half_y, half_z)
+        ready to be passed to DominoPhysics as a static collision box.
     """
     hz = PLATFORM_THICKNESS * 0.5
     return (
@@ -461,22 +609,36 @@ def _stair(
     ox: float, oy: float, oz: float, yaw: float, n: int,
     rise: float, run: float = DOMINO_SPACING,
 ) -> tuple[list[DP], list[tuple]]:
-    """
-    A straight run of n dominoes where each successive one sits `rise`
-    metres higher (rise > 0) or lower (rise < 0) than the last — a
-    staircase. `rise = 0.0` places a flat run at a constant elevation
-    (useful for a plateau or a canyon floor that sits above/below z = 0).
+    """Place n dominoes in a straight run with a constant rise per step.
 
-    Every domino needs solid footing, so each step also produces a static
-    platform box whose TOP face is exactly at that domino's height — except
-    when the step is at z ≈ 0, where the existing ground plane already
-    provides it.
+    When rise is negative, successive dominoes step downward (a descending
+    ramp).  When rise is positive, they step upward (an ascending ramp).
+    When rise is zero, all dominoes share the same elevation (a flat run).
 
-    Returns
-    -------
-    placements : the n DP positions (world bottom-centre of each domino)
-    platforms  : (pos_xyz, yaw, half_x, half_y, half_z) per non-zero step,
-                 ready for DominoPhysics to instantiate as static boxes
+    For every domino whose elevation is above z=0, this function also
+    generates a static platform box whose top face aligns with that domino's
+    footing elevation.  Dominoes at z=0 are supported by the global ground
+    plane and do not need an additional box.
+
+    The platform half-length along the heading direction is set slightly larger
+    than half the step spacing so that consecutive slabs overlap by a small
+    margin.  This prevents a narrow gap from forming between adjacent slabs
+    at the step edge — a gap that a falling tile's corner could catch on.
+
+    Args:
+        ox:   X coordinate of the first domino's bottom-centre.
+        oy:   Y coordinate of the first domino's bottom-centre.
+        oz:   Starting elevation (z of the first domino's footing).
+        yaw:  Heading direction in radians.
+        n:    Number of dominoes to place.
+        rise: Elevation change per step (metres).  Negative for descent.
+        run:  Horizontal spacing between successive dominoes (metres).
+
+    Returns:
+        A tuple of (placements, platforms) where:
+            placements: list of DP, one per domino, in cascade order.
+            platforms:  list of (pos_xyz, yaw, hx, hy, hz) tuples for each
+                        elevated step, ready for DominoPhysics.
     """
     dx, dy = math.cos(yaw), math.sin(yaw)
     placements: list[DP] = []
@@ -486,11 +648,10 @@ def _stair(
         x = ox + dx * run * i
         y = oy + dy * run * i
         placements.append(DP(x, y, z, yaw))
+        # Only create a platform box when the step is elevated above the ground
+        # plane.  At z=0 the global plane.urdf already provides the surface.
         if abs(z) > 1e-6:
             hz = PLATFORM_THICKNESS * 0.5
-            # Half-length is slightly over run/2 so consecutive step boxes
-            # overlap a little instead of leaving a seam a falling domino
-            # could catch its corner on.
             platforms.append((
                 (x, y, z - hz), yaw,
                 run * 0.55, (DOM_W + 0.10) * 0.5, hz,
@@ -499,67 +660,74 @@ def _stair(
 
 
 def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
-    """
-    Single-wave cascade: flat entry → ramp DOWN to ground → flat floor
-    → ramp UP to plateau → one clean FORK into two arms.
+    """Construct the full domino placement for the single-wave cascade.
 
-    ONE wave, ONE direction.  Domino 0 is the only tile ever given an
-    external push; every subsequent fall is caused by physical contact.
+    The cascade is organised into five acts that follow one continuous
+    path.  Domino 0 is the only tile that ever receives an external push;
+    every subsequent fall is caused by a neighbouring domino striking it.
 
-    ACT 1 · Entry ramp  — dominoes start ON an elevated platform heading
-             +X.  The platform height equals DESCEND_STEPS × STEP_RISE so
-             the descent lands exactly at z = 0 (the infinite ground plane).
-    ACT 2 · Descent     — stair-stepped ramp down to z = 0.  Gravity
-             converts potential energy to kinetic energy; the cascade
-             accelerates visibly on the way down.
-    ACT 3 · Canyon floor — short flat run at z = 0.  Lets the wave
-             settle before the climb.
-    ACT 4 · Ascent      — stair-stepped ramp back up.  Fewer, shallower
-             steps than the descent so the kinetic energy banked on the
-             way down is enough to carry the wave to the top (half-pipe
-             principle).  Rise per step is kept < STEP_RISE so the top
-             plateau is lower than the starting platform — this is
-             intentional and physically correct.
-    ACT 5 · Plateau     — short flat run on the elevated plateau.
-    ACT 6 · Fork        — last plateau domino fans into two arms (±FORK_DEG).
-             The separation angle is chosen so the two first-child dominoes
-             do NOT overlap each other (SAT check: need > ~28° at this
-             spacing); 35° gives a clear safety margin.
-    ACT 7 · Arm A / Arm B — straight flat runs on the plateau surface.
+    Acts:
+        1. Entry platform: a flat elevated starting section heading in the
+           +X direction.  The starting height is chosen so that the descent
+           in Act 2 lands exactly at z=0.
+        2. Descent: a stair-stepped ramp down to z=0.  Each step drops the
+           domino by STEP_RISE metres.  As the wave travels downward, the
+           falling tiles accelerate because gravity adds kinetic energy to
+           each step — potential energy is being converted to kinetic energy.
+        3. Ground run: a short flat section at z=0 where the cascade settles
+           onto the global ground plane before beginning the climb.
+        4. Ascent: a stair-stepped ramp back up to PLATEAU_H.  The ascent
+           uses shallower steps and tighter spacing than the descent.  The
+           kinetic energy accumulated on the way down carries the wave up the
+           ramp — the same energy exchange that occurs on a skate half-pipe.
+        5. Plateau: a flat section at PLATEAU_H that ends at the fork domino.
+        6. Fork: the last plateau domino falls toward two neighbours placed at
+           ±FORK_DEG from the heading direction.  Each neighbour starts its
+           own arm of the cascade.  The angle must be wide enough that the
+           two first arm dominoes do not overlap when initially placed;
+           a 2-D oriented-box check shows the minimum safe angle is about
+           28° at this spacing, so 35° provides a clear margin.
+        7. Arm A and Arm B: two straight flat runs on the plateau surface,
+           one for each branch of the fork.
 
-    Returns
-    -------
-    pl        : ordered list of DP placements
-    fork_idx  : [index of fork domino]
-    platforms : static box specs for every elevated step / plateau tile
+    Returns:
+        A tuple of (placements, fork_idx, platforms) where:
+            placements: Ordered list of DP, one per domino in cascade order.
+            fork_idx:   List containing the index of the fork domino in
+                        placements.  Can be used to highlight or annotate
+                        the branching point.
+            platforms:  List of (pos_xyz, yaw, hx, hy, hz) tuples describing
+                        the static support boxes for all elevated tiles.
     """
     pl: list[DP] = []
     fork_idx: list[int] = []
     platforms: list[tuple] = []
 
-    # ── Heights ──────────────────────────────────────────────────────────────
-    # Ground plane is at z = 0.  Start high enough that DESCEND_STEPS steps
-    # of DESCEND_STEP_RISE each land exactly at z = 0.
+    # Derive the starting height so that DESCEND_STEPS steps of STEP_RISE
+    # each bring the ramp exactly to z=0 on the last step.
     DESCEND_STEPS = 10
-    STEP_RISE     = DESCEND_STEP_RISE          # 0.050 m — from constants
-    START_H       = STEP_RISE * DESCEND_STEPS  # 0.50 m
+    STEP_RISE     = DESCEND_STEP_RISE          # 0.050 m per step
+    START_H       = STEP_RISE * DESCEND_STEPS  # 0.50 m total starting height
 
-    # Ascent: fewer + shallower steps.  Plateau ends up at ~0.25 m.
+    # The ascending ramp uses a smaller rise per step than the descent so
+    # that the kinetic energy from the downhill run can carry the wave up.
     ASCEND_STEPS  = 8
     A_RISE        = STEP_RISE * 0.6            # 0.030 m per step
-    PLATEAU_H     = A_RISE * ASCEND_STEPS      # ~0.24 m
+    PLATEAU_H     = A_RISE * ASCEND_STEPS      # ~0.24 m plateau height
 
-    # Fork geometry
+    # Fork angle: each arm deviates ±FORK_DEG from the plateau heading.
     FORK_DEG      = 35.0
     FORK_HALF     = math.radians(FORK_DEG)
-    FORK_SP       = 0.20   # first child spacing — wider than normal to
-                           # guarantee no initial overlap between children
+    # First spacing in each arm is slightly larger than DOMINO_SPACING to
+    # ensure the two first-arm dominoes do not touch each other at placement.
+    FORK_SP       = 0.20
 
-    # ── ACT 1 — flat entry at START_H, heading +X ──────────────────────────
+    # Act 1: flat entry section at START_H, heading in the +X direction (yaw=0).
     entry, plats = _stair(0.0, 0.0, START_H, 0.0, 8, rise=0.0)
     pl.extend(entry); platforms.extend(plats)
 
-    # ── ACT 2 — ramp DOWN (DESCEND_STEPS steps) to z = 0 ───────────────────
+    # Act 2: descending ramp from START_H down to z=0.
+    # The next domino is placed one DESCEND_SPACING ahead of the last entry tile.
     p = entry[-1]
     descend, plats = _stair(
         p.x + math.cos(p.yaw) * DESCEND_SPACING,
@@ -570,7 +738,8 @@ def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
     )
     pl.extend(descend); platforms.extend(plats)
 
-    # ── ACT 3 — canyon floor: flat run at z = 0 ────────────────────────────
+    # Act 3: flat ground run at z=0.
+    # Dominoes here rest on the global ground plane (no platform boxes needed).
     p = descend[-1]
     floor_run, plats = _stair(
         p.x + math.cos(p.yaw) * DOMINO_SPACING,
@@ -579,7 +748,9 @@ def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
     )
     pl.extend(floor_run); platforms.extend(plats)
 
-    # ── ACT 4 — ramp UP (ASCEND_STEPS steps) to PLATEAU_H ──────────────────
+    # Act 4: ascending ramp from z=0 up to PLATEAU_H.
+    # Tighter spacing (ASCEND_SPACING) keeps each tile within reach as the
+    # cascade decelerates while climbing.
     p = floor_run[-1]
     ascend, plats = _stair(
         p.x + math.cos(p.yaw) * ASCEND_SPACING,
@@ -590,7 +761,7 @@ def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
     )
     pl.extend(ascend); platforms.extend(plats)
 
-    # ── ACT 5 — flat plateau at PLATEAU_H ───────────────────────────────────
+    # Act 5: flat plateau section at PLATEAU_H.
     p = ascend[-1]
     plateau, plats = _stair(
         p.x + math.cos(p.yaw) * DOMINO_SPACING,
@@ -599,10 +770,13 @@ def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
     )
     pl.extend(plateau); platforms.extend(plats)
 
-    # ── ACT 6 — fork: one domino fans into two arms ─────────────────────────
-    fork_idx.append(len(pl) - 1)   # the last plateau tile is the fork tile
+    # Act 6 and 7: fork and arms.
+    # Record the index of the last plateau tile — this is the fork domino.
+    # When it falls, it tips toward two neighbours simultaneously.
+    fork_idx.append(len(pl) - 1)
     pf = plateau[-1]
 
+    # Place one arm on each side of the heading direction.
     for sign in (+1.0, -1.0):
         arm_yaw = pf.yaw + sign * FORK_HALF
         ax = pf.x + math.cos(arm_yaw) * FORK_SP
@@ -618,31 +792,35 @@ def build_layout() -> tuple[list[DP], list[int], list[tuple]]:
 # =============================================================================
 
 class InteractiveCamera:
-    """
-    Orbit / pan / zoom camera with optional wave-front auto-track.
+    """Orbit/pan/zoom camera with optional wave-front auto-tracking.
 
-    Coordinate system: Z-up (matches PyBullet).
-      · Eye position is computed in spherical coords from yaw + pitch + dist.
-      · Left-drag  → orbit (yaw + pitch)
-      · Middle-drag → pan (translate target in camera's local XY)
-      · Scroll      → zoom (scale distance)
-      · Double-click → reframe (restore saved defaults)
+    The camera is defined in spherical coordinates around a target point:
+    yaw (horizontal angle), pitch (vertical angle), and distance.  The
+    eye position is derived from these three values each frame.
 
-    Auto-track mode: smoothly interpolates the target toward the physics
-    wave-front position (a moving average of the most recently fallen dominoes).
-    The smooth interpolation factor (dt * 2.0) keeps the camera slightly behind
-    the cascade for a natural following feel — identical to the lag in a real
-    camera truck following a practitioner.
+    The coordinate system is Z-up, matching PyBullet's convention.
+
+    Controls:
+        Left-drag:    Orbit — change yaw and pitch around the target.
+        Middle-drag:  Pan — translate the target in the camera's local XY plane.
+        Scroll wheel: Zoom — scale the distance from eye to target.
+        Double-click: Reframe — restore the saved default view.
+
+    Auto-track mode:
+        When enabled, the target smoothly follows the wave-front position
+        reported by DominoPhysics.  The target is interpolated toward the
+        wave position each frame using a factor of (dt × 2.0), which keeps
+        the camera slightly behind the leading edge of the cascade.
     """
 
     def __init__(self) -> None:
-        self._yaw   =  28.0   # horizontal angle (degrees)
-        self._pitch =  24.0   # vertical tilt (degrees)
-        self._dist  =  10.0   # distance from target (metres)
+        self._yaw   =  28.0   # horizontal orbit angle in degrees
+        self._pitch =  24.0   # vertical orbit angle in degrees
+        self._dist  =  10.0   # distance from eye to target in metres
         self._tgt   = np.array([0.0, 0.0, 0.5], dtype=np.float32)
         self.auto_track: bool = False
 
-        # Defaults for double-click reframe
+        # Store default values so the camera can be restored on double-click.
         self._def_yaw   =  28.0
         self._def_pitch =  24.0
         self._def_dist  =  10.0
@@ -659,16 +837,25 @@ class InteractiveCamera:
         ], dtype=np.float32)
 
     def view_matrix(self) -> np.ndarray:
-        """
-        Standard lookAt construction — identical to glm::lookAt.
-        Builds an orthonormal camera frame from forward/right/up vectors.
+        """Compute the view matrix from the current eye position and target.
+
+        Constructs an orthonormal camera frame from three vectors:
+            forward (f): direction from eye to target.
+            right (r):   perpendicular to forward and world up.
+            camera-up (u): perpendicular to both forward and right.
+
+        The resulting 4×4 matrix transforms world-space coordinates into
+        camera space, where the camera looks along its negative Z axis.
+
+        Returns:
+            Row-major 4×4 view matrix as a float32 NumPy array.
         """
         e  = self.eye
         t  = self._tgt
-        up = np.array([0.0, 0.0, 1.0], dtype=np.float32)  # Z-up world
-        f  = t - e;  f /= np.linalg.norm(f) + 1e-9  # forward
-        r  = np.cross(f, up); r /= np.linalg.norm(r) + 1e-9  # right
-        u  = np.cross(r, f)                                    # camera-up
+        up = np.array([0.0, 0.0, 1.0], dtype=np.float32)  # world Z-up
+        f  = t - e;  f /= np.linalg.norm(f) + 1e-9        # forward vector
+        r  = np.cross(f, up); r /= np.linalg.norm(r) + 1e-9  # right vector
+        u  = np.cross(r, f)                                    # camera-up vector
         V  = np.eye(4, dtype=np.float32)
         V[0, :3] = r;  V[0, 3] = -np.dot(r, e)
         V[1, :3] = u;  V[1, 3] = -np.dot(u, e)
@@ -676,15 +863,26 @@ class InteractiveCamera:
         return V
 
     def proj_matrix(self, aspect: float) -> np.ndarray:
-        """
-        Perspective projection derived from frustum geometry.
-        near/far scale with orbit distance so clipping adapts to zoom level.
-        The −1 at [3,2] is the perspective divide that maps depth to W.
+        """Compute a perspective projection matrix for the current zoom level.
+
+        Near and far clip planes are derived from the orbit distance so that
+        the depth range stays well-conditioned at any zoom level: zooming in
+        (small distance) tightens the clip planes, reducing depth-buffer waste.
+
+        The entry P[3,2] = -1 performs the perspective divide, mapping the
+        z component into the W component that OpenGL uses to divide clip-space
+        coordinates into normalised device coordinates.
+
+        Args:
+            aspect: Viewport width divided by viewport height.
+
+        Returns:
+            Row-major 4×4 projection matrix as a float32 NumPy array.
         """
         near = max(0.01, self._dist * 0.004)
         far  = max(100.0, self._dist * 160.0)
         fov  = math.radians(50.0)
-        f    = 1.0 / math.tan(fov * 0.5)   # cot(fov/2)
+        f    = 1.0 / math.tan(fov * 0.5)   # cotangent of the half field-of-view
         P    = np.zeros((4, 4), dtype=np.float32)
         P[0, 0] = f / aspect
         P[1, 1] = f
@@ -694,16 +892,29 @@ class InteractiveCamera:
         return P
 
     def orbit(self, dx: float, dy: float) -> None:
+        """Adjust the orbit angles by mouse delta values.
+
+        Args:
+            dx: Horizontal mouse movement in pixels (positive = right).
+            dy: Vertical mouse movement in pixels (positive = down).
+        """
         self._yaw  += dx * 0.4
         self._pitch = max(-89.0, min(89.0, self._pitch + dy * 0.4))
 
     def pan(self, dx_px: float, dy_px: float, vp_h: int) -> None:
-        """
-        Translate the orbit target in the camera's local XY plane.
-        Scale by orbit_dist/viewport_height so panning feels the same
-        regardless of zoom level — matching Maya / Blender behaviour.
+        """Translate the orbit target in the camera's local XY plane.
+
+        The translation is scaled by (orbit distance / viewport height) so
+        that the same pixel movement corresponds to the same scene movement
+        regardless of the current zoom level.
+
+        Args:
+            dx_px: Horizontal mouse movement in pixels.
+            dy_px: Vertical mouse movement in pixels.
+            vp_h:  Current viewport height in pixels.
         """
         yr = math.radians(self._yaw); pr = math.radians(self._pitch)
+        # Reconstruct the forward direction from spherical coordinates.
         f  = -np.array([
             math.cos(pr)*math.cos(yr),
             math.cos(pr)*math.sin(yr),
@@ -712,20 +923,44 @@ class InteractiveCamera:
         up = np.array([0., 0., 1.])
         r  = np.cross(f, up); r /= np.linalg.norm(r) + 1e-9
         u  = np.cross(r, f)
+        # Scale factor: pixels → metres, proportional to distance and inversely
+        # proportional to viewport height.
         s  = self._dist / max(1, vp_h)
         self._tgt -= r.astype(np.float32) * (dx_px * s)
         self._tgt += u.astype(np.float32) * (dy_px * s)
 
     def zoom(self, delta: float) -> None:
-        """Proportional zoom — 0.999^120 ≈ 0.887 per scroll notch."""
+        """Scale the orbit distance proportionally to the scroll delta.
+
+        A multiplicative scale (0.999 per unit of delta) keeps the zoom speed
+        proportional to the current distance — the same number of scroll
+        notches halves the distance regardless of whether the camera is close
+        or far from the target.
+
+        Args:
+            delta: Raw scroll delta from the wheel event (positive = zoom in).
+        """
         self._dist = max(0.3, min(80.0, self._dist * (0.999 ** delta)))
 
     def reframe(self) -> None:
+        """Restore the camera to its saved default position and orientation."""
         self._yaw = self._def_yaw; self._pitch = self._def_pitch
         self._dist = self._def_dist; self._tgt = self._def_tgt.copy()
 
     def update_wave(self, wx: float, wy: float, wz: float, dt: float) -> None:
-        """Smooth-follow the wave-front when auto-track is enabled."""
+        """Smoothly move the camera target toward the wave-front position.
+
+        Called every frame when auto-track is enabled.  The target is
+        interpolated toward the goal using a factor of (dt × 2.0), which
+        introduces a small lag so the camera follows the cascade smoothly
+        rather than snapping to it instantly.
+
+        Args:
+            wx: Wave-front X position in world space.
+            wy: Wave-front Y position in world space.
+            wz: Wave-front Z position in world space.
+            dt: Elapsed time since the last frame in seconds.
+        """
         if self.auto_track:
             goal       = np.array([wx, wy, wz + 0.3], dtype=np.float32)
             self._tgt += (goal - self._tgt) * min(1.0, dt * 2.0)
@@ -736,25 +971,27 @@ class InteractiveCamera:
 # =============================================================================
 
 class DominoPhysics:
-    """
-    Rigid-body simulation via PyBullet DIRECT (headless).
+    """Headless rigid-body simulation of the domino cascade.
 
-    This class is responsible for physics only.  It exposes three arrays
-    that the OpenGL viewport reads each frame:
-      · body_states    — list[(pos, orn)] per domino, refreshed after each step
-      · platform_data  — static list[(pos, orn, hx, hy, hz)] for step platforms
-      · body_colors    — gradient RGBA pre-computed once at build time
+    This class owns the PyBullet physics world and is responsible for
+    building the scene, advancing the simulation, and reporting body
+    poses to the renderer.  It has no knowledge of OpenGL or Qt.
 
-    PIPELINE CONCEPT
-    ----------------
-    connect(DIRECT)             → no GUI, no renderer
-    setGravity                  → 9.81 m/s² downward (−Z)
-    loadURDF("plane.urdf")      → infinite static ground plane (mass = 0)
-    createCollisionShape(BOX)   → AABB for collision detection
-    createMultiBody             → rigid body = shape + mass + pose
-    changeDynamics              → restitution, friction, damping
-    stepSimulation()            → integrate forces + resolve contacts
-    getBasePositionAndOrientation() → query pose for rendering
+    PyBullet is used in DIRECT mode, which runs the physics engine without
+    launching any graphical window.  Poses are queried after each step and
+    stored in public attributes that DominoViewport reads every frame.
+
+    Physics pipeline per simulation step:
+        stepSimulation() integrates forces and resolves contact constraints.
+        getBasePositionAndOrientation() reads the resulting pose of each body.
+
+    Attributes:
+        body_states:   List of (pos, orn) tuples, one per domino, updated
+                       after every call to step().
+        platform_data: List of (pos, orn, hx, hy, hz) tuples describing the
+                       static support boxes.  Set once during connect().
+        body_colors:   List of (r, g, b) tuples, one per domino, computed
+                       once from the colour gradient during connect().
     """
 
     def __init__(self) -> None:
@@ -766,43 +1003,56 @@ class DominoPhysics:
         self._running    = False
         self._wave: tuple[float, float, float] = (0.0, 0.0, 0.5)
 
-        # Rendering data exposed to DominoViewport
+        # Public arrays read by DominoViewport each frame.
         self.body_states:   list[tuple] = []
-        self.platform_data: list[tuple] = []   # (pos, orn, hx, hy, hz)
+        self.platform_data: list[tuple] = []
         self.body_colors:   list[tuple] = []
 
-    # ── Build ─────────────────────────────────────────────────────────────────
-
     def connect(self) -> None:
+        """Initialise the PyBullet world and populate the scene.
+
+        Connects to PyBullet in DIRECT (headless) mode, sets gravity and the
+        fixed timestep, then calls the internal build methods to place the
+        ground plane, support platforms, and domino rigid bodies.
+
+        The solver iteration count is raised from the default of 10 to 20.
+        More iterations mean the contact solver converges closer to the true
+        solution each step, which reduces penetration artefacts in stacks of
+        thin bodies like dominoes.
+        """
         self._client = pybullet.connect(pybullet.DIRECT)
         pybullet.setAdditionalSearchPath(pybullet_data.getDataPath())
         pybullet.setGravity(0, 0, -9.81)
         pybullet.setTimeStep(PHYSICS_DT)
 
-        # More solver iterations → better contact resolution for thin dominoes.
-        # 20 (default=10) reduces penetration-driven jitter without a large
-        # performance cost at 480 Hz.
+        # Increase solver iterations to improve contact resolution for the
+        # thin, closely spaced domino bodies.
         pybullet.setPhysicsEngineParameter(
             numSolverIterations       = 20,
             numSubSteps               = 1,
-            contactBreakingThreshold  = 0.001,  # 1 mm — tight contact detection
+            contactBreakingThreshold  = 0.001,  # contact detection threshold (m)
         )
 
         self._build_ground()
         self._build_scene()
 
     def _build_ground(self) -> None:
-        """
-        Infinite static ground plane via URDF.
-        mass = 0 in PyBullet = infinite mass = unmovable by any force.
+        """Load the infinite static ground plane and configure its surface.
 
-        CRITICAL — energy isolation:
-          restitution = 0.0  → the floor absorbs all impact energy; no bounce
-                               can propagate through the surface to a neighbouring
-                               domino that was never struck directly.
-          contactStiffness / contactDamping → PyBullet contact model damps
-                               residual penetration oscillations so dominoes
-                               that are merely resting do not jitter.
+        PyBullet's plane.urdf provides an infinite rigid slab at z=0 with
+        mass=0, meaning it has infinite effective mass and cannot be moved
+        by any force.  All dominoes and platforms at z=0 rest on this plane.
+
+        Restitution is set to zero on the ground plane so that a domino
+        landing on it does not bounce.  A bounce could transfer energy through
+        the floor surface to a neighbouring domino that was never struck,
+        which would propagate the cascade by a mechanism other than direct
+        physical contact.
+
+        contactStiffness and contactDamping control how PyBullet models
+        resting contact.  High stiffness prevents the bodies from sinking
+        into the floor; the damping suppresses the residual oscillation that
+        would otherwise cause resting bodies to jitter.
         """
         gid = pybullet.loadURDF("plane.urdf", useFixedBase=True)
         pybullet.changeDynamics(
@@ -814,31 +1064,35 @@ class DominoPhysics:
         )
 
     def _build_scene(self) -> None:
-        """
-        Build the static platforms and domino rigid bodies.
+        """Create the static support platforms and all domino rigid bodies.
 
-        Flat stretches at z = 0 rest on plane.urdf, the single infinite
-        ground plane. Every elevation change — a staircase step down, the
-        canyon floor, the ramp up, the plateau — is a separate static box
-        built from build_layout()'s platform specs, so dominoes above z = 0
-        always have solid footing instead of floating in mid-air.
+        Static platforms (mass=0):
+            Every domino that sits above z=0 needs a solid surface under it.
+            build_layout() returns a platform specification for each such
+            domino — a box whose top face aligns with the domino's footing
+            elevation.  These boxes are created with mass=0 so they cannot
+            be moved by collisions.
 
-        DOMINOES
-        --------
-        GEOM_BOX half-extents = (D/2, W/2, H/2).
-        Centre of mass at p.z + DOM_H/2, i.e. half the domino's height
-        above whatever surface (ground plane or platform) it stands on.
-        restitution = 0  — no energy bounces back through the floor.
-        damping = 0.05   — suppresses numerical drift without slowing the cascade.
+        Domino rigid bodies:
+            Each domino is represented by a GEOM_BOX collision shape with
+            half-extents (D/2, W/2, H/2).  The body's centre of mass is
+            positioned at p.z + DOM_H/2 — half the domino's height above
+            the footing surface it stands on.
+
+            Linear and angular damping of 0.05 suppress the small numerical
+            drift that accumulates over many time steps without meaningfully
+            slowing the cascade.
+
+        After all bodies are created, their poses and velocities are reset
+        to the exact upright initial state so that any numerical noise
+        introduced during body creation does not affect the simulation.
         """
         self._placements, _fork_idx, platform_specs = build_layout()
         self.platform_data = []
 
-        # ── Static step platforms (mass = 0 → immovable) ────────────────────
-        # Each spec is (pos_xyz, yaw, hx, hy, hz) from build_layout(); every
-        # elevation change (staircase step, plateau, canyon floor, elevated
-        # turn) gets a real collision box so dominoes resting above z = 0
-        # have solid footing, instead of floating or clipping through air.
+        # Create one static box for each elevated support platform.
+        # mass=0 makes the body static — it has infinite effective mass
+        # and is unaffected by any collision force.
         for pos, yaw, hx, hy, hz in platform_specs:
             q = pybullet.getQuaternionFromEuler([0, 0, yaw])
             plat_col = pybullet.createCollisionShape(
@@ -853,6 +1107,8 @@ class DominoPhysics:
             )
             self.platform_data.append((pos, q, hx, hy, hz))
 
+        # Create the domino collision shape once and reuse it for all bodies.
+        # Half-extents correspond to half the domino's depth, width, and height.
         dom_col = pybullet.createCollisionShape(
             pybullet.GEOM_BOX,
             halfExtents=[DOM_D * 0.5, DOM_W * 0.5, DOM_H * 0.5],
@@ -860,9 +1116,8 @@ class DominoPhysics:
         total = len(self._placements)
         for i, p in enumerate(self._placements):
             q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
-            # p.z is the elevation of this step's footing (0 on the ground
-            # plane, nonzero on a platform); the domino's centre of mass
-            # sits half its height above whatever surface it's standing on.
+            # p.z is the footing elevation; the body's centre of mass is
+            # half the domino height above that surface.
             pos = [p.x, p.y, p.z + DOM_H * 0.5]
             bid = pybullet.createMultiBody(DOM_MASS, dom_col, -1, pos, list(q))
             pybullet.changeDynamics(
@@ -875,7 +1130,8 @@ class DominoPhysics:
             self._dom_ids.append(bid)
             self.body_colors.append(body_color(i, total))
 
-        # Freeze every domino at its exact upright pose with zero velocity.
+        # Reset every domino to its exact upright pose with zero velocity.
+        # This eliminates any numerical noise from the body creation process.
         for bid, p in zip(self._dom_ids, self._placements):
             q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
             pos = [p.x, p.y, p.z + DOM_H * 0.5]
@@ -889,7 +1145,12 @@ class DominoPhysics:
         self._sync_states()
 
     def _sync_states(self) -> None:
-        """Query every domino's current pose from PyBullet."""
+        """Read the current pose of every domino body from PyBullet.
+
+        Populates body_states with (position, orientation) tuples so that
+        DominoViewport can build the model matrices for rendering without
+        needing direct access to the physics world.
+        """
         self.body_states = [
             pybullet.getBasePositionAndOrientation(bid)
             for bid in self._dom_ids
@@ -898,27 +1159,23 @@ class DominoPhysics:
     # ── Control ───────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """
-        Tip ONLY the first domino (index 0) with a single angular impulse.
+        """Apply a single angular impulse to domino 0 to begin the cascade.
 
-        CONCEPT — why torque only, no linear velocity:
-          applyExternalTorque injects angular momentum around an axis that is
-          perpendicular to the domino's heading, so it rotates forward into
-          the chain.  Once tilt exceeds arctan(DOM_D / DOM_H) ≈ 5.7°, the
-          centre of mass is past the pivot edge and gravity does the rest.
+        Only domino 0 ever receives an external force.  Every subsequent fall
+        is caused by a neighbouring domino physically striking the next one.
 
-          We deliberately avoid giving domino 0 any linear (translational)
-          velocity: a linear push would slide the domino body into its
-          neighbour rather than pivoting it, which looks unnatural and can
-          also transfer lateral energy to the second domino without a proper
-          tip-over contact.
+        A pure torque (angular impulse) is used rather than a linear force.
+        A torque rotates the domino forward about its own base edge.  Once
+        the tile tilts past the tipping angle — arctan(D/H) ≈ 5.7° — its
+        centre of mass passes beyond the pivot edge and gravity takes over.
+        A linear force would slide the tile into its neighbour instead of
+        tipping it, which does not produce a realistic fall.
 
-          The torque magnitude (8 N·m for one physics step of 1/480 s) is
-          enough to rotate the domino ~6° which clears the tipping threshold,
-          but is not so large that it launches the tile into the air.
-
-        Only domino 0 is ever touched by external forces; all subsequent falls
-        are caused solely by physical contact between adjacent dominoes.
+        The torque axis is perpendicular to the domino's heading direction
+        in the XY plane, so the tile rotates forward rather than sideways.
+        The torque magnitude of 8 N·m is enough to rotate the tile ~6°
+        (past the tipping threshold) in a single physics step without
+        launching the tile off the platform.
         """
         if not self._dom_ids:
             return
@@ -926,9 +1183,8 @@ class DominoPhysics:
         p0  = self._placements[0]
         bid = self._dom_ids[0]
 
-        # Pure angular impulse in the world frame.
-        # Axis is perpendicular to the domino heading (rotated 90° in XY),
-        # so the tile rotates forward (in the +heading direction), not sideways.
+        # The torque axis is perpendicular to the heading (rotated 90° in XY).
+        # A vector perpendicular to (cos θ, sin θ, 0) is (-sin θ, cos θ, 0).
         pybullet.applyExternalTorque(
             bid, -1,
             torqueObj=[-math.sin(p0.yaw) * 8.0,
@@ -938,14 +1194,19 @@ class DominoPhysics:
         )
 
     def step(self, n: int) -> None:
-        """
-        Advance n physics sub-steps.
+        """Advance the simulation by n physics steps.
 
-        ANIMATION CONCEPT — fixed-timestep loop:
-        QTimer fires at ~60 Hz. Each tick advances n×PHYSICS_DT simulation.
-        n = REAL_TIME_SUBSTEPS (4) → 4×(1/240) ≈ 16.7 ms/frame = 1× real-time.
-        n = 8  → 2× real-time.  n = 32 → 8× real-time.
-        Physics accuracy is unchanged — only temporal compression varies.
+        This method implements the fixed-timestep loop.  The QTimer fires at
+        approximately 60 Hz, and each call to step() advances the simulation
+        by (n × PHYSICS_DT) seconds of simulated time.
+
+        At n=4 (1× real-time), the simulation advances by 4 × 1/240 ≈ 16.7 ms
+        per frame, matching wall-clock time.  Increasing n compresses time
+        without changing physics accuracy — the same number of solver
+        iterations runs per step, only the number of steps per frame changes.
+
+        Args:
+            n: Number of physics steps to advance this tick.
         """
         if not self._running:
             return
@@ -956,9 +1217,17 @@ class DominoPhysics:
         self._update_wave()
 
     def _update_wave(self) -> None:
-        """
-        Track wave front = average position of the last 5 fallen dominoes.
-        A domino is 'fallen' when its total tilt exceeds 40°.
+        """Update the wave-front position from the most recently fallen tiles.
+
+        A domino is considered fallen when the sum of its absolute Euler
+        angles around X and Y exceeds 40°.  This threshold is well past the
+        tipping angle (~5.7°) but well below 90° (fully flat on the floor),
+        so it captures tiles that are actively falling rather than those that
+        have already come to rest.
+
+        The wave position is the average of the last five fallen dominoes'
+        positions.  Averaging a small window smooths out the jitter that
+        would arise from tracking a single tile.
         """
         fallen: list[tuple] = []
         cnt = 0
@@ -969,6 +1238,7 @@ class DominoPhysics:
                 cnt += 1; fallen.append(pos)
         self._n_fallen = cnt
         if fallen:
+            # Average the last five fallen positions to get a smooth wave front.
             rec = fallen[-5:]
             self._wave = (
                 sum(v[0] for v in rec) / len(rec),
@@ -977,6 +1247,12 @@ class DominoPhysics:
             )
 
     def reset(self) -> None:
+        """Disconnect the current physics world and rebuild it from scratch.
+
+        Disconnecting destroys all bodies and frees PyBullet's internal state.
+        connect() then creates a fresh world and repopulates the scene,
+        returning all dominoes to their upright initial poses.
+        """
         if self._client >= 0:
             pybullet.disconnect(self._client)
         self._client = -1; self._dom_ids = []; self._placements = []
@@ -986,6 +1262,11 @@ class DominoPhysics:
         self.connect()
 
     def disconnect(self) -> None:
+        """Shut down the PyBullet client cleanly.
+
+        Called when the application window is closed.  Disconnecting releases
+        the shared memory and sockets that PyBullet uses internally.
+        """
         if self._client >= 0:
             pybullet.disconnect(self._client); self._client = -1
 
@@ -1006,26 +1287,26 @@ class DominoPhysics:
 # =============================================================================
 
 class DominoViewport(QOpenGLWidget):
-    """
-    OpenGL 3.3 Core Profile rendering of the domino scene.
+    """OpenGL 3.3 Core Profile renderer for the domino scene.
 
-    RENDERING PIPELINE (per frame)
-    --------------------------------
-    1. DominoPhysics.body_states provides (pos, orn) per domino.
-    2. For each body:
-         model = T × R × S   (translation × rotation × scale)
-         → upload as uModel uniform
-         → draw body (gradient colour)
-         → shift model along local X → draw ivory face stripe
-    3. Same box VAO for all draws — only the model matrix and colour change.
-    4. Floor: a single large quad at z = 0, checkerboard in fragment shader.
+    This widget reads physics body poses from DominoPhysics each frame and
+    draws the scene using a Blinn-Phong shader.  It has no knowledge of
+    the physics internals — the two subsystems communicate only through the
+    public arrays on DominoPhysics (body_states, platform_data, body_colors).
 
-    CAMERA CONTROLS
-    ---------------
-    Left-drag    → orbit  (yaw + pitch around target)
-    Middle-drag  → pan    (translate target in camera's local XY)
-    Scroll wheel → zoom   (proportional distance scale)
-    Double-click → reframe (restore saved defaults)
+    Rendering pipeline per frame:
+        1. body_states provides (pos, orn) for each domino.
+        2. For each body, _build_model_mat() constructs the 4×4 model matrix
+           and it is uploaded as the uModel shader uniform.
+        3. The body is drawn in its gradient colour.
+        4. A second, smaller box is drawn on the domino's front face using an
+           offset along the body's local X axis, giving the ivory stripe detail.
+        5. Static platforms are drawn using their stored (pos, orn, hx, hy, hz).
+        6. The floor is a single large quad rendered with a procedural
+           checkerboard pattern computed in the fragment shader.
+
+    All geometry uses the same unit-cube VAO.  Only the model matrix, colour,
+    and specular exponent change between draw calls.
     """
 
     def __init__(self, physics: DominoPhysics, parent: QWidget | None = None) -> None:
@@ -1048,11 +1329,19 @@ class DominoViewport(QOpenGLWidget):
     # ── Qt OpenGL lifecycle ────────────────────────────────────────────────────
 
     def initializeGL(self) -> None:
-        GL.glEnable(GL.GL_DEPTH_TEST)
-        GL.glDisable(GL.GL_CULL_FACE)   # dominoes show all faces while tumbling
-        GL.glEnable(GL.GL_MULTISAMPLE)  # 4× MSAA from QSurfaceFormat
+        """Set up OpenGL state, compile shaders, and upload geometry.
 
-        # Clear colour from the UI palette
+        Called once by Qt when the OpenGL context becomes available.
+        """
+        # Depth testing ensures closer surfaces hide surfaces behind them.
+        GL.glEnable(GL.GL_DEPTH_TEST)
+        # Back-face culling is disabled so that domino faces remain visible
+        # from any angle, including while the tile is falling or upside-down.
+        GL.glDisable(GL.GL_CULL_FACE)
+        # Enable multisample anti-aliasing (4× MSAA configured in main()).
+        GL.glEnable(GL.GL_MULTISAMPLE)
+
+        # Set the background colour by decoding the hex string from PALETTE.
         GL.glClearColor(
             int(PALETTE["bg"][1:3], 16) / 255,
             int(PALETTE["bg"][3:5], 16) / 255,
@@ -1060,7 +1349,7 @@ class DominoViewport(QOpenGLWidget):
             1.0,
         )
 
-        # Compile and link shaders
+        # Compile the GLSL source strings and link them into a shader program.
         self._prog = QOpenGLShaderProgram(self)
         ok = self._prog.addShaderFromSourceCode(
             QOpenGLShader.ShaderTypeBit.Vertex, _VERT_SRC)
@@ -1073,14 +1362,22 @@ class DominoViewport(QOpenGLWidget):
         if not self._prog.link():
             print(f"[VP] Shader link error:\n{self._prog.log()}")
 
+        # Upload the two geometry meshes to the GPU.
         self._make_box_vao()
         self._make_floor_vao()
 
     def resizeGL(self, w: int, h: int) -> None:
+        """Update the OpenGL viewport when the widget is resized."""
         GL.glViewport(0, 0, w, h)
 
     def paintGL(self) -> None:
-        # Advance auto-track camera
+        """Draw the full scene for the current frame.
+
+        Called by Qt whenever the widget needs to be repainted.  The method
+        reads the latest body poses from DominoPhysics and draws the floor,
+        support platforms, domino bodies, and face stripes in that order.
+        """
+        # Update the auto-tracking camera before drawing.
         now = time.perf_counter()
         dt  = now - self._last_wall
         self._last_wall = now
@@ -1099,22 +1396,25 @@ class DominoViewport(QOpenGLWidget):
         eye  = self.cam.eye
 
         def _u(name: str) -> int:
+            """Return the uniform location for the named shader variable."""
             return GL.glGetUniformLocation(pid, name)
 
-        # ── Shared uniforms ───────────────────────────────────────────────────
+        # Upload uniforms that are shared across all draw calls this frame.
         GL.glUniformMatrix4fv(_u("uView"), 1, GL.GL_TRUE, view)
         GL.glUniformMatrix4fv(_u("uProj"), 1, GL.GL_TRUE, proj)
-        # Key light — warm upper-left
+        # Key light: warm colour, positioned upper-left of the scene.
         GL.glUniform3fv(_u("uLight1Pos"),   1, [5.0, -8.0, 12.0])
         GL.glUniform3fv(_u("uLight1Color"), 1, [1.0, 0.95, 0.88])
-        # Fill light — cool opposite side
+        # Fill light: cool colour, opposite side of the scene at lower intensity.
         GL.glUniform3fv(_u("uLight2Pos"),   1, [-8.0, 5.0, 5.0])
         GL.glUniform3fv(_u("uLight2Color"), 1, [0.5, 0.65, 1.0])
         GL.glUniform3fv(_u("uCamPos"),      1, eye.tolist())
 
         identity = np.eye(4, dtype=np.float32)
 
-        # ── Floor (large quad, checkerboard) ─────────────────────────────────
+        # Draw the floor quad.  The uFloor flag activates the checkerboard
+        # pattern in the fragment shader.  The model matrix is the identity
+        # because the floor quad is already defined in world space.
         GL.glUniform1f(_u("uAmbient"),   0.35)
         GL.glUniform1f(_u("uSpecPower"), 6.0)
         GL.glUniform1i(_u("uFloor"),     1)
@@ -1127,7 +1427,10 @@ class DominoViewport(QOpenGLWidget):
 
         GL.glBindVertexArray(self._box_vao)
 
-        # ── Step platforms (dark concrete slate) ─────────────────────────────
+        # Draw the static support platforms as dark-coloured boxes.
+        # The model matrix is built from each platform's stored pose and
+        # half-extents (hx, hy, hz): the box is scaled by 2× the half-extents
+        # so that the unit cube spans the full platform dimensions.
         GL.glUniform1f(_u("uAmbient"),   0.20)
         GL.glUniform1f(_u("uSpecPower"), 10.0)
         for pos, orn, hx, hy, hz in self._ph.platform_data:
@@ -1137,38 +1440,40 @@ class DominoViewport(QOpenGLWidget):
             GL.glDrawElements(GL.GL_TRIANGLES, self._box_idx_count,
                               GL.GL_UNSIGNED_INT, None)
 
-        # ── Domino bodies + ivory face stripes ────────────────────────────────
-        # FACE GEOMETRY CONCEPT:
-        # The ivory face stripe is a separate thin box placed on the +X face
-        # of each domino.  Instead of baking it into the mesh, we compute
-        # a second model matrix by offsetting the domino's centre along its
-        # animated local X axis:
-        #   local_x_unit = model_col0 / DOM_D   (rotation-only X direction)
-        #   face_centre  = body_pos + local_x_unit × (DOM_D/2 + FACE_D/2)
-        # This works correctly for any orientation, including falling dominoes.
-        FACE_D = DOM_D * 0.07   # 2.1 mm — slightly raised from the face
+        # Draw each domino as two boxes: the coloured body and the ivory face stripe.
+        #
+        # Face stripe geometry:
+        #   The stripe is a thin box placed on the front face of the domino.
+        #   Its centre is offset from the body centre along the domino's local
+        #   X axis (the direction the domino faces).  The first column of the
+        #   model matrix, m[:3, 0], is the scaled local X axis in world space.
+        #   Dividing by DOM_D gives the unit direction vector, which is then
+        #   used to compute the stripe centre position.  This approach works
+        #   correctly for any body orientation, including mid-fall.
+        FACE_D = DOM_D * 0.07   # stripe thickness in metres (~2.1 mm)
         GL.glUniform1f(_u("uAmbient"),   0.14)
 
         for i, (pos, orn) in enumerate(self._ph.body_states):
             r, g, b = self._ph.body_colors[i]
             m = _build_model_mat(pos, orn, DOM_D, DOM_W, DOM_H)
 
-            # Body
+            # Draw the domino body in its gradient colour.
             GL.glUniformMatrix4fv(_u("uModel"), 1, GL.GL_TRUE, m)
             GL.glUniform4f(_u("uBaseColor"), r, g, b, 1.0)
             GL.glUniform1f(_u("uSpecPower"), 32.0)
             GL.glDrawElements(GL.GL_TRIANGLES, self._box_idx_count,
                               GL.GL_UNSIGNED_INT, None)
 
-            # Ivory face stripe — offset along domino's local X axis
-            # m[:3,0] = R @ [DOM_D, 0, 0] → divide by DOM_D to get unit vector
+            # Compute the face stripe model matrix.
+            # m[:3, 0] is the local X axis scaled by DOM_D; dividing gives the
+            # unit direction vector in world space.
             local_x  = m[:3, 0] / DOM_D
             face_pos = np.array(pos, dtype=np.float32) + local_x * (DOM_D * 0.5 + FACE_D * 0.5)
             mf = _build_model_mat(face_pos.tolist(), orn,
                                    FACE_D, DOM_W * 0.84, DOM_H * 0.88)
             GL.glUniformMatrix4fv(_u("uModel"), 1, GL.GL_TRUE, mf)
             GL.glUniform4f(_u("uBaseColor"), 0.96, 0.94, 0.86, 1.0)
-            GL.glUniform1f(_u("uSpecPower"), 110.0)   # shinier ivory surface
+            GL.glUniform1f(_u("uSpecPower"), 110.0)
             GL.glDrawElements(GL.GL_TRIANGLES, self._box_idx_count,
                               GL.GL_UNSIGNED_INT, None)
 
@@ -1178,18 +1483,22 @@ class DominoViewport(QOpenGLWidget):
     # ── Mesh generation ───────────────────────────────────────────────────────
 
     def _make_box_vao(self) -> None:
-        """
-        Upload a unit cube (−0.5 to +0.5 in each axis) with flat per-face normals.
+        """Upload a unit cube mesh to the GPU.
 
-        Each face gets its own 4 vertices (cannot share between faces because
-        normals differ).  Six faces × 4 vertices × 6 floats = 144 floats.
-        Six faces × 2 triangles × 3 indices = 36 uint32 indices.
+        The cube spans from -0.5 to +0.5 on each axis.  Each face has its own
+        four vertices so that each vertex can carry the outward-facing normal
+        for that face.  Sharing vertices between faces would require averaging
+        normals, which would produce incorrect flat shading.
 
-        Interleaved layout (stride = 24 bytes):
-            bytes 0–11  : position  (3 × float32)
-            bytes 12–23 : normal    (3 × float32)
+        Vertex buffer layout (stride = 24 bytes):
+            bytes  0–11:  position  (3 × float32)
+            bytes 12–23:  normal    (3 × float32)
+
+        Index buffer: 6 faces × 2 triangles × 3 indices = 36 uint32 values.
+        Vertices are wound counter-clockwise when viewed from outside the cube.
         """
-        # (normal_xyz, [[v0], [v1], [v2], [v3]]) for each face, CCW winding
+        # Each face is defined by its outward normal and four corner positions.
+        # Corners are listed counter-clockwise when viewed from outside the face.
         FACES = [
             (( 1, 0, 0), [[ .5,-.5,-.5],[ .5, .5,-.5],[ .5, .5, .5],[ .5,-.5, .5]]),
             ((-1, 0, 0), [[-.5, .5,-.5],[-.5,-.5,-.5],[-.5,-.5, .5],[-.5, .5, .5]]),
