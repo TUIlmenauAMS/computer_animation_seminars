@@ -719,6 +719,85 @@
         </div>
       </div>
 
+      <!-- Chapter 05 + demos -->
+      <div class="notebook-row has-demos">
+        <div class="notebook-row-top">
+          <div class="notebook-num">05</div>
+          <div class="notebook-title">
+            <a href="05_computeranimation_physics.html">Physics-based Animation</a><span class="title-tag">&middot; rigid bodies, constraints, and domino cascade</span>
+            <p class="notebook-desc">Rigid body dynamics, collision detection, Rapier + Three.js, constraints &amp; joints, spring-damper secondary animation, and a PyBullet + OpenGL domino cascade with a custom GLSL renderer.</p>
+          </div>
+          <div class="badge-group">
+            <a class="badge badge-page"
+               href="05_computeranimation_physics.html"
+               rel="noopener">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Read
+            </a>
+            <a class="badge badge-github"
+               href="https://github.com/TUIlmenauAMS/computer_animation_seminars/tree/main/05_physics"
+               target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+              GitHub
+            </a>
+          </div>
+        </div>
+
+        <div class="demo-subsection">
+          <p class="demo-sublabel">Interactive demos — Rapier · Three.js · PyBullet · OpenGL 3.3 · uv</p>
+          <div class="demo-grid">
+
+            <a class="demo-card" href="https://tuilmenauams.github.io/computer_animation_seminars/05_ca_rigidbody.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-key">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="6" height="8" rx="1"/><rect x="14" y="4" width="6" height="12" rx="1"/><line x1="4" y1="20" x2="20" y2="20"/></svg>
+              </div>
+              <div class="demo-title">First Rapier Scene</div>
+              <div class="demo-desc">A stack of boxes falling under gravity with a Rapier world, rigid bodies, colliders, and a fixed-timestep loop. Click to throw new boxes.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+            <a class="demo-card" href="https://tuilmenauams.github.io/computer_animation_seminars/05_ca_restitution.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-ease">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="18" cy="4" r="2"/><path d="M6 16 C6 10 12 10 12 8"/><path d="M12 8 C12 4 18 4 18 2"/></svg>
+              </div>
+              <div class="demo-title">Bounciness Explorer</div>
+              <div class="demo-desc">A 5×5 grid of balls each with a different restitution value (0.0–1.0). Gravity and drop-height sliders reveal what the coefficient of restitution means physically.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+            <a class="demo-card" href="https://tuilmenauams.github.io/computer_animation_seminars/05_ca_constraints.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-cam">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><line x1="12" y1="6" x2="10" y2="10"/><line x1="10" y1="10" x2="12" y2="14"/><line x1="12" y1="14" x2="10" y2="18"/><circle cx="10" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+              </div>
+              <div class="demo-title">Joints &amp; Chains</div>
+              <div class="demo-desc">Eight capsule-shaped rigid bodies connected by revolute joints. Toggle gravity, drag the bottom link to apply impulses, and explore how this scales to a full character ragdoll.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+            <a class="demo-card" href="https://tuilmenauams.github.io/computer_animation_seminars/05_ca_spring.html" target="_blank" rel="noopener">
+              <div class="demo-icon icon-key">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12 C5 6 7 18 9 12 C11 6 13 18 15 12 C17 6 19 18 21 12"/></svg>
+              </div>
+              <div class="demo-title">Spring-Damper Serpent</div>
+              <div class="demo-desc">A 30-segment bioluminescent serpent with spring-damper secondary animation. Stiffness, damping, and length-constraint sliders expose underdamped, critical, and overdamped regimes live.</div>
+              <div class="demo-link-label">Open demo <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+            <a class="demo-card"
+               href="https://github.com/TUIlmenauAMS/computer_animation_seminars/blob/main/05_physics/05_ca_pybullet_domino.py"
+               target="_blank" rel="noopener">
+              <div class="demo-icon icon-py1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="4" height="10" rx="1"/><rect x="10" y="5" width="4" height="10" rx="1"/><rect x="16" y="2" width="4" height="10" rx="1"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+              </div>
+              <div class="demo-title">Domino Cascade (Python)</div>
+              <div class="demo-desc">PyBullet physics + OpenGL 3.3 renderer in a PySide6 Qt window. A cascade wave travels through five acts — descent, ground run, ascent, plateau, and fork — with Blinn-Phong shading and an interactive orbit camera.</div>
+              <div class="demo-link-label">View source <svg viewBox="0 0 12 12"><path d="M2 10 L10 2 M5 2 h5 v5"/></svg></div>
+            </a>
+
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
