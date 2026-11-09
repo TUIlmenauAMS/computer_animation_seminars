@@ -90,8 +90,11 @@ DOM_H: float           = 0.30
 DOM_W: float           = 0.14
 DOM_D: float           = 0.030
 DOM_MASS: float        = 0.090   # kg
-DOM_RESTITUTION: float = 0.15
-DOM_FRICTION: float    = 0.70
+# Zero restitution on dominoes: energy is NOT bounced back into the chain.
+# Only a domino physically struck by its neighbour should fall; vibration
+# or surface bounce must not propagate the cascade on its own.
+DOM_RESTITUTION: float = 0.0
+DOM_FRICTION: float    = 0.80
 
 # ── Layout geometry ───────────────────────────────────────────────────────────
 DOMINO_SPACING: float  = 0.155   # slightly tighter for denser chains
@@ -777,6 +780,16 @@ class DominoPhysics:
         pybullet.setAdditionalSearchPath(pybullet_data.getDataPath())
         pybullet.setGravity(0, 0, -9.81)
         pybullet.setTimeStep(PHYSICS_DT)
+
+        # More solver iterations → better contact resolution for thin dominoes.
+        # 20 (default=10) reduces penetration-driven jitter without a large
+        # performance cost at 480 Hz.
+        pybullet.setPhysicsEngineParameter(
+            numSolverIterations       = 20,
+            numSubSteps               = 1,
+            contactBreakingThreshold  = 0.001,  # 1 mm — tight contact detection
+        )
+
         self._build_ground()
         self._build_scene()
 
@@ -784,9 +797,23 @@ class DominoPhysics:
         """
         Infinite static ground plane via URDF.
         mass = 0 in PyBullet = infinite mass = unmovable by any force.
+
+        CRITICAL — energy isolation:
+          restitution = 0.0  → the floor absorbs all impact energy; no bounce
+                               can propagate through the surface to a neighbouring
+                               domino that was never struck directly.
+          contactStiffness / contactDamping → PyBullet contact model damps
+                               residual penetration oscillations so dominoes
+                               that are merely resting do not jitter.
         """
         gid = pybullet.loadURDF("plane.urdf", useFixedBase=True)
-        pybullet.changeDynamics(gid, -1, lateralFriction=DOM_FRICTION)
+        pybullet.changeDynamics(
+            gid, -1,
+            lateralFriction   = DOM_FRICTION,
+            restitution       = 0.0,
+            contactStiffness  = 1e6,
+            contactDamping    = 1e4,
+        )
 
     def _build_scene(self) -> None:
         """
@@ -794,47 +821,53 @@ class DominoPhysics:
 
         STEP PLATFORMS
         --------------
-        Each step is a GEOM_BOX slab under exactly one domino (mass = 0 →
-        static).  We store their pose and half-extents in platform_data
-        for the renderer to draw — no per-frame PyBullet query needed.
+        Each elevated domino (z > 0) gets its own solid slab directly beneath
+        it.  The slab top surface is exactly at p.z; the slab reaches down to
+        z = 0 so it is always supported by the ground plane.
+
+        Slab is mass=0 (static, infinite mass) with:
+          restitution = 0.0  — absorbs impact, never bounces energy upward
+          high friction      — dominoes grip the step surface
 
         DOMINOES
         --------
-        GEOM_BOX (DOM_D × DOM_W × DOM_H), mass = DOM_MASS.
-        PyBullet auto-computes the inertia tensor from mass + geometry.
-        The domino stands with its centre of mass at p.z + DOM_H/2.
+        GEOM_BOX half-extents = (D/2, W/2, H/2).
+        Centre of mass placed at p.z + H/2 so the base sits exactly on p.z.
+        linearDamping / angularDamping = 0.05 — small enough not to slow the
+        cascade, large enough to prevent numerical drift in standing tiles.
         """
         self._placements, _ = build_layout()
+        self.platform_data   = []
 
-        # ── Step platforms ────────────────────────────────────────────────────
-        # Each domino that is NOT at z ≈ 0 sits on a solid step slab.
-        # The slab half-extents span the full step depth and are tall enough
-        # to reach from z down to the ground (or the next step surface).
-        # This creates a proper staircase the physics engine can reason about.
-        step_hw = STEP_DEPTH * 0.6     # half-depth along travel direction
-        step_ww = DOM_W * 1.1          # slightly wider than domino
-        self.platform_data = []
+        # Shared slab half-widths — same for every step
+        slab_hw = STEP_DEPTH * 0.5 + 0.01   # just wider than one step
+        slab_ww = DOM_W * 0.8               # fits under domino width
+
+        _slab_dyn = dict(
+            lateralFriction = DOM_FRICTION,
+            restitution     = 0.0,
+        )
 
         for p in self._placements:
-            if abs(p.z) < 0.004:        # at ground level — plane.urdf handles it
+            if p.z < 0.004:          # ground level — plane.urdf handles it
                 continue
-            # Slab top surface = p.z; slab bottom = ground (z=0) or negative floor.
-            # Half-height = |p.z| / 2; slab centre at p.z / 2.
-            step_hh = abs(p.z) * 0.5 + 0.002   # tiny extra to avoid gap
-            pos = (p.x, p.y, p.z * 0.5)
+            # Slab: top surface at p.z, bottom at z=0.
+            # half-height = p.z/2, centre at p.z/2.
+            slab_hh = p.z * 0.5
+            pos = (p.x, p.y, slab_hh)
             q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
-            self.platform_data.append((pos, q, step_hw, step_ww, step_hh))
+            self.platform_data.append((pos, q, slab_hw, slab_ww, slab_hh))
             sh  = pybullet.createCollisionShape(
                 pybullet.GEOM_BOX,
-                halfExtents=[step_hw, step_ww, step_hh],
+                halfExtents=[slab_hw, slab_ww, slab_hh],
             )
             bid = pybullet.createMultiBody(0, sh, -1, list(pos), list(q))
-            pybullet.changeDynamics(bid, -1, lateralFriction=DOM_FRICTION)
+            pybullet.changeDynamics(bid, -1, **_slab_dyn)
 
         # ── Domino rigid bodies ───────────────────────────────────────────────
         dom_col = pybullet.createCollisionShape(
             pybullet.GEOM_BOX,
-            halfExtents=[DOM_D*0.5, DOM_W*0.5, DOM_H*0.5],
+            halfExtents=[DOM_D * 0.5, DOM_W * 0.5, DOM_H * 0.5],
         )
         total = len(self._placements)
         for i, p in enumerate(self._placements):
@@ -843,13 +876,27 @@ class DominoPhysics:
             bid = pybullet.createMultiBody(DOM_MASS, dom_col, -1, pos, list(q))
             pybullet.changeDynamics(
                 bid, -1,
-                restitution   = DOM_RESTITUTION,
+                restitution     = DOM_RESTITUTION,
                 lateralFriction = DOM_FRICTION,
-                linearDamping = 0.02,
-                angularDamping = 0.02,
+                linearDamping   = 0.05,
+                angularDamping  = 0.05,
             )
             self._dom_ids.append(bid)
             self.body_colors.append(body_color(i, total))
+
+        # ── Freeze every domino at its exact upright pose ─────────────────────
+        # resetBasePositionAndOrientation + resetBaseVelocity guarantees every
+        # tile is perfectly still before the user presses START — no settle
+        # pass needed because the slabs are analytically flush with p.z.
+        for bid, p in zip(self._dom_ids, self._placements):
+            q   = pybullet.getQuaternionFromEuler([0, 0, p.yaw])
+            pos = [p.x, p.y, p.z + DOM_H * 0.5]
+            pybullet.resetBasePositionAndOrientation(bid, pos, q)
+            pybullet.resetBaseVelocity(
+                bid,
+                linearVelocity =[0.0, 0.0, 0.0],
+                angularVelocity=[0.0, 0.0, 0.0],
+            )
 
         self._sync_states()
 
@@ -864,16 +911,26 @@ class DominoPhysics:
 
     def start(self) -> None:
         """
-        Tip ONLY the first domino (index 0) with a torque + linear impulse.
+        Tip ONLY the first domino (index 0) with a single angular impulse.
 
-        CONCEPT: applyExternalTorque adds an angular impulse (N·m).
-        Once tilt exceeds arctan(DOM_D/DOM_H) ≈ 5.7°, gravity takes over.
-        Torque axis is perpendicular to the domino heading so it falls
-        forward (into the chain), not sideways.
+        CONCEPT — why torque only, no linear velocity:
+          applyExternalTorque injects angular momentum around an axis that is
+          perpendicular to the domino's heading, so it rotates forward into
+          the chain.  Once tilt exceeds arctan(DOM_D / DOM_H) ≈ 5.7°, the
+          centre of mass is past the pivot edge and gravity does the rest.
 
-        A complementary linear velocity nudge along the domino's facing
-        direction guarantees the tip even if the torque is absorbed by the
-        ground contact point, ensuring one — and only one — tile is pushed.
+          We deliberately avoid giving domino 0 any linear (translational)
+          velocity: a linear push would slide the domino body into its
+          neighbour rather than pivoting it, which looks unnatural and can
+          also transfer lateral energy to the second domino without a proper
+          tip-over contact.
+
+          The torque magnitude (8 N·m for one physics step of 1/480 s) is
+          enough to rotate the domino ~6° which clears the tipping threshold,
+          but is not so large that it launches the tile into the air.
+
+        Only domino 0 is ever touched by external forces; all subsequent falls
+        are caused solely by physical contact between adjacent dominoes.
         """
         if not self._dom_ids:
             return
@@ -881,21 +938,15 @@ class DominoPhysics:
         p0  = self._placements[0]
         bid = self._dom_ids[0]
 
-        # Angular impulse — perpendicular to heading, tilts it forward
+        # Pure angular impulse in the world frame.
+        # Axis is perpendicular to the domino heading (rotated 90° in XY),
+        # so the tile rotates forward (in the +heading direction), not sideways.
         pybullet.applyExternalTorque(
             bid, -1,
-            torqueObj=[-math.sin(p0.yaw) * 12.0,
-                        math.cos(p0.yaw) * 12.0,
+            torqueObj=[-math.sin(p0.yaw) * 8.0,
+                        math.cos(p0.yaw) * 8.0,
                         0.0],
             flags=pybullet.WORLD_FRAME,
-        )
-        # Small linear nudge along the facing direction for extra reliability
-        pybullet.resetBaseVelocity(
-            bid,
-            linearVelocity =[math.cos(p0.yaw) * 0.4,
-                              math.sin(p0.yaw) * 0.4,
-                              0.0],
-            angularVelocity=[0.0, 0.0, 0.0],
         )
 
     def step(self, n: int) -> None:
